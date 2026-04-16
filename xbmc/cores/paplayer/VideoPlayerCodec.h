@@ -30,6 +30,7 @@ public:
   int ReadRaw(uint8_t **pBuffer, int *bufferSize) override;
   bool CanInit() override;
   bool CanSeek() override;
+  int64_t GetTime() override;
 
   void DeInit();
   AEAudioFormat GetFormat();
@@ -49,6 +50,7 @@ private:
   std::string m_strFileName;
   int m_nAudioStream{-1};
   size_t m_nDecodedLen{0};
+  int64_t m_displayTime{-1};
 
   bool m_bInited{false};
   bool m_bCanSeek{false};
