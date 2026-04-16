@@ -975,10 +975,23 @@ int64_t PAPlayer::GetTimeInternal()
   if (!m_currentStream)
     return 0;
 
-  double time = ((double)m_currentStream->m_framesSent / (double)m_currentStream->m_audioFormat.m_sampleRate);
-  if (m_currentStream->m_stream)
-    time -= m_currentStream->m_stream->GetDelay();
-  time = time * 1000.0;
+  // Prefer the codec's display time when available — it tracks the content
+  // position from the demuxer's IDisplayTime interface. Frame counting is
+  // inaccurate when an inputstream addon processes audio (e.g. tempo/speed
+  // change produces fewer output frames for the same content duration).
+  int64_t codecTime = m_currentStream->m_decoder.GetTime();
+  double time;
+  if (codecTime >= 0)
+  {
+    time = static_cast<double>(codecTime);
+  }
+  else
+  {
+    time = ((double)m_currentStream->m_framesSent / (double)m_currentStream->m_audioFormat.m_sampleRate);
+    if (m_currentStream->m_stream)
+      time -= m_currentStream->m_stream->GetDelay();
+    time = time * 1000.0;
+  }
 
   m_playerGUIData.m_time = (int64_t)time; //update for GUI
   CDataCacheCore::GetInstance().SetPlayTimes(0, time, 0, m_playerGUIData.m_totalTime);
