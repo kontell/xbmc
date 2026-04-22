@@ -10,8 +10,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     env:
-      # Versions per docs/README.Android.md
-      NDK_VERSION: 21.4.7075529
+      # Kodi 22 (Piers) requires C++20. NDK r21 clang 9 doesn't support it.
+      # r25c ships clang 14 which does. Docs/README.Android.md lists r21 but
+      # that's stale for the Piers branch.
+      NDK_VERSION: 25.2.9519653
       SDK_CMDLINE_TOOLS: commandlinetools-linux-11076708_latest.zip
       ANDROID_ROOT: /mnt/build/android
       KODI_DEPENDS_PREFIX: /mnt/build/xbmc-depends
