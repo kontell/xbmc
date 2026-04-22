@@ -16,8 +16,11 @@ jobs:
     - name: Free build space on /mnt
       uses: easimon/maximize-build-space@v10
       with:
-        root-reserve-mb: 2048
-        swap-size-mb: 1024
+        # Leave enough on / for git checkout + /tmp/apt-caches-inside-container.
+        # First few runs had ~100 MB free after the action ran and step 4
+        # (checkout) occasionally failed silently; 4 GB reserve is plenty.
+        root-reserve-mb: 4096
+        swap-size-mb: 0
         remove-dotnet: 'true'
         remove-android: 'true'
         remove-haskell: 'true'
