@@ -1,0 +1,108 @@
+name: Build Kodi (Docker)
+on:
+  push:
+    branches: ['ci/build']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Linux x86_64 / Kodi 21 (patched)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+    - name: Maximize build space
+      uses: easimon/maximize-build-space@v10
+      with:
+        root-reserve-mb: 2048
+        swap-size-mb: 1024
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+
+    - name: Checkout patched Kodi
+      uses: actions/checkout@v5
+      with:
+        path: kodi
+        fetch-depth: 1
+
+    - name: Checkout kodi-docker-build
+      uses: actions/checkout@v5
+      with:
+        repository: oliver/kodi-docker-build
+        path: kodi-docker-build
+        fetch-depth: 1
+
+    - name: Build docker image
+      working-directory: kodi-docker-build
+      run: docker build -t kodi-docker-build .
+
+    - name: Write minimal build script (Kodi only, no extra addons)
+      run: |
+        cat > build-minimal.sh << 'EOF'
+        #!/usr/bin/env bash
+        set -euxo pipefail
+        ionice -n 7 -p $$ || true
+        renice 3 -p $$ > /dev/null || true
+
+        cd /kodi/build
+        mkdir -p kodi_build
+        cd kodi_build
+
+        cmake /kodi/source/kodi \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/kodi/build/kodi_install \
+              -DCMAKE_GENERATOR=Ninja \
+              -DCORE_PLATFORM_NAME="x11" \
+              -DADDONS_CONFIGURE_AT_STARTUP=0 \
+              -DENABLE_INTERNAL_DAV1D=ON \
+              -DAPP_RENDER_SYSTEM=gl \
+              -DENABLE_INTERNAL_FFMPEG=ON
+
+        cmake --build . -- build-crossguid
+
+        cmake /kodi/source/kodi \
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+        cmake --build .
+        cmake --build . -- install
+        EOF
+        chmod +x build-minimal.sh
+
+    - name: Prepare mounted build directory
+      run: |
+        mkdir -p kodi-build
+        # kodi-docker-build runs as the 'ubuntu' user (uid 1000).
+        # Make build + script readable/writable by that uid.
+        sudo chown -R 1000:1000 kodi-build build-minimal.sh
+        sudo chmod -R a+rwX kodi-build build-minimal.sh
+
+    - name: Build Kodi
+      run: |
+        docker run --rm \
+          --volume "$(pwd)/kodi:/kodi/source/kodi:ro" \
+          --volume "$(pwd)/kodi-build:/kodi/build" \
+          --volume "$(pwd)/build-minimal.sh:/usr/local/bin/build-minimal.sh:ro" \
+          kodi-docker-build:latest \
+          /usr/local/bin/build-minimal.sh
+
+    - name: Show build output tree (top level)
+      if: always()
+      run: |
+        ls -la kodi-build/kodi_install/ 2>/dev/null || true
+        ls -la kodi-build/kodi_install/bin/ 2>/dev/null || true
+        du -sh kodi-build/kodi_install 2>/dev/null || true
+
+    - name: Package install tree
+      run: |
+        cd kodi-build
+        tar czf kodi-linux-x86_64-kodi21.tar.gz -C kodi_install .
+        ls -lah kodi-linux-x86_64-kodi21.tar.gz
+
+    - name: Upload Kodi build
+      uses: actions/upload-artifact@v4
+      with:
+        name: kodi-linux-x86_64-kodi21
+        path: kodi-build/kodi-linux-x86_64-kodi21.tar.gz
+        if-no-files-found: error
