@@ -63,7 +63,7 @@ jobs:
               libasound2-dev libass-dev libavahi-client-dev libavahi-common-dev \
               libbluetooth-dev libbluray-dev libbz2-dev libcap-dev libcdio-dev \
               libcrossguid-dev libcurl4-openssl-dev libdbus-1-dev libdrm-dev \
-              libegl-dev libenca-dev libexiv2-dev libflac-dev libflatbuffers-dev \
+              libegl-dev libenca-dev libexiv2-dev libflac-dev libflatbuffers-dev mesa-common-dev \
               libfmt-dev libfontconfig-dev libfreetype-dev libfribidi-dev \
               libfstrcmp-dev libgbm-dev libgcrypt-dev libgif-dev libgl-dev \
               libgles-dev libglu1-mesa-dev libglew-dev libgnutls28-dev libgpg-error-dev \
