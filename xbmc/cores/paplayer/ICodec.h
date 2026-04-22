@@ -71,7 +71,7 @@ public:
   // Returns the current playback position in ms from the demuxer's display
   // time, or -1 if not available. More accurate than frame counting when
   // an inputstream addon processes audio (e.g. tempo/speed change).
-  virtual int64_t GetTime() { return -1; }
+  virtual int64_t GetTime() const { return -1; }
 
   virtual bool IsCaching()    const    {return false;}
   virtual int GetCacheLevel() const    {return -1;}

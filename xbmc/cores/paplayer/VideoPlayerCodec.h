@@ -30,7 +30,7 @@ public:
   int ReadRaw(uint8_t **pBuffer, int *bufferSize) override;
   bool CanInit() override;
   bool CanSeek() override;
-  int64_t GetTime() override;
+  int64_t GetTime() const override;
 
   void DeInit();
   AEAudioFormat GetFormat();

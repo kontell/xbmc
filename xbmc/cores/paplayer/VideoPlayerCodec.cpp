@@ -535,7 +535,7 @@ CAEStreamInfo::DataType VideoPlayerCodec::GetPassthroughStreamType(AVCodecID cod
     return CAEStreamInfo::DataType::STREAM_TYPE_NULL;
 }
 
-int64_t VideoPlayerCodec::GetTime()
+int64_t VideoPlayerCodec::GetTime() const
 {
   return m_displayTime;
 }

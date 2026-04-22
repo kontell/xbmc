@@ -982,7 +982,8 @@ int64_t PAPlayer::GetTimeInternal()
   // position from the demuxer's IDisplayTime interface. Frame counting is
   // inaccurate when an inputstream addon processes audio (e.g. tempo/speed
   // change produces fewer output frames for the same content duration).
-  int64_t codecTime = m_currentStream->m_decoder.GetTime();
+  const ICodec* codec = m_currentStream->m_decoder.GetCodec();
+  int64_t codecTime = codec ? codec->GetTime() : -1;
   double time;
   if (codecTime >= 0)
   {
