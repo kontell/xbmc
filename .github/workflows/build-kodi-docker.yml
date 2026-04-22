@@ -83,6 +83,13 @@ jobs:
             # git refuses to cooperate with a repo owned by another uid
             git config --global --add safe.directory "*"
 
+            # Kodi 21 includes <EGL/eglextchromium.h>, which Mesa dropped from
+            # its shipped headers (not in mesa-common-dev on trixie). Fetch it
+            # from Mesa upstream.
+            mkdir -p /usr/local/include/EGL
+            curl -fsSL https://gitlab.freedesktop.org/mesa/mesa/-/raw/main/include/EGL/eglextchromium.h \
+              -o /usr/local/include/EGL/eglextchromium.h
+
             # libdisplay-info 0.3.0 (matches upstream kodi-docker-build)
             mkdir -p /tmp/deps && cd /tmp/deps
             git clone https://gitlab.freedesktop.org/emersion/libdisplay-info
