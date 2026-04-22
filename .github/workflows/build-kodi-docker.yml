@@ -147,25 +147,20 @@ jobs:
             ldconfig
 
             # Sources at /work (read-only), build tree at /build (on the
-            # maximized /mnt/build volume).
+            # maximized /mnt/build volume). The final link line unconditionally
+            # references build/lib/libcrossguid-dgb.a, so we need the internal
+            # crossguid build — enable with ENABLE_INTERNAL_CROSSGUID=ON.
             cd /build
-            # Two-phase build that upstream kodi-docker-build does: Kodi
-            # always links its internal libcrossguid-dgb.a. The build-crossguid
-            # target only exists when CMAKE_BUILD_TYPE=Release, but the final
-            # link for the whole binary wants RelWithDebInfo debug info.
-            # Configure Release, build crossguid, reconfigure RelWithDebInfo,
-            # build everything else.
             cmake /work/kodi \
-              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo \
               -DCMAKE_INSTALL_PREFIX=/build/kodi_install \
               -DCMAKE_GENERATOR=Ninja \
               -DCORE_PLATFORM_NAME=x11 \
               -DADDONS_CONFIGURE_AT_STARTUP=0 \
               -DENABLE_INTERNAL_DAV1D=ON \
+              -DENABLE_INTERNAL_CROSSGUID=ON \
               -DAPP_RENDER_SYSTEM=gl \
               -DENABLE_INTERNAL_FFMPEG=ON
-            cmake --build . -- build-crossguid
-            cmake /work/kodi -DCMAKE_BUILD_TYPE=RelWithDebInfo
             cmake --build .
             cmake --build . -- install
           '
