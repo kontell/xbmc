@@ -152,7 +152,7 @@ jobs:
             # crossguid build — enable with ENABLE_INTERNAL_CROSSGUID=ON.
             cd /build
             cmake /work/kodi \
-              -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+              -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_INSTALL_PREFIX=/build/kodi_install \
               -DCMAKE_GENERATOR=Ninja \
               -DCORE_PLATFORM_NAME=x11 \
