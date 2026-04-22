@@ -151,9 +151,15 @@ jobs:
             # references build/lib/libcrossguid-dgb.a, so we need the internal
             # crossguid build — enable with ENABLE_INTERNAL_CROSSGUID=ON.
             cd /build
+            # Install prefix matches where the tarball will be extracted
+            # on the target (/opt/kodi-patched). Kodi bakes this path into
+            # both the launcher script (LIBDIR/@libdir@) and the compiled
+            # binary (-DBIN_INSTALL_PATH, -DINSTALL_PATH), so a mismatch
+            # between build-time prefix and runtime location breaks
+            # everything.
             cmake /work/kodi \
               -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_INSTALL_PREFIX=/build/kodi_install \
+              -DCMAKE_INSTALL_PREFIX=/opt/kodi-patched \
               -DCMAKE_GENERATOR=Ninja \
               -DCORE_PLATFORM_NAME=x11 \
               -DADDONS_CONFIGURE_AT_STARTUP=0 \
@@ -162,22 +168,29 @@ jobs:
               -DAPP_RENDER_SYSTEM=gl \
               -DENABLE_INTERNAL_FFMPEG=ON
             cmake --build .
-            cmake --build . -- install
+            # Stage into DESTDIR so we can tar the tree without needing
+            # /opt/kodi-patched to exist on the runner. Files land at
+            # /build/stage/opt/kodi-patched/{bin,lib,share,...}.
+            DESTDIR=/build/stage cmake --build . -- install
           '
 
     - name: Show install tree
       if: always()
       run: |
-        ls -la /mnt/build/kodi-build/kodi_install/ 2>/dev/null || true
-        ls -la /mnt/build/kodi-build/kodi_install/bin/ 2>/dev/null || true
-        sudo du -sh /mnt/build/kodi-build/kodi_install 2>/dev/null || true
+        ls -la /mnt/build/kodi-build/stage/opt/kodi-patched/ 2>/dev/null || true
+        ls -la /mnt/build/kodi-build/stage/opt/kodi-patched/bin/ 2>/dev/null || true
+        sudo du -sh /mnt/build/kodi-build/stage/opt/kodi-patched 2>/dev/null || true
 
     - name: Package install tree
       run: |
-        # Build tree is owned by root inside the container; reclaim it.
-        sudo chown -R $(id -u):$(id -g) /mnt/build/kodi-build/kodi_install
-        cd /mnt/build/kodi-build
-        tar czf /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz -C kodi_install .
+        # Staged tree at /build/stage/opt/kodi-patched/ inside container →
+        # /mnt/build/kodi-build/stage/opt/kodi-patched/ on host, owned by root.
+        sudo chown -R $(id -u):$(id -g) /mnt/build/kodi-build/stage
+        cd /mnt/build/kodi-build/stage/opt
+        # Archive preserves /opt/kodi-patched/... — extract with
+        #   sudo tar xzf THIS.tar.gz -C /
+        # and it lands at /opt/kodi-patched.
+        tar czf /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz kodi-patched
         ls -lah /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz
 
     - name: Upload Kodi build
