@@ -101,7 +101,7 @@ jobs:
               pkgconf gettext hwdata lsb-release \
               libasound2-dev libass-dev libavahi-client-dev libavahi-common-dev \
               libbluetooth-dev libbluray-dev libbz2-dev libcap-dev libcdio-dev \
-              libcrossguid-dev libcurl4-openssl-dev libdbus-1-dev libdrm-dev \
+              libcurl4-openssl-dev libdbus-1-dev libdrm-dev \
               libegl-dev libenca-dev libexiv2-dev libflac-dev libflatbuffers-dev mesa-common-dev \
               libfmt-dev libfontconfig-dev libfreetype-dev libfribidi-dev \
               libfstrcmp-dev libgbm-dev libgcrypt-dev libgif-dev libgl-dev \
@@ -149,11 +149,14 @@ jobs:
             # Sources at /work (read-only), build tree at /build (on the
             # maximized /mnt/build volume).
             cd /build
-            # Single-phase build — system libcrossguid-dev is installed so the
-            # two-step "Release crossguid then RelWithDebInfo everything else"
-            # dance from upstream build.sh is unnecessary.
+            # Two-phase build that upstream kodi-docker-build does: Kodi
+            # always links its internal libcrossguid-dgb.a. The build-crossguid
+            # target only exists when CMAKE_BUILD_TYPE=Release, but the final
+            # link for the whole binary wants RelWithDebInfo debug info.
+            # Configure Release, build crossguid, reconfigure RelWithDebInfo,
+            # build everything else.
             cmake /work/kodi \
-              -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+              -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_INSTALL_PREFIX=/build/kodi_install \
               -DCMAKE_GENERATOR=Ninja \
               -DCORE_PLATFORM_NAME=x11 \
@@ -161,6 +164,8 @@ jobs:
               -DENABLE_INTERNAL_DAV1D=ON \
               -DAPP_RENDER_SYSTEM=gl \
               -DENABLE_INTERNAL_FFMPEG=ON
+            cmake --build . -- build-crossguid
+            cmake /work/kodi -DCMAKE_BUILD_TYPE=RelWithDebInfo
             cmake --build .
             cmake --build . -- install
           '
