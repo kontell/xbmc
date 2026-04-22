@@ -6,11 +6,18 @@ on:
 
 jobs:
   build:
-    name: Linux x86_64 / Kodi 21 (patched)
+    name: Kodi 21 (Debian trixie, x86_64, patched)
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
-    - name: Maximize build space
+    # Need ~20 GB of free space on /var/lib/docker for the in-container
+    # build. Host's default /var/lib/docker sits on / which has ~14 GB.
+    # Point maximize-build-space's freed partition at /var/lib/docker so
+    # Docker gets the extra room.
+    - name: Stop docker so /var/lib/docker can be remounted
+      run: sudo systemctl stop docker
+
+    - name: Free space and remount /var/lib/docker
       uses: easimon/maximize-build-space@v10
       with:
         root-reserve-mb: 2048
@@ -20,6 +27,13 @@ jobs:
         remove-haskell: 'true'
         remove-codeql: 'true'
         remove-docker-images: 'true'
+        build-mount-path: /var/lib/docker
+
+    - name: Restart docker on maximized mount
+      run: |
+        sudo systemctl start docker
+        docker info | grep -E 'Docker Root Dir|Storage Driver' || true
+        df -h /var/lib/docker
 
     - name: Checkout patched Kodi
       uses: actions/checkout@v5
@@ -27,68 +41,70 @@ jobs:
         path: kodi
         fetch-depth: 1
 
-    # Replicates oliver/kodi-docker-build's Dockerfile inside the runner
-    # directly — the runner is already a fresh Ubuntu 24.04, so the Docker
-    # wrapper adds only complexity and (here) a disk-space cliff.
-    - name: Install build dependencies (matches kodi-docker-build Dockerfile)
+    # Build inside debian:trixie so the resulting binary links against the
+    # same glibc / system libs as the P1D target (Debian forky ≈ trixie-next).
+    # We use -DENABLE_INTERNAL_FFMPEG=ON to bundle Kodi's own FFmpeg 6,
+    # sidestepping Debian's FFmpeg 7 API-break dance entirely.
+    - name: Build Kodi inside Debian container
       run: |
-        sudo apt-get update
-        sudo apt-get install --assume-yes ccache software-properties-common nano less sudo ninja-build
-        sudo apt-get install --assume-yes autoconf automake autopoint autotools-dev cmake \
-          curl debhelper default-jre doxygen gawk gcc gdc gettext gperf \
-          libasound2-dev libass-dev libavahi-client-dev libavahi-common-dev \
-          libbluetooth-dev libbluray-dev libbz2-dev libcdio-dev \
-          libcrossguid-dev libcurl4-openssl-dev libcwiid-dev libdbus-1-dev \
-          libdrm-dev libegl1-mesa-dev libenca-dev libexiv2-dev libflac-dev \
-          libfmt-dev libfontconfig-dev libfreetype6-dev libfribidi-dev \
-          libfstrcmp-dev libgcrypt-dev libgif-dev libgl1-mesa-dev \
-          libgles2-mesa-dev libglu1-mesa-dev libgnutls28-dev libgpg-error-dev \
-          libgtest-dev libiso9660-dev libjpeg-dev liblcms2-dev libltdl-dev \
-          liblzo2-dev libmicrohttpd-dev libmysqlclient-dev libnfs-dev \
-          libogg-dev libp8-platform-dev libpcre2-dev libplist-dev libpng-dev \
-          libpulse-dev libshairplay-dev libsmbclient-dev libspdlog-dev \
-          libsqlite3-dev libssl-dev libtag1-dev libtiff5-dev libtinyxml-dev \
-          libtinyxml2-dev libtool libudev-dev libunistring-dev libva-dev \
-          libvdpau-dev libvorbis-dev libxmu-dev libxrandr-dev libxslt1-dev \
-          libxt-dev lsb-release meson nasm ninja-build nlohmann-json3-dev \
-          python3-dev python3-pil python3-pip swig unzip uuid-dev zip \
-          zlib1g-dev
-        sudo apt-get install --assume-yes libflatbuffers-dev
-        sudo apt-get install --assume-yes libgbm-dev libinput-dev libxkbcommon-dev
-        sudo apt-get install --assume-yes libglew-dev libwayland-dev libxkbcommon-dev waylandpp-dev wayland-protocols
-        sudo apt-get install --assume-yes doxygen libcap-dev libsndio-dev libmariadbd-dev
-        sudo apt-get install --assume-yes hwdata git
+        docker run --rm \
+          --volume "$GITHUB_WORKSPACE:/work" \
+          --workdir /work \
+          --env DEBIAN_FRONTEND=noninteractive \
+          debian:trixie \
+          bash -exc '
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              ca-certificates git curl wget \
+              build-essential cmake ninja-build nasm meson \
+              autoconf automake autopoint autotools-dev libtool \
+              gawk gperf swig unzip zip default-jre python3-dev python3-pil python3-pip \
+              pkgconf gettext hwdata lsb-release \
+              libasound2-dev libass-dev libavahi-client-dev libavahi-common-dev \
+              libbluetooth-dev libbluray-dev libbz2-dev libcap-dev libcdio-dev \
+              libcrossguid-dev libcurl4-openssl-dev libdbus-1-dev libdrm-dev \
+              libegl-dev libenca-dev libexiv2-dev libflac-dev libflatbuffers-dev \
+              libfmt-dev libfontconfig-dev libfreetype-dev libfribidi-dev \
+              libfstrcmp-dev libgbm-dev libgcrypt-dev libgif-dev libgl-dev \
+              libgles-dev libglu1-mesa-dev libglew-dev libgnutls28-dev libgpg-error-dev \
+              libgtest-dev libinput-dev libiso9660-dev libjpeg-dev liblcms2-dev \
+              libltdl-dev liblzo2-dev libmariadb-dev libmicrohttpd-dev libnfs-dev \
+              libogg-dev libp8-platform-dev libpcre2-dev libplist-dev libpng-dev \
+              libpulse-dev libshairplay-dev libsmbclient-dev libsndio-dev \
+              libspdlog-dev libsqlite3-dev libssl-dev libtag1-dev libtiff-dev \
+              libtinyxml-dev libtinyxml2-dev libudev-dev libunistring-dev \
+              libva-dev libvdpau-dev libvorbis-dev libwayland-dev libxkbcommon-dev \
+              waylandpp-dev wayland-protocols libxmu-dev libxrandr-dev libxslt1-dev \
+              libxt-dev nlohmann-json3-dev uuid-dev zlib1g-dev \
+              doxygen
 
-    - name: Build libdisplay-info 0.3.0
-      run: |
-        mkdir -p /tmp/deps/libdisplay-info
-        cd /tmp/deps/libdisplay-info
-        git clone https://gitlab.freedesktop.org/emersion/libdisplay-info
-        cd libdisplay-info
-        git checkout 0.3.0
-        mkdir build && cd build
-        meson setup --prefix=/usr/local --buildtype=release
-        ninja
-        sudo ninja install
-        sudo ldconfig
+            # libdisplay-info 0.3.0 (matches upstream kodi-docker-build)
+            mkdir -p /tmp/deps && cd /tmp/deps
+            git clone https://gitlab.freedesktop.org/emersion/libdisplay-info
+            cd libdisplay-info
+            git checkout 0.3.0
+            mkdir build && cd build
+            meson setup --prefix=/usr/local --buildtype=release
+            ninja
+            ninja install
+            ldconfig
 
-    - name: Configure + build Kodi (no extra addons)
-      run: |
-        mkdir -p build
-        cd build
-        cmake ../kodi \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/build/kodi_install \
-          -DCMAKE_GENERATOR=Ninja \
-          -DCORE_PLATFORM_NAME="x11" \
-          -DADDONS_CONFIGURE_AT_STARTUP=0 \
-          -DENABLE_INTERNAL_DAV1D=ON \
-          -DAPP_RENDER_SYSTEM=gl \
-          -DENABLE_INTERNAL_FFMPEG=ON
-        cmake --build . -- build-crossguid
-        cmake ../kodi -DCMAKE_BUILD_TYPE=RelWithDebInfo
-        cmake --build .
-        cmake --build . -- install
+            cd /work
+            mkdir -p build && cd build
+            cmake /work/kodi \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/work/build/kodi_install \
+              -DCMAKE_GENERATOR=Ninja \
+              -DCORE_PLATFORM_NAME=x11 \
+              -DADDONS_CONFIGURE_AT_STARTUP=0 \
+              -DENABLE_INTERNAL_DAV1D=ON \
+              -DAPP_RENDER_SYSTEM=gl \
+              -DENABLE_INTERNAL_FFMPEG=ON
+            cmake --build . -- build-crossguid
+            cmake /work/kodi -DCMAKE_BUILD_TYPE=RelWithDebInfo
+            cmake --build .
+            cmake --build . -- install
+          '
 
     - name: Show install tree
       if: always()
@@ -99,13 +115,15 @@ jobs:
 
     - name: Package install tree
       run: |
+        # build/ was created inside the container as root; reclaim it
+        sudo chown -R $(id -u):$(id -g) build
         cd build
-        tar czf kodi-linux-x86_64-kodi21.tar.gz -C kodi_install .
-        ls -lah kodi-linux-x86_64-kodi21.tar.gz
+        tar czf kodi-debian-trixie-x86_64-kodi21.tar.gz -C kodi_install .
+        ls -lah kodi-debian-trixie-x86_64-kodi21.tar.gz
 
     - name: Upload Kodi build
       uses: actions/upload-artifact@v4
       with:
-        name: kodi-linux-x86_64-kodi21
-        path: build/kodi-linux-x86_64-kodi21.tar.gz
+        name: kodi-debian-trixie-x86_64-kodi21
+        path: build/kodi-debian-trixie-x86_64-kodi21.tar.gz
         if-no-files-found: error
