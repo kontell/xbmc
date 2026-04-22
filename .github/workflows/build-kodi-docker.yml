@@ -53,9 +53,6 @@ jobs:
           --env DEBIAN_FRONTEND=noninteractive \
           debian:trixie \
           bash -exc '
-            # git refuses to cooperate with a repo owned by another uid
-            git config --global --add safe.directory "*"
-
             apt-get update
             apt-get install -y --no-install-recommends \
               ca-certificates git curl wget \
@@ -79,6 +76,9 @@ jobs:
               libva-dev libvdpau-dev libvorbis-dev libwayland-dev libxkbcommon-dev \
               waylandpp-dev wayland-protocols libxmu-dev libxrandr-dev libxslt1-dev \
               libxt-dev nlohmann-json3-dev uuid-dev zlib1g-dev
+
+            # git refuses to cooperate with a repo owned by another uid
+            git config --global --add safe.directory "*"
 
             # libdisplay-info 0.3.0 (matches upstream kodi-docker-build)
             mkdir -p /tmp/deps && cd /tmp/deps
