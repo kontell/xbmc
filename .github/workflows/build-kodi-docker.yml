@@ -10,14 +10,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
-    # Need ~20 GB of free space on /var/lib/docker for the in-container
-    # build. Host's default /var/lib/docker sits on / which has ~14 GB.
-    # Point maximize-build-space's freed partition at /var/lib/docker so
-    # Docker gets the extra room.
-    - name: Stop docker so /var/lib/docker can be remounted
-      run: sudo systemctl stop docker
-
-    - name: Free space and remount /var/lib/docker
+    # Runner's / has ~14 GB free; our in-container build (~20 GB tmp)
+    # won't fit. Free the partition first, then point Docker's data-root
+    # at the freed mount via daemon.json.
+    - name: Free build space on /mnt
       uses: easimon/maximize-build-space@v10
       with:
         root-reserve-mb: 2048
@@ -27,13 +23,17 @@ jobs:
         remove-haskell: 'true'
         remove-codeql: 'true'
         remove-docker-images: 'true'
-        build-mount-path: /var/lib/docker
+        build-mount-path: /mnt/build
 
-    - name: Restart docker on maximized mount
+    - name: Move Docker data-root to /mnt/build/docker
       run: |
+        sudo systemctl stop docker docker.socket containerd || true
+        sudo rm -rf /var/lib/docker
+        sudo mkdir -p /mnt/build/docker /etc/docker
+        echo '{"data-root": "/mnt/build/docker"}' | sudo tee /etc/docker/daemon.json
         sudo systemctl start docker
-        docker info | grep -E 'Docker Root Dir|Storage Driver' || true
-        df -h /var/lib/docker
+        docker info | grep -E 'Docker Root Dir|Storage Driver'
+        df -h /mnt/build
 
     - name: Checkout patched Kodi
       uses: actions/checkout@v5
