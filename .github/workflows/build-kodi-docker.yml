@@ -53,12 +53,15 @@ jobs:
           --env DEBIAN_FRONTEND=noninteractive \
           debian:trixie \
           bash -exc '
+            # git refuses to cooperate with a repo owned by another uid
+            git config --global --add safe.directory "*"
+
             apt-get update
             apt-get install -y --no-install-recommends \
               ca-certificates git curl wget \
               build-essential cmake ninja-build nasm meson \
               autoconf automake autopoint autotools-dev libtool \
-              gawk gperf swig unzip zip default-jre python3-dev python3-pil python3-pip \
+              gawk gperf swig unzip zip python3-dev python3-pil python3-pip \
               pkgconf gettext hwdata lsb-release \
               libasound2-dev libass-dev libavahi-client-dev libavahi-common-dev \
               libbluetooth-dev libbluray-dev libbz2-dev libcap-dev libcdio-dev \
@@ -75,8 +78,7 @@ jobs:
               libtinyxml-dev libtinyxml2-dev libudev-dev libunistring-dev \
               libva-dev libvdpau-dev libvorbis-dev libwayland-dev libxkbcommon-dev \
               waylandpp-dev wayland-protocols libxmu-dev libxrandr-dev libxslt1-dev \
-              libxt-dev nlohmann-json3-dev uuid-dev zlib1g-dev \
-              doxygen
+              libxt-dev nlohmann-json3-dev uuid-dev zlib1g-dev
 
             # libdisplay-info 0.3.0 (matches upstream kodi-docker-build)
             mkdir -p /tmp/deps && cd /tmp/deps
@@ -87,6 +89,18 @@ jobs:
             meson setup --prefix=/usr/local --buildtype=release
             ninja
             ninja install
+
+            # PCRE1 (libpcre3-dev) was removed from Debian trixie — package is
+            # EOL. Kodi 21s CMake still expects PCRE1. Build from source.
+            cd /tmp/deps
+            curl -LO https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.gz/download
+            mv download pcre-8.45.tar.gz
+            tar xf pcre-8.45.tar.gz
+            cd pcre-8.45
+            ./configure --prefix=/usr/local --enable-utf --enable-unicode-properties \
+              --disable-static --enable-shared
+            make -j$(nproc)
+            make install
             ldconfig
 
             cd /work
