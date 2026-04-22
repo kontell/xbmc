@@ -50,12 +50,18 @@ jobs:
     - name: Install host build tools
       run: |
         sudo apt-get update
+        # Match docs/README.Android.md §2 (plus the non-docs-listed bits the
+        # tools/depends native bootstrap needs: autoconf/automake/libtool,
+        # meson, ninja, nasm, swig, pkgconf, python3).
         sudo apt-get install -y --no-install-recommends \
           autoconf automake autopoint autotools-dev libtool \
+          bison flex \
           build-essential ccache cmake ninja-build nasm meson \
           curl wget git ca-certificates unzip zip \
           default-jdk-headless \
-          gawk gperf gettext pkgconf python3 python3-pip swig
+          gawk gperf gettext pkgconf python3 python3-pip swig \
+          libcurl4-openssl-dev zlib1g-dev \
+          lib32stdc++6 lib32z1
 
     - name: Install Android SDK (cmdline-tools + platform + ndk)
       run: |
