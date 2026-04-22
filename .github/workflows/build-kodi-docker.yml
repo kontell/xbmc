@@ -1,4 +1,4 @@
-name: Build Kodi (Docker)
+name: Build Kodi
 on:
   push:
     branches: ['ci/build']
@@ -27,76 +27,79 @@ jobs:
         path: kodi
         fetch-depth: 1
 
-    - name: Checkout kodi-docker-build
-      uses: actions/checkout@v5
-      with:
-        repository: oliver/kodi-docker-build
-        path: kodi-docker-build
-        fetch-depth: 1
-
-    - name: Build docker image
-      working-directory: kodi-docker-build
-      run: docker build -t kodi-docker-build .
-
-    - name: Write minimal build script (Kodi only, no extra addons)
+    # Replicates oliver/kodi-docker-build's Dockerfile inside the runner
+    # directly — the runner is already a fresh Ubuntu 24.04, so the Docker
+    # wrapper adds only complexity and (here) a disk-space cliff.
+    - name: Install build dependencies (matches kodi-docker-build Dockerfile)
       run: |
-        cat > build-minimal.sh << 'EOF'
-        #!/usr/bin/env bash
-        set -euxo pipefail
-        ionice -n 7 -p $$ || true
-        renice 3 -p $$ > /dev/null || true
+        sudo apt-get update
+        sudo apt-get install --assume-yes ccache software-properties-common nano less sudo ninja-build
+        sudo apt-get install --assume-yes autoconf automake autopoint autotools-dev cmake \
+          curl debhelper default-jre doxygen gawk gcc gdc gettext gperf \
+          libasound2-dev libass-dev libavahi-client-dev libavahi-common-dev \
+          libbluetooth-dev libbluray-dev libbz2-dev libcdio-dev \
+          libcrossguid-dev libcurl4-openssl-dev libcwiid-dev libdbus-1-dev \
+          libdrm-dev libegl1-mesa-dev libenca-dev libexiv2-dev libflac-dev \
+          libfmt-dev libfontconfig-dev libfreetype6-dev libfribidi-dev \
+          libfstrcmp-dev libgcrypt-dev libgif-dev libgl1-mesa-dev \
+          libgles2-mesa-dev libglu1-mesa-dev libgnutls28-dev libgpg-error-dev \
+          libgtest-dev libiso9660-dev libjpeg-dev liblcms2-dev libltdl-dev \
+          liblzo2-dev libmicrohttpd-dev libmysqlclient-dev libnfs-dev \
+          libogg-dev libp8-platform-dev libpcre2-dev libplist-dev libpng-dev \
+          libpulse-dev libshairplay-dev libsmbclient-dev libspdlog-dev \
+          libsqlite3-dev libssl-dev libtag1-dev libtiff5-dev libtinyxml-dev \
+          libtinyxml2-dev libtool libudev-dev libunistring-dev libva-dev \
+          libvdpau-dev libvorbis-dev libxmu-dev libxrandr-dev libxslt1-dev \
+          libxt-dev lsb-release meson nasm ninja-build nlohmann-json3-dev \
+          python3-dev python3-pil python3-pip swig unzip uuid-dev zip \
+          zlib1g-dev
+        sudo apt-get install --assume-yes libflatbuffers-dev
+        sudo apt-get install --assume-yes libgbm-dev libinput-dev libxkbcommon-dev
+        sudo apt-get install --assume-yes libglew-dev libwayland-dev libxkbcommon-dev waylandpp-dev wayland-protocols
+        sudo apt-get install --assume-yes doxygen libcap-dev libsndio-dev libmariadbd-dev
+        sudo apt-get install --assume-yes hwdata git
 
-        cd /kodi/build
-        mkdir -p kodi_build
-        cd kodi_build
+    - name: Build libdisplay-info 0.3.0
+      run: |
+        mkdir -p /tmp/deps/libdisplay-info
+        cd /tmp/deps/libdisplay-info
+        git clone https://gitlab.freedesktop.org/emersion/libdisplay-info
+        cd libdisplay-info
+        git checkout 0.3.0
+        mkdir build && cd build
+        meson setup --prefix=/usr/local --buildtype=release
+        ninja
+        sudo ninja install
+        sudo ldconfig
 
-        cmake /kodi/source/kodi \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_INSTALL_PREFIX=/kodi/build/kodi_install \
-              -DCMAKE_GENERATOR=Ninja \
-              -DCORE_PLATFORM_NAME="x11" \
-              -DADDONS_CONFIGURE_AT_STARTUP=0 \
-              -DENABLE_INTERNAL_DAV1D=ON \
-              -DAPP_RENDER_SYSTEM=gl \
-              -DENABLE_INTERNAL_FFMPEG=ON
-
+    - name: Configure + build Kodi (no extra addons)
+      run: |
+        mkdir -p build
+        cd build
+        cmake ../kodi \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/build/kodi_install \
+          -DCMAKE_GENERATOR=Ninja \
+          -DCORE_PLATFORM_NAME="x11" \
+          -DADDONS_CONFIGURE_AT_STARTUP=0 \
+          -DENABLE_INTERNAL_DAV1D=ON \
+          -DAPP_RENDER_SYSTEM=gl \
+          -DENABLE_INTERNAL_FFMPEG=ON
         cmake --build . -- build-crossguid
-
-        cmake /kodi/source/kodi \
-              -DCMAKE_BUILD_TYPE=RelWithDebInfo
-
+        cmake ../kodi -DCMAKE_BUILD_TYPE=RelWithDebInfo
         cmake --build .
         cmake --build . -- install
-        EOF
-        chmod +x build-minimal.sh
 
-    - name: Prepare mounted build directory
-      run: |
-        mkdir -p kodi-build
-        # kodi-docker-build runs as the 'ubuntu' user (uid 1000).
-        # Make build + script readable/writable by that uid.
-        sudo chown -R 1000:1000 kodi-build build-minimal.sh
-        sudo chmod -R a+rwX kodi-build build-minimal.sh
-
-    - name: Build Kodi
-      run: |
-        docker run --rm \
-          --volume "$(pwd)/kodi:/kodi/source/kodi:ro" \
-          --volume "$(pwd)/kodi-build:/kodi/build" \
-          --volume "$(pwd)/build-minimal.sh:/usr/local/bin/build-minimal.sh:ro" \
-          kodi-docker-build:latest \
-          /usr/local/bin/build-minimal.sh
-
-    - name: Show build output tree (top level)
+    - name: Show install tree
       if: always()
       run: |
-        ls -la kodi-build/kodi_install/ 2>/dev/null || true
-        ls -la kodi-build/kodi_install/bin/ 2>/dev/null || true
-        du -sh kodi-build/kodi_install 2>/dev/null || true
+        ls -la build/kodi_install/ 2>/dev/null || true
+        ls -la build/kodi_install/bin/ 2>/dev/null || true
+        du -sh build/kodi_install 2>/dev/null || true
 
     - name: Package install tree
       run: |
-        cd kodi-build
+        cd build
         tar czf kodi-linux-x86_64-kodi21.tar.gz -C kodi_install .
         ls -lah kodi-linux-x86_64-kodi21.tar.gz
 
@@ -104,5 +107,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: kodi-linux-x86_64-kodi21
-        path: kodi-build/kodi-linux-x86_64-kodi21.tar.gz
+        path: build/kodi-linux-x86_64-kodi21.tar.gz
         if-no-files-found: error
