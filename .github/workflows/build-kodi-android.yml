@@ -1,0 +1,123 @@
+name: Build Kodi (Android)
+on:
+  push:
+    branches: ['ci/build-piers']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Kodi 22 (Android arm, patched)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    env:
+      # Versions per docs/README.Android.md
+      NDK_VERSION: 21.4.7075529
+      SDK_CMDLINE_TOOLS: commandlinetools-linux-11076708_latest.zip
+      ANDROID_ROOT: /mnt/build/android
+      KODI_DEPENDS_PREFIX: /mnt/build/xbmc-depends
+      KODI_TARBALLS: /mnt/build/xbmc-tarballs
+      KODI_BUILD: /mnt/build/kodi-build
+    steps:
+    - name: Free build space on /mnt
+      uses: easimon/maximize-build-space@v10
+      with:
+        root-reserve-mb: 4096
+        swap-size-mb: 1024
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+        build-mount-path: /mnt/build
+
+    - name: Checkout patched Kodi (ci/build-piers)
+      uses: actions/checkout@v5
+      with:
+        path: kodi
+        fetch-depth: 1
+
+    - name: Install host build tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          autoconf automake autopoint autotools-dev libtool \
+          build-essential ccache cmake ninja-build nasm meson \
+          curl wget git ca-certificates unzip zip \
+          default-jdk-headless \
+          gawk gperf gettext pkgconf python3 python3-pip swig
+
+    - name: Install Android SDK (cmdline-tools + platform + ndk)
+      run: |
+        sudo mkdir -p $ANDROID_ROOT
+        sudo chown $(id -u):$(id -g) $ANDROID_ROOT
+        cd $ANDROID_ROOT
+        curl -fsSLO https://dl.google.com/android/repository/$SDK_CMDLINE_TOOLS
+        unzip -q $SDK_CMDLINE_TOOLS
+        rm $SDK_CMDLINE_TOOLS
+        # sdkmanager needs cmdline-tools/latest/ layout
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/bin cmdline-tools/lib cmdline-tools/NOTICE.txt cmdline-tools/source.properties cmdline-tools/latest/
+        yes | cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_ROOT --licenses >/dev/null
+        cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_ROOT \
+          "platform-tools" \
+          "platforms;android-34" \
+          "build-tools;33.0.1" \
+          "ndk;$NDK_VERSION"
+
+    - name: Generate debug keystore (APK signing)
+      run: |
+        mkdir -p $HOME/.android
+        keytool -genkey -keystore $HOME/.android/debug.keystore \
+          -alias androiddebugkey \
+          -dname "CN=Android Debug,O=Android,C=US" \
+          -keypass android -storepass android \
+          -keyalg RSA -keysize 2048 -validity 10000
+
+    - name: Bootstrap + configure tools/depends (arm-linux-androideabi)
+      run: |
+        cd kodi/tools/depends
+        ./bootstrap
+        mkdir -p $KODI_TARBALLS $KODI_DEPENDS_PREFIX
+        ./configure \
+          --host=arm-linux-androideabi \
+          --with-tarballs=$KODI_TARBALLS \
+          --with-sdk-path=$ANDROID_ROOT \
+          --with-ndk-path=$ANDROID_ROOT/ndk/$NDK_VERSION \
+          --prefix=$KODI_DEPENDS_PREFIX
+
+    - name: Build tools/depends (deps cross-compiled from source)
+      run: |
+        cd kodi/tools/depends
+        make -j$(getconf _NPROCESSORS_ONLN)
+
+    - name: Configure Kodi CMake build
+      run: |
+        mkdir -p $KODI_BUILD
+        make -C kodi/tools/depends/target/cmakebuildsys BUILD_DIR=$KODI_BUILD
+
+    - name: Build Kodi
+      run: |
+        cd $KODI_BUILD
+        make -j$(getconf _NPROCESSORS_ONLN)
+
+    - name: Package APK
+      run: |
+        cd $KODI_BUILD
+        make apk
+
+    - name: Locate APK
+      if: always()
+      id: apk
+      run: |
+        # apk target drops the file into the source tree's root
+        find $GITHUB_WORKSPACE/kodi $KODI_BUILD -maxdepth 4 -name '*.apk' -print 2>/dev/null || true
+        APK=$(find $GITHUB_WORKSPACE/kodi $KODI_BUILD -maxdepth 4 -name '*.apk' | head -1)
+        echo "apk=$APK" >> $GITHUB_OUTPUT
+
+    - name: Upload APK
+      if: steps.apk.outputs.apk != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: kodi-android-armeabi-v7a-kodi22
+        path: ${{ steps.apk.outputs.apk }}
+        if-no-files-found: error
