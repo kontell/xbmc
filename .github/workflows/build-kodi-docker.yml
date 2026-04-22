@@ -75,7 +75,7 @@ jobs:
               libtinyxml-dev libtinyxml2-dev libudev-dev libunistring-dev \
               libva-dev libvdpau-dev libvorbis-dev libwayland-dev libxkbcommon-dev \
               waylandpp-dev wayland-protocols libxmu-dev libxrandr-dev libxslt1-dev \
-              libxt-dev nlohmann-json3-dev uuid-dev zlib1g-dev
+              libxt-dev nlohmann-json3-dev rapidjson-dev uuid-dev zlib1g-dev
 
             # git refuses to cooperate with a repo owned by another uid
             git config --global --add safe.directory "*"
