@@ -105,8 +105,11 @@ jobs:
 
             cd /work
             mkdir -p build && cd build
+            # Single-phase build — system libcrossguid-dev is installed so the
+            # two-step "Release crossguid then RelWithDebInfo everything else"
+            # dance from upstream build.sh is unnecessary.
             cmake /work/kodi \
-              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo \
               -DCMAKE_INSTALL_PREFIX=/work/build/kodi_install \
               -DCMAKE_GENERATOR=Ninja \
               -DCORE_PLATFORM_NAME=x11 \
@@ -114,8 +117,6 @@ jobs:
               -DENABLE_INTERNAL_DAV1D=ON \
               -DAPP_RENDER_SYSTEM=gl \
               -DENABLE_INTERNAL_FFMPEG=ON
-            cmake --build . -- build-crossguid
-            cmake /work/kodi -DCMAKE_BUILD_TYPE=RelWithDebInfo
             cmake --build .
             cmake --build . -- install
           '
