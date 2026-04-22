@@ -79,9 +79,16 @@ jobs:
     # sidestepping Debian's FFmpeg 7 API-break dance entirely.
     - name: Build Kodi inside Debian container
       run: |
+        # Kodi's RelWithDebInfo objects + debug info easily exceed 10 GB.
+        # Host / has only ~4 GB free after maximize-build-space; put the
+        # build tree on the 100 GB /mnt/build volume.
+        sudo mkdir -p /mnt/build/kodi-build
+        sudo chown $(id -u):$(id -g) /mnt/build/kodi-build
+
         docker run --rm \
-          --volume "$GITHUB_WORKSPACE:/work" \
-          --workdir /work \
+          --volume "$GITHUB_WORKSPACE:/work:ro" \
+          --volume "/mnt/build/kodi-build:/build" \
+          --workdir /build \
           --env DEBIAN_FRONTEND=noninteractive \
           debian:trixie \
           bash -exc '
@@ -139,14 +146,15 @@ jobs:
             make install
             ldconfig
 
-            cd /work
-            mkdir -p build && cd build
+            # Sources at /work (read-only), build tree at /build (on the
+            # maximized /mnt/build volume).
+            cd /build
             # Single-phase build — system libcrossguid-dev is installed so the
             # two-step "Release crossguid then RelWithDebInfo everything else"
             # dance from upstream build.sh is unnecessary.
             cmake /work/kodi \
               -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-              -DCMAKE_INSTALL_PREFIX=/work/build/kodi_install \
+              -DCMAKE_INSTALL_PREFIX=/build/kodi_install \
               -DCMAKE_GENERATOR=Ninja \
               -DCORE_PLATFORM_NAME=x11 \
               -DADDONS_CONFIGURE_AT_STARTUP=0 \
@@ -160,21 +168,21 @@ jobs:
     - name: Show install tree
       if: always()
       run: |
-        ls -la build/kodi_install/ 2>/dev/null || true
-        ls -la build/kodi_install/bin/ 2>/dev/null || true
-        du -sh build/kodi_install 2>/dev/null || true
+        ls -la /mnt/build/kodi-build/kodi_install/ 2>/dev/null || true
+        ls -la /mnt/build/kodi-build/kodi_install/bin/ 2>/dev/null || true
+        sudo du -sh /mnt/build/kodi-build/kodi_install 2>/dev/null || true
 
     - name: Package install tree
       run: |
-        # build/ was created inside the container as root; reclaim it
-        sudo chown -R $(id -u):$(id -g) build
-        cd build
-        tar czf kodi-debian-trixie-x86_64-kodi21.tar.gz -C kodi_install .
-        ls -lah kodi-debian-trixie-x86_64-kodi21.tar.gz
+        # Build tree is owned by root inside the container; reclaim it.
+        sudo chown -R $(id -u):$(id -g) /mnt/build/kodi-build/kodi_install
+        cd /mnt/build/kodi-build
+        tar czf /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz -C kodi_install .
+        ls -lah /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz
 
     - name: Upload Kodi build
       uses: actions/upload-artifact@v4
       with:
         name: kodi-debian-trixie-x86_64-kodi21
-        path: build/kodi-debian-trixie-x86_64-kodi21.tar.gz
+        path: /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz
         if-no-files-found: error
