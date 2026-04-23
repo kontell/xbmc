@@ -83,6 +83,15 @@ jobs:
           "build-tools;33.0.1" \
           "ndk;$NDK_VERSION"
 
+    - name: Symlink JDK include/android → include/linux (libbluray meson)
+      run: |
+        # libbluray's meson.build looks for JNI headers under
+        # $JAVA_HOME/include/$host_system. When cross-compiling for Android
+        # host_system='android', but a host JDK only ships include/linux.
+        # The headers are identical for our purposes; symlink it.
+        JAVA_INC=$JAVA_HOME/include
+        [ -d "$JAVA_INC/android" ] || sudo ln -s linux "$JAVA_INC/android"
+
     - name: Generate debug keystore (APK signing)
       run: |
         mkdir -p $HOME/.android
