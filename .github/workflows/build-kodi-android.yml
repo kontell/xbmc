@@ -60,7 +60,7 @@ jobs:
           bison flex \
           build-essential ccache cmake ninja-build nasm meson \
           curl wget git ca-certificates unzip zip \
-          default-jdk-headless \
+          default-jdk-headless ant \
           gawk gperf gettext pkgconf python3 python3-pip swig \
           libcurl4-openssl-dev zlib1g-dev \
           lib32stdc++6 lib32z1
