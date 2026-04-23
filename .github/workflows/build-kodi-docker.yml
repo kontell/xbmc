@@ -98,7 +98,7 @@ jobs:
               ca-certificates git curl wget \
               build-essential cmake ninja-build nasm meson \
               autoconf automake autopoint autotools-dev libtool \
-              gawk gperf swig unzip zip default-jre-headless python3-dev python3-pil python3-pip \
+              gawk gperf swig unzip zip openjdk-21-jre-headless python3-dev python3-pil python3-pip \
               pkgconf gettext hwdata lsb-release \
               libasound2-dev libass-dev libavahi-client-dev libavahi-common-dev \
               libbluetooth-dev libbluray-dev libbz2-dev libcap-dev libcdio-dev \
