@@ -109,6 +109,19 @@ jobs:
           -keypass android -storepass android \
           -keyalg RSA -keysize 2048 -validity 10000
 
+    - name: Rebrand APK (side-by-side with stock Kodi)
+      run: |
+        # Stock Kodi signs as org.xbmc.kodi; our debug keystore won't
+        # match, so Android refuses the install as a signature conflict.
+        # Rename the applicationId and the app's display/library names
+        # so this install is a parallel package, not a replacement.
+        # Must be a single word with no spaces: APP_NAME_LC (TOLOWER of
+        # APP_NAME) feeds into the .so filename and System.loadLibrary.
+        cd kodi
+        sed -i 's|^APP_PACKAGE .*|APP_PACKAGE org.xbmc.kodi.patched|' version.txt
+        sed -i 's|^APP_NAME .*|APP_NAME KodiPatched|' version.txt
+        grep -E '^(APP_PACKAGE|APP_NAME) ' version.txt
+
     - name: Bootstrap + configure tools/depends (arm-linux-androideabi)
       run: |
         cd kodi/tools/depends
