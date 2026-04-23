@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    name: Kodi 21 (Debian trixie, x86_64, patched)
+    name: Kodi 21 (Debian testing, x86_64, patched)
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
@@ -73,10 +73,11 @@ jobs:
         #endif /* __eglextchromium_h_ */
         EOF
 
-    # Build inside debian:trixie so the resulting binary links against the
-    # same glibc / system libs as the P1D target (Debian forky ≈ trixie-next).
-    # We use -DENABLE_INTERNAL_FFMPEG=ON to bundle Kodi's own FFmpeg 6,
-    # sidestepping Debian's FFmpeg 7 API-break dance entirely.
+    # Build inside debian:testing so the resulting binary links against
+    # the same library SOVERSIONs as the target (trixie is now stable and
+    # has bumped libbluray.so.2 → .so.3, libudfread etc. in testing).
+    # -DENABLE_INTERNAL_FFMPEG=ON bundles Kodi's own FFmpeg 6, sidestepping
+    # Debian's FFmpeg 7 API-break dance entirely.
     - name: Build Kodi inside Debian container
       run: |
         # Kodi's RelWithDebInfo objects + debug info easily exceed 10 GB.
@@ -90,7 +91,7 @@ jobs:
           --volume "/mnt/build/kodi-build:/build" \
           --workdir /build \
           --env DEBIAN_FRONTEND=noninteractive \
-          debian:trixie \
+          debian:testing \
           bash -exc '
             apt-get update
             apt-get install -y --no-install-recommends \
@@ -133,8 +134,8 @@ jobs:
             ninja
             ninja install
 
-            # PCRE1 (libpcre3-dev) was removed from Debian trixie — package is
-            # EOL. Kodi 21s CMake still expects PCRE1. Build from source.
+            # PCRE1 (libpcre3-dev) was removed from Debian — package is
+            # EOL. Kodi 21's CMake still expects PCRE1. Build from source.
             cd /tmp/deps
             curl -LO https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.gz/download
             mv download pcre-8.45.tar.gz
@@ -190,12 +191,12 @@ jobs:
         # Archive preserves /opt/kodi-patched/... — extract with
         #   sudo tar xzf THIS.tar.gz -C /
         # and it lands at /opt/kodi-patched.
-        tar czf /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz kodi-patched
-        ls -lah /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz
+        tar czf /tmp/kodi-debian-testing-x86_64-kodi21.tar.gz kodi-patched
+        ls -lah /tmp/kodi-debian-testing-x86_64-kodi21.tar.gz
 
     - name: Upload Kodi build
       uses: actions/upload-artifact@v4
       with:
-        name: kodi-debian-trixie-x86_64-kodi21
-        path: /tmp/kodi-debian-trixie-x86_64-kodi21.tar.gz
+        name: kodi-debian-testing-x86_64-kodi21
+        path: /tmp/kodi-debian-testing-x86_64-kodi21.tar.gz
         if-no-files-found: error
