@@ -21,6 +21,13 @@ jobs:
       KODI_DEPENDS_PREFIX: /mnt/build/xbmc-depends
       KODI_TARBALLS: /mnt/build/xbmc-tarballs
       KODI_BUILD: /mnt/build/kodi-build
+      # Keep caches off the tiny root partition. Root only has ~100 MB free
+      # after maximize-build-space; default ccache (~/.ccache) and gradle
+      # (~/.gradle) will fill it during the Kodi compile + APK package and
+      # crash the runner with ENOSPC.
+      CCACHE_DIR: /mnt/build/ccache
+      GRADLE_USER_HOME: /mnt/build/gradle
+      TMPDIR: /mnt/build/tmp
     steps:
     - name: Free build space on /mnt
       uses: easimon/maximize-build-space@v10
@@ -36,11 +43,12 @@ jobs:
 
     # / has only ~100 MB free after maximize-build-space (the action's
     # root-reserve-mb doesn't actually guarantee that amount). Check out
-    # onto the large /mnt/build volume instead.
-    - name: Prepare checkout target on /mnt
+    # onto the large /mnt/build volume instead, and relocate caches that
+    # would otherwise sit on root.
+    - name: Prepare checkout target + caches on /mnt
       run: |
-        sudo mkdir -p /mnt/build/kodi
-        sudo chown $(id -u):$(id -g) /mnt/build/kodi
+        sudo mkdir -p /mnt/build/kodi /mnt/build/ccache /mnt/build/gradle /mnt/build/tmp
+        sudo chown -R $(id -u):$(id -g) /mnt/build/kodi /mnt/build/ccache /mnt/build/gradle /mnt/build/tmp
         ln -s /mnt/build/kodi $GITHUB_WORKSPACE/kodi
 
     - name: Checkout patched Kodi (ci/build-piers)
