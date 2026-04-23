@@ -360,6 +360,9 @@ int VideoPlayerCodec::ReadPCM(uint8_t* pBuffer, size_t size, size_t* actualsize)
       return READ_EOF;
     }
 
+    if (pPacket->dispTime > 0)
+      m_displayTime = pPacket->dispTime;
+
     pPacket->pts = DVD_NOPTS_VALUE;
     pPacket->dts = DVD_NOPTS_VALUE;
 
@@ -530,4 +533,9 @@ CAEStreamInfo::DataType VideoPlayerCodec::GetPassthroughStreamType(AVCodecID cod
     return format.m_streamInfo.m_type;
   else
     return CAEStreamInfo::DataType::STREAM_TYPE_NULL;
+}
+
+int64_t VideoPlayerCodec::GetTime() const
+{
+  return m_displayTime;
 }
