@@ -135,7 +135,7 @@ jobs:
             ninja install
 
             # PCRE1 (libpcre3-dev) was removed from Debian — package is
-            # EOL. Kodi 21's CMake still expects PCRE1. Build from source.
+            # EOL. Kodi 21s CMake still expects PCRE1. Build from source.
             cd /build/deps
             curl -LO https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.gz/download
             mv download pcre-8.45.tar.gz
