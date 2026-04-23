@@ -149,9 +149,18 @@ jobs:
       if: always()
       id: apk
       run: |
-        # apk target drops the file into the source tree's root
-        find $GITHUB_WORKSPACE/kodi $KODI_BUILD -maxdepth 4 -name '*.apk' -print 2>/dev/null || true
-        APK=$(find $GITHUB_WORKSPACE/kodi $KODI_BUILD -maxdepth 4 -name '*.apk' | head -1)
+        # Gradle's assembleDebug lands at
+        # $KODI_BUILD/xbmc/build/outputs/apk/debug/*.apk (5+ levels deep),
+        # plus Kodi's `make apk` may also stage a copy elsewhere in the
+        # source tree. Search without maxdepth and prefer unsigned/debug
+        # outputs.
+        echo "--- all .apk files found ---"
+        find /mnt/build/kodi /mnt/build/kodi-build -name '*.apk' -print 2>/dev/null || true
+        APK=$(find /mnt/build/kodi-build -name '*.apk' -type f 2>/dev/null | head -1)
+        if [ -z "$APK" ]; then
+          APK=$(find /mnt/build/kodi -name '*.apk' -type f 2>/dev/null | head -1)
+        fi
+        echo "Selected APK: $APK"
         echo "apk=$APK" >> $GITHUB_OUTPUT
 
     - name: Upload APK
