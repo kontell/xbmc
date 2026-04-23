@@ -125,7 +125,7 @@ jobs:
             cp /work/eglextchromium.h /usr/local/include/EGL/eglextchromium.h
 
             # libdisplay-info 0.3.0 (matches upstream kodi-docker-build)
-            mkdir -p /tmp/deps && cd /tmp/deps
+            mkdir -p /build/deps && cd /build/deps
             git clone https://gitlab.freedesktop.org/emersion/libdisplay-info
             cd libdisplay-info
             git checkout 0.3.0
@@ -136,7 +136,7 @@ jobs:
 
             # PCRE1 (libpcre3-dev) was removed from Debian — package is
             # EOL. Kodi 21's CMake still expects PCRE1. Build from source.
-            cd /tmp/deps
+            cd /build/deps
             curl -LO https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.gz/download
             mv download pcre-8.45.tar.gz
             tar xf pcre-8.45.tar.gz
