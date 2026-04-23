@@ -121,7 +121,11 @@ jobs:
     - name: Configure Kodi CMake build
       run: |
         mkdir -p $KODI_BUILD
-        make -C kodi/tools/depends/target/cmakebuildsys BUILD_DIR=$KODI_BUILD
+        # ENABLE_BLURAY_JAR defaults to ON in CMakeLists.txt. The BD-J jars
+        # need an Ant-compatible JDK (1.7 target) which modern JDKs can't
+        # produce. Irrelevant for an Android audiobook app anyway.
+        make -C kodi/tools/depends/target/cmakebuildsys BUILD_DIR=$KODI_BUILD \
+          CMAKE_EXTRA_ARGUMENTS="-DENABLE_BLURAY_JAR=OFF"
 
     - name: Build Kodi
       run: |
