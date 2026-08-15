@@ -156,12 +156,16 @@ namespace XBMCAddon
     void Player::stop()
     {
       XBMC_TRACE;
+      DelayedCallGuard dc(languageHook);
+
       CServiceBroker::GetAppMessenger()->SendMsg(TMSG_MEDIA_STOP);
     }
 
     void Player::pause()
     {
       XBMC_TRACE;
+      DelayedCallGuard dc(languageHook);
+
       CServiceBroker::GetAppMessenger()->SendMsg(TMSG_MEDIA_PAUSE);
     }
 
