@@ -3144,15 +3144,22 @@ void CVideoPlayer::HandleMessages()
       CDVDMsgPlayerSeekChapter& msg(*std::static_pointer_cast<CDVDMsgPlayerSeekChapter>(pMsg));
       double start = DVD_NOPTS_VALUE;
       int64_t offset = 0;
+      // Set when a call site has already worked out the offset in GetTime()'s domain,
+      // which it cannot be derived from `start` in - see the IChapter fallback below.
+      bool offsetKnown{false};
       int newChapter{std::max(1, msg.GetChapter())};
       bool inCut{false};
       bool seekDone{false};
       const int64_t beforeSeek = GetTime();
 
-      const auto FinishChapterSeek = [this, &offset, &start, &newChapter, &seekDone, beforeSeek]()
+      const auto FinishChapterSeek =
+          [this, &offset, &offsetKnown, &start, &newChapter, &seekDone, beforeSeek]()
       {
+        // `start` is on the packet clock: FlushBuffers() makes it CheckPlayerInit()'s drop
+        // threshold and jumps the master clock to it. A value from any other timeline
+        // costs decoded packets, not just accuracy.
         FlushBuffers(start, true, true);
-        if (start != DVD_NOPTS_VALUE)
+        if (!offsetKnown && start != DVD_NOPTS_VALUE)
         {
           const int64_t targetTime{
               m_Edl.GetTimeWithoutCuts(std::chrono::milliseconds(DVD_TIME_TO_MSEC(start))).count()};
@@ -3206,10 +3213,22 @@ void CVideoPlayer::HandleMessages()
           if (pChapter->SeekChapter(rawChapter))
           {
             // IChapter::SeekChapter() has no startpts out param, unlike the demuxer's
-            // SeekChapter()/SeekTime(), so approximate the landed position with the
-            // chapter's nominal (raw) start instead of leaving start/offset at 0.
-            start =
-                DVD_MSEC_TO_TIME(static_cast<double>(pChapter->GetChapterPos(rawChapter).count()));
+            // SeekChapter()/SeekTime(), so approximate the landed position from the
+            // chapter's nominal (raw) start. GetChapterPos() reports in state.time's
+            // domain, which is not the packet clock: convert it the same way the seek
+            // handler above does, or FlushBuffers() gets a display time where it needs a
+            // pts and CheckPlayerInit() discards every packet up to the difference. The
+            // offset readout wants the unconverted value, so take that first. Zero means
+            // the inputstream does not report chapter positions at all - except for the
+            // first chapter, which is where one legitimately begins.
+            if (const std::chrono::milliseconds nominalStart{pChapter->GetChapterPos(rawChapter)};
+                nominalStart > 0ms || rawChapter == 1)
+            {
+              offset = m_Edl.GetTimeWithoutCuts(nominalStart).count() - beforeSeek;
+              offsetKnown = true;
+              start =
+                  DVD_MSEC_TO_TIME(static_cast<double>(nominalStart.count())) - m_State.time_offset;
+            }
             FinishChapterSeek();
           }
         }
