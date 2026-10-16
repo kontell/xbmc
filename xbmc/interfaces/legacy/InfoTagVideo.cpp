@@ -109,9 +109,19 @@ namespace XBMCAddon
       streamDetail->m_iChannels = m_channels;
       streamDetail->m_strCodec = m_codec;
       streamDetail->m_strLanguage = CLangCodeExpander::AsISO6392B(m_language);
-      streamDetail->m_flags = ToStreamFlags(m_flags);
+      streamDetail->m_flags = m_flags;
 
       return streamDetail;
+    }
+
+    std::vector<String> AudioStreamDetail::getFlags() const
+    {
+      return CStreamDetails::StreamFlagsToNames(m_flags);
+    }
+
+    void AudioStreamDetail::setFlags(std::vector<String> flags)
+    {
+      m_flags = ToStreamFlags(flags);
     }
 
     SubtitleStreamDetail::SubtitleStreamDetail(const String& language /* = emptyString */)
@@ -123,9 +133,19 @@ namespace XBMCAddon
     {
       auto streamDetail = new CStreamDetailSubtitle();
       streamDetail->m_strLanguage = CLangCodeExpander::AsISO6392B(m_language);
-      streamDetail->m_flags = ToStreamFlags(m_flags);
+      streamDetail->m_flags = m_flags;
 
       return streamDetail;
+    }
+
+    std::vector<String> SubtitleStreamDetail::getFlags() const
+    {
+      return CStreamDetails::StreamFlagsToNames(m_flags);
+    }
+
+    void SubtitleStreamDetail::setFlags(std::vector<String> flags)
+    {
+      m_flags = ToStreamFlags(flags);
     }
 
     InfoTagVideo::InfoTagVideo(bool offscreen /* = false */)
