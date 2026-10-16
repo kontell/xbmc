@@ -298,6 +298,12 @@ namespace XBMCAddon
       setLastPlayedRaw(infoTag, lastPlayed);
     }
 
+    void InfoTagMusic::setDateAdded(const String& dateAdded)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      setDateAddedRaw(infoTag, dateAdded);
+    }
+
     void InfoTagMusic::setMusicBrainzTrackID(const String& musicBrainzTrackID)
     {
       XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
@@ -438,6 +444,11 @@ namespace XBMCAddon
                                         const String& lastPlayed)
     {
       infoTag->SetLastPlayed(lastPlayed);
+    }
+
+    void InfoTagMusic::setDateAddedRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& dateAdded)
+    {
+      infoTag->SetDateAdded(dateAdded);
     }
 
     void InfoTagMusic::setMusicBrainzTrackIDRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
