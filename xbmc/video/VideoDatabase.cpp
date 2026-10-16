@@ -10386,6 +10386,9 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
             if (exists == PluginItemExists::UNKNOWN)
               unreachableFiles.try_emplace(m_pDS2->fv("files.idFile").get_asInt(),
                                            CURL(fullPath).GetHostName());
+            // The add-on is the source of its items, and it says this one has gone
+            if (exists == PluginItemExists::NO)
+              decidedFiles.insert(m_pDS2->fv("files.idFile").get_asInt());
             del = exists == PluginItemExists::NO;
           }
         }
