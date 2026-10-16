@@ -16,6 +16,7 @@
 #include "filesystem/Directory.h"
 #include "filesystem/File.h"
 #include "filesystem/MultiPathDirectory.h"
+#include "filesystem/PluginDirectory.h"
 #include "filesystem/SpecialProtocol.h"
 #include "imagefiles/ImageFileURL.h"
 #include "interfaces/AnnouncementManager.h"
@@ -38,6 +39,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -48,6 +50,21 @@
 namespace
 {
 constexpr const char* DB_NAME = "TestVideoDatabase";
+
+// Answers for the plugins of a test, which has none to ask
+class CTestVideoDatabase : public CVideoDatabase
+{
+public:
+  std::map<std::string, XFILE::PluginItemExists, std::less<>> m_pluginAnswers;
+
+protected:
+  XFILE::PluginItemExists CheckPluginItemExists(const std::string& content,
+                                                const std::string& path) const override
+  {
+    const auto answer{m_pluginAnswers.find(path)};
+    return answer == m_pluginAnswers.end() ? XFILE::PluginItemExists::UNKNOWN : answer->second;
+  }
+};
 
 class TestVideoDatabase : public ::testing::Test
 {
@@ -166,7 +183,7 @@ protected:
   }
 
   DatabaseSettings m_settings;
-  CVideoDatabase m_db;
+  CTestVideoDatabase m_db;
   std::shared_ptr<ANNOUNCEMENT::CAnnouncementManager> m_previousAnnouncementManager;
 };
 } // namespace
@@ -945,9 +962,10 @@ protected:
 
   void TearDown() override
   {
-    std::erase_if(CMediaSourceSettings::GetInstance().GetSources(KODI::MEDIA::MediaSection::VIDEO),
-                  [this](const CMediaSource& source)
-                  { return source.strPath.starts_with(m_root); });
+    std::erase_if(
+        CMediaSourceSettings::GetInstance().GetSources(KODI::MEDIA::MediaSection::VIDEO),
+        [this](const CMediaSource& source)
+        { return source.strPath.starts_with(m_root) || source.strPath.starts_with(PLUGIN_ROOT); });
     XFILE::CDirectory::RemoveRecursive(m_root);
     TestVideoDatabase::TearDown();
   }
@@ -1009,6 +1027,10 @@ protected:
   }
 
   void Clean() { m_db.CleanDatabase(nullptr, {}, false); }
+
+  // A library item of a plugin, filed as the scanner files one under a folder with its content
+  // set, where Kodi asks the plugin whether it still exists
+  static constexpr const char* PLUGIN_ROOT = "plugin://plugin.video.test/";
 
   std::string m_root;
 };
@@ -1585,4 +1607,45 @@ TEST_F(TestVideoDatabase, SetDefaultVideoVersionKeepsOnlyTheMovieArt)
                    "SELECT COUNT(*) FROM art WHERE media_id = " + std::to_string(movieId) +
                    " AND media_type = 'movie' AND type = 'fanart'"));
   EXPECT_EQ("old-fanart.jpg", m_db.GetArtForItem(movieId, KODI::MEDIA::TYPE::MOVIE, "fanart"));
+}
+
+TEST_F(TestVideoDatabaseClean, KeepsAPluginItemItsAddonCouldNotAnswerFor)
+{
+  const std::string movies{std::string{PLUGIN_ROOT} + "movies/"};
+  AddSource(movies, "movies");
+  const std::string film{movies + "?id=1"};
+  const int idMovie{AddMovie(film)};
+  ASSERT_GT(idMovie, 0);
+
+  Clean();
+
+  EXPECT_EQ(idMovie, m_db.GetMovieId(film));
+}
+
+TEST_F(TestVideoDatabaseClean, RemovesAPluginItemItsAddonSaysHasGone)
+{
+  const std::string movies{std::string{PLUGIN_ROOT} + "movies/"};
+  AddSource(movies, "movies");
+  const std::string film{movies + "?id=1"};
+  ASSERT_GT(AddMovie(film), 0);
+  m_db.m_pluginAnswers.emplace(film, XFILE::PluginItemExists::NO);
+
+  Clean();
+
+  EXPECT_EQ(-1, m_db.GetMovieId(film));
+}
+
+TEST_F(TestVideoDatabaseClean, KeepsTheContentOfAPluginFolderItsAddonCouldNotAnswerFor)
+{
+  const std::string movies{Folder(m_root, "movies")};
+  AddSource(movies, "movies");
+  ASSERT_GT(AddMovie(File(movies, "Kept.mkv")), 0);
+  const std::string shows{std::string{PLUGIN_ROOT} + "tvshows/"};
+  AddSource(shows, "tvshows");
+
+  Clean();
+
+  EXPECT_EQ(1, m_db.GetSingleValueInt(m_db.PrepareSQL(
+                   "SELECT COUNT(*) FROM path WHERE strPath='%s' AND strContent='tvshows'",
+                   shows.c_str())));
 }
