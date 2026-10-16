@@ -3329,7 +3329,7 @@ int CVideoDatabase::SetDetailsForEpisode(CVideoInfoTag& details,
     AddCast(idEpisode, MEDIA::TYPE::EPISODE, details.m_cast);
     AddActorLinksToItem(idEpisode, MEDIA::TYPE::EPISODE, "director", details.m_director);
     AddActorLinksToItem(idEpisode, MEDIA::TYPE::EPISODE, "writer", details.m_writingCredits);
-    UpdateLinksToItem(idEpisode, MEDIA::TYPE::EPISODE, "tag", details.m_tags);
+    AddLinksToItem(idEpisode, MEDIA::TYPE::EPISODE, "tag", details.m_tags);
 
     // add ratings
     details.m_iIdRating =

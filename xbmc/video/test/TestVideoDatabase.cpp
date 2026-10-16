@@ -531,21 +531,20 @@ TEST_F(TestVideoDatabase, AnEpisodeKeepsItsTags)
   EXPECT_EQ((std::vector<std::string>{"Favourite", "Pilot"}), EpisodeTags(idEpisode));
 }
 
-TEST_F(TestVideoDatabase, SettingAnEpisodeAgainReplacesItsTags)
+TEST_F(TestVideoDatabase, WritingAnEpisodeWithoutItsTagsKeepsThem)
 {
   const int idShow{AddTvShow("/tv/Show/")};
   ASSERT_GT(idShow, 0);
   const int idEpisode{AddEpisode(idShow, "/tv/Show/e01.mkv", 1, {"Favourite", "Pilot"})};
   ASSERT_GT(idEpisode, 0);
 
+  // As a listing's item is written back after its streams were read, with no tags loaded
   CVideoInfoTag details;
-  ASSERT_TRUE(m_db.GetEpisodeInfo("", details, idEpisode));
+  ASSERT_TRUE(m_db.GetEpisodeInfo("", details, idEpisode, VideoDbDetailsNone));
+  ASSERT_TRUE(details.m_tags.empty());
   ASSERT_EQ(idEpisode, m_db.SetDetailsForEpisode(details, KODI::ART::Artwork{}, idShow, idEpisode));
-  EXPECT_EQ((std::vector<std::string>{"Favourite", "Pilot"}), EpisodeTags(idEpisode));
 
-  details.SetTags({"Pilot"});
-  ASSERT_EQ(idEpisode, m_db.SetDetailsForEpisode(details, KODI::ART::Artwork{}, idShow, idEpisode));
-  EXPECT_EQ(std::vector<std::string>{"Pilot"}, EpisodeTags(idEpisode));
+  EXPECT_EQ((std::vector<std::string>{"Favourite", "Pilot"}), EpisodeTags(idEpisode));
 }
 
 TEST_F(TestVideoDatabase, RemovingAnEpisodeRemovesItsTags)
