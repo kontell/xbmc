@@ -2395,6 +2395,43 @@ namespace XBMCAddon
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
       /// \ingroup python_InfoTagVideo
+      /// @brief \python_func{ setHasVideoVersions(hasVideoVersions) }
+      /// Set whether the movie has more than one version, as `<hasvideoversions>` does in an NFO
+      /// file. When the library is scanned, such an item is added as a version of the movie
+      /// already in the library with the same unique ID.
+      ///
+      /// @param hasVideoVersions   bool - True if the movie has versions.
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      setHasVideoVersions(...);
+#else
+      void setHasVideoVersions(bool hasVideoVersions);
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagVideo
+      /// @brief \python_func{ setIsDefaultVideoVersion(isDefaultVideoVersion) }
+      /// Set whether the item is the default version of its movie, as `<isdefaultvideoversion>`
+      /// does in an NFO file.
+      ///
+      /// @param isDefaultVideoVersion   bool - True if the item is the default version.
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      setIsDefaultVideoVersion(...);
+#else
+      void setIsDefaultVideoVersion(bool isDefaultVideoVersion);
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagVideo
       /// @brief \python_func{ setProductionCode(const String& productioncode) }
       /// Set the production code of the video item.
       ///
@@ -2866,6 +2903,8 @@ namespace XBMCAddon
       static void setSetOverviewRaw(CVideoInfoTag* infoTag, const String& setOverview);
       static void setTagsRaw(CVideoInfoTag* infoTag, std::vector<String> tags);
       static void setVideoAssetTitleRaw(CVideoInfoTag* infoTag, const String& videoAssetTitle);
+      static void setHasVideoVersionsRaw(CVideoInfoTag* infoTag, bool hasVideoVersions);
+      static void setIsDefaultVideoVersionRaw(CVideoInfoTag* infoTag, bool isDefaultVideoVersion);
       static void setProductionCodeRaw(CVideoInfoTag* infoTag, const String& productionCode);
       static void setFirstAiredRaw(CVideoInfoTag* infoTag, const String& firstAired);
       static void setLastPlayedRaw(CVideoInfoTag* infoTag, const String& lastPlayed);
