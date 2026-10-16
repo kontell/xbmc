@@ -10663,6 +10663,23 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
         }
         m_pDS->close();
 
+        // The scanner finds a movie's versions and extras when it scans the movie's folder, and
+        // skips a folder whose hash matches. Clear it for a movie that loses one, wherever the
+        // file was filed, or the asset is not found again when it comes back.
+        m_pDS->query("SELECT DISTINCT path.strPath FROM videoversion "
+                     "JOIN movie ON movie.idMovie = videoversion.idMedia "
+                     "AND videoversion.media_type = 'movie' "
+                     "JOIN files ON files.idFile = movie.idFile "
+                     "JOIN path ON path.idPath = files.idPath "
+                     "WHERE videoversion.idFile <> movie.idFile AND videoversion.idFile IN " +
+                     filesToDelete);
+        while (!m_pDS->eof())
+        {
+          pathsToInvalidate.emplace_back(m_pDS->fv(0).get_asString());
+          m_pDS->next();
+        }
+        m_pDS->close();
+
         // The hash of a show folder covers every folder below it, and a show can have more
         // than one folder. Clear them all for a show that loses episodes, or the scanner skips
         // the whole show when its files come back unchanged.

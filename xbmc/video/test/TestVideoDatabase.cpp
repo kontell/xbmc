@@ -2420,11 +2420,32 @@ TEST_F(TestVideoDatabaseClean, CleaningAPluginMovieFolderRemovesItsExtraThatHasG
   int idExtra{-1};
   ASSERT_NO_FATAL_FAILURE(AddPluginMovieWithExtra(film, idMovie, extra, idExtra));
   m_db.m_pluginAnswers.emplace(extra, XFILE::PluginItemExists::NO);
+  const std::string folder{std::string{PLUGIN_ROOT} + "movies/1/"};
+  ASSERT_TRUE(m_db.SetPathHash(folder, "hash"));
 
-  Clean(std::string{PLUGIN_ROOT} + "movies/1/");
+  Clean(folder);
 
   EXPECT_EQ(idMovie, m_db.GetMovieId(film));
   EXPECT_EQ(0, CountFile(idExtra));
+  EXPECT_EQ("", PathHash(folder));
+}
+
+TEST_F(TestVideoDatabaseClean, ClearsTheHashOfTheFolderOfAMovieThatLosesAnExtra)
+{
+  const std::string movies{Folder(m_root, "movies")};
+  AddSource(movies, "movies");
+  const std::string film{Folder(movies, "Film (2010)")};
+  const int idMovie{AddMovie(File(film, "Film (2010).mkv"))};
+  ASSERT_GT(idMovie, 0);
+  const std::string extra{File(Folder(film, "extras"), "Trailer.mkv")};
+  ASSERT_GT(AddAsset(idMovie, extra, VideoAssetType::EXTRA), 0);
+  ASSERT_TRUE(m_db.SetPathHash(film, "hash"));
+
+  ASSERT_TRUE(XFILE::CFile::Delete(extra));
+  Clean();
+
+  EXPECT_GT(m_db.GetFileIdByMovie(idMovie), 0);
+  EXPECT_EQ("", PathHash(film));
 }
 
 TEST_F(TestVideoDatabaseClean, CleaningAMovieFolderRemovesItsVersionElsewhereThatHasGone)
