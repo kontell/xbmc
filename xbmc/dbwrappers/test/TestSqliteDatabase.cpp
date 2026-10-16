@@ -28,7 +28,7 @@ TEST(TestSqliteDatabase, ConnectionUsesWriteAheadLogging)
   std::string mode;
   {
     const std::unique_ptr<dbiplus::Dataset> ds{db.CreateDataset()};
-    ASSERT_TRUE(ds->query("PRAGMA journal_mode"));
+    ASSERT_TRUE(ds->query("SELECT * FROM pragma_journal_mode"));
     ASSERT_FALSE(ds->eof());
     mode = ds->fv(0).get_asString();
     ds->close();
