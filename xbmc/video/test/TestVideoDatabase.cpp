@@ -84,12 +84,15 @@ public:
     }
     else if (message == "OnRefresh")
     {
+      if (m_refreshes == 0)
+        m_removalsBeforeRefresh = m_removals.load();
       ++m_refreshes;
       m_refreshed.Set();
     }
   }
 
   std::atomic<int> m_removals{0};
+  std::atomic<int> m_removalsBeforeRefresh{0};
   std::atomic<int> m_inTransaction{0};
   std::atomic<int> m_refreshes{0};
   CEvent m_refreshed;
@@ -1057,6 +1060,61 @@ TEST_F(TestVideoDatabase, RemoveContentForPathAnnouncesItsRemovalsAsOneTransacti
   EXPECT_EQ(5, announcer.m_removals);
   EXPECT_EQ(announcer.m_removals, announcer.m_inTransaction);
   EXPECT_EQ(1, announcer.m_refreshes);
+}
+
+TEST_F(TestVideoDatabase, RemoveContentForPathRemovesAMultipathSourceAsOneTransaction)
+{
+  ASSERT_GT(AddMovie("/media/one/One (2010)/One (2010).mkv"), 0);
+  ASSERT_GT(AddMovie("/media/two/Two (2011)/Two (2011).mkv"), 0);
+
+  CRemovalAnnouncer announcer;
+  const auto manager{CServiceBroker::GetAnnouncementManager()};
+  manager->AddAnnouncer(&announcer, ANNOUNCEMENT::VideoLibrary);
+  manager->Start();
+
+  m_db.RemoveContentForPath(XFILE::CMultiPathDirectory::ConstructMultiPath(
+      std::vector<std::string>{"/media/one/", "/media/two/"}));
+
+  const bool refreshed{announcer.m_refreshed.Wait(5s)};
+  manager->Deinitialize();
+  ASSERT_TRUE(refreshed);
+  EXPECT_EQ(2, announcer.m_removalsBeforeRefresh);
+  EXPECT_EQ(announcer.m_removals, announcer.m_inTransaction);
+}
+
+TEST_F(TestVideoDatabase, RemoveContentForPathKeepsEverythingWhenAMovieCannotBeRemoved)
+{
+  const MovieWithVersion movie{AddMovieWithVersion({}, {})};
+  ASSERT_GT(movie.movieId, 0);
+  ASSERT_TRUE(m_db.ExecuteQuery(m_db.PrepareSQL(
+      "CREATE TRIGGER fail_version BEFORE DELETE ON videoversion WHEN old.idFile=%i "
+      "BEGIN SELECT RAISE(ABORT, 'version kept'); END",
+      movie.versionFileId)));
+
+  m_db.RemoveContentForPath("/movies/");
+
+  EXPECT_EQ(1, m_db.GetSingleValueInt(
+                   m_db.PrepareSQL("SELECT COUNT(*) FROM movie WHERE idMovie=%i", movie.movieId)));
+  EXPECT_EQ(2, m_db.GetSingleValueInt(m_db.PrepareSQL(
+                   "SELECT COUNT(*) FROM videoversion WHERE idMedia=%i", movie.movieId)));
+}
+
+TEST_F(TestVideoDatabase, RemoveContentForPathKeepsEverythingWhenAShowCannotBeRemoved)
+{
+  const int idShow{AddTvShow("/media/shows/Show/")};
+  ASSERT_GT(idShow, 0);
+  ASSERT_GT(AddEpisode(idShow, "/media/shows/Show/S01E01.mkv", 1), 0);
+  ASSERT_TRUE(m_db.ExecuteQuery(
+      m_db.PrepareSQL("CREATE TRIGGER fail_show BEFORE DELETE ON tvshow WHEN old.idShow=%i "
+                      "BEGIN SELECT RAISE(ABORT, 'show kept'); END",
+                      idShow)));
+
+  m_db.RemoveContentForPath("/media/shows/");
+
+  EXPECT_EQ(1, m_db.GetSingleValueInt(
+                   m_db.PrepareSQL("SELECT COUNT(*) FROM tvshow WHERE idShow=%i", idShow)));
+  EXPECT_EQ(1, m_db.GetSingleValueInt(
+                   m_db.PrepareSQL("SELECT COUNT(*) FROM episode WHERE idShow=%i", idShow)));
 }
 
 TEST_F(TestVideoDatabase, RemoveContentForPathRemovesDiscRips)

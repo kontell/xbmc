@@ -4398,8 +4398,10 @@ void CVideoDatabase::DeleteTvShow(int idTvShow, bool bKeepId /* = false */)
   catch (...)
   {
     CLog::LogF(LOGERROR, "({}) failed", idTvShow);
-    if (!inTransaction)
-      RollbackTransaction();
+    // In a transaction opened elsewhere, the failure is for its owner to roll back
+    if (inTransaction)
+      throw;
+    RollbackTransaction();
   }
 }
 
@@ -4519,8 +4521,10 @@ void CVideoDatabase::DeleteMusicVideo(int idMVideo, bool bKeepId /* = false */)
   catch (...)
   {
     CLog::LogF(LOGERROR, "failed");
-    if (!inTransaction)
-      RollbackTransaction();
+    // In a transaction opened elsewhere, the failure is for its owner to roll back
+    if (inTransaction)
+      throw;
+    RollbackTransaction();
   }
 }
 
@@ -6227,15 +6231,6 @@ void CVideoDatabase::SetStackTimes(const std::string& filePath,
 void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
                                           CGUIDialogProgress* progress /* = nullptr */)
 {
-  if(URIUtils::IsMultiPath(strPath))
-  {
-    std::vector<std::string> paths;
-    CMultiPathDirectory::GetPaths(strPath, paths);
-
-    for (const auto& path : paths)
-      RemoveContentForPath(path, progress);
-  }
-
   if (nullptr == m_pDB)
     return;
   if (nullptr == m_pDS)
@@ -6257,8 +6252,15 @@ void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
       progress->Open();
       progress->ShowProgressBar(true);
     }
-    std::vector<std::pair<int, std::string> > paths;
-    GetSubPaths(strPath, paths, false);
+    // A multipath source goes with the paths it is made of, in the same transaction
+    std::vector<std::string> roots;
+    FlattenMultiPath(strPath, roots);
+    if (URIUtils::IsMultiPath(strPath))
+      roots.emplace_back(strPath);
+
+    std::vector<std::pair<int, std::string>> paths;
+    for (const auto& root : roots)
+      GetSubPaths(root, paths, false);
 
     if (!inTransaction)
       BeginTransaction();
@@ -6310,7 +6312,8 @@ void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
                 GetDbId(PrepareSQL("SELECT idSet FROM movie WHERE idMovie=%i", movieId))};
             if (idSet > 0)
               sets.insert(idSet);
-            DeleteMovie(movieId);
+            if (!DeleteMovie(movieId))
+              throw DbErrors("Unable to remove movie %i", movieId);
             removed = true;
           }
           else
@@ -6340,7 +6343,7 @@ void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
       }
     }
 
-    // A set is only listed through its movies, so one the removal emptied would stay unseen
+    // A set is only listed through its movies, so one that this removal emptied would stay unseen
     for (const int idSet : sets)
     {
       if (GetSingleValueInt(PrepareSQL("SELECT COUNT(*) FROM movie WHERE idSet=%i", idSet)) == 0)
