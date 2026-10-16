@@ -169,14 +169,16 @@ CTextureCache::UncachedImage UncachedArt(bool cachedByScan)
   return cachedByScan ? CTextureCache::UncachedImage::CACHE : CTextureCache::UncachedImage::COPY;
 }
 
-// Asks whether to remove the media items of a source that can't be reached
+// Asks whether to remove the media items of a source that can't be reached. Only Remove, the
+// dialog's No button, removes them: backing out keeps them.
 bool AskToRemoveItemsOfUnavailableSource(const std::string& sourcePath)
 {
   CGUIDialogYesNo* pDialog =
       CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogYesNo>(WINDOW_DIALOG_YES_NO);
   if (!pDialog)
-    return true;
+    return false;
 
+  pDialog->Reset();
   CURL sourceUrl(sourcePath);
   pDialog->SetHeading(CVariant{15012});
   pDialog->SetText(CVariant{
@@ -186,7 +188,7 @@ bool AskToRemoveItemsOfUnavailableSource(const std::string& sourcePath)
   pDialog->SetChoice(1, CVariant{15014});
   pDialog->Open();
 
-  return !pDialog->IsConfirmed();
+  return pDialog->GetResult() == CGUIDialogYesNo::DIALOG_RESULT_NO;
 }
 } // unnamed namespace
 
