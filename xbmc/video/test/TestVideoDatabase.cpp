@@ -21,12 +21,14 @@
 #include "imagefiles/ImageFileURL.h"
 #include "interfaces/AnnouncementManager.h"
 #include "language/LangInfo.h"
+#include "interfaces/IAnnouncer.h"
 #include "playlists/SmartPlayList.h"
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/MediaSourceSettings.h"
 #include "settings/SettingsComponent.h"
+#include "threads/Event.h"
 #include "utils/Artwork.h"
 #include "utils/DatabaseUtils.h"
 #include "utils/StreamDetails.h"
@@ -47,6 +49,8 @@
 #include "video/jobs/VideoLibraryResetResumePointJob.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <iterator>
 #include <memory>
@@ -60,6 +64,36 @@
 namespace
 {
 constexpr const char* DB_NAME = "TestVideoDatabase";
+
+using namespace std::chrono_literals;
+
+// Counts the removals announced and the refreshes that follow them
+class CRemovalAnnouncer : public ANNOUNCEMENT::IAnnouncer
+{
+public:
+  void Announce(ANNOUNCEMENT::AnnouncementFlag flag,
+                const std::string& sender,
+                const std::string& message,
+                const CVariant& data) override
+  {
+    if (message == "OnRemove")
+    {
+      ++m_removals;
+      if (data.isMember("transaction") && data["transaction"].asBoolean())
+        ++m_inTransaction;
+    }
+    else if (message == "OnRefresh")
+    {
+      ++m_refreshes;
+      m_refreshed.Set();
+    }
+  }
+
+  std::atomic<int> m_removals{0};
+  std::atomic<int> m_inTransaction{0};
+  std::atomic<int> m_refreshes{0};
+  CEvent m_refreshed;
+};
 
 class TestVideoDatabase : public ::testing::Test
 {
@@ -977,6 +1011,52 @@ TEST_F(TestVideoDatabase, GetSourcePathReadsTheSettingsOfTheSourceOfASubFolder)
   EXPECT_EQ("/movies/", sourcePath);
   EXPECT_TRUE(settings.parent_name);
   EXPECT_EQ(0, settings.recurse);
+}
+
+TEST_F(TestVideoDatabase, RemoveContentForPathRemovesTheSetsItEmpties)
+{
+  const int removed{AddMovie("/media/movies/Removed (2010)/Removed (2010).mkv")};
+  const int alsoRemoved{AddMovie("/media/movies/Also Removed (2011)/Also Removed (2011).mkv")};
+  const int kept{AddMovie("/other/Kept (2012)/Kept (2012).mkv")};
+  ASSERT_GT(removed, 0);
+  ASSERT_GT(alsoRemoved, 0);
+  ASSERT_GT(kept, 0);
+  const int emptied{m_db.AddSet("Emptied")};
+  const int shared{m_db.AddSet("Shared")};
+  m_db.SetMovieSet(removed, emptied);
+  m_db.SetMovieSet(alsoRemoved, shared);
+  m_db.SetMovieSet(kept, shared);
+
+  m_db.RemoveContentForPath("/media/movies/");
+
+  EXPECT_EQ(0, m_db.GetSingleValueInt(
+                   m_db.PrepareSQL("SELECT COUNT(*) FROM sets WHERE idSet=%i", emptied)));
+  EXPECT_EQ(1, m_db.GetSingleValueInt(
+                   m_db.PrepareSQL("SELECT COUNT(*) FROM sets WHERE idSet=%i", shared)));
+}
+
+TEST_F(TestVideoDatabase, RemoveContentForPathAnnouncesItsRemovalsAsOneTransaction)
+{
+  ASSERT_GT(AddMovie("/media/movies/One (2010)/One (2010).mkv"), 0);
+  ASSERT_GT(AddMovie("/media/movies/Two (2011)/Two (2011).mkv"), 0);
+  const int idShow{AddTvShow("/media/shows/Show/")};
+  ASSERT_GT(idShow, 0);
+  ASSERT_GT(AddEpisode(idShow, "/media/shows/Show/S01E01.mkv", 1), 0);
+  ASSERT_GT(AddEpisode(idShow, "/media/shows/Show/S01E02.mkv", 2), 0);
+
+  CRemovalAnnouncer announcer;
+  const auto manager{CServiceBroker::GetAnnouncementManager()};
+  manager->AddAnnouncer(&announcer, ANNOUNCEMENT::VideoLibrary);
+  manager->Start();
+
+  m_db.RemoveContentForPath("/media/");
+
+  const bool refreshed{announcer.m_refreshed.Wait(5s)};
+  manager->Deinitialize();
+  ASSERT_TRUE(refreshed);
+  EXPECT_EQ(5, announcer.m_removals);
+  EXPECT_EQ(announcer.m_removals, announcer.m_inTransaction);
+  EXPECT_EQ(1, announcer.m_refreshes);
 }
 
 TEST_F(TestVideoDatabase, RemoveContentForPathRemovesDiscRips)
