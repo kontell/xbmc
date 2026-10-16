@@ -424,6 +424,13 @@ int SqliteDatabase::postconnect()
     throw DbErrors("%s", getErrorMsg());
   }
 
+  // With write-ahead logging a commit appends to the log, where a rollback journal is a file
+  // created, synced and removed for every transaction. A database that can't change mode keeps
+  // the journal it has.
+  if (sqlite3_exec(getHandle(), "PRAGMA journal_mode=WAL", nullptr, nullptr, nullptr) != SQLITE_OK)
+    CLog::Log(LOGWARNING, "SqliteDatabase: {} keeps its journal mode: {}", db,
+              sqlite3_errmsg(getHandle()));
+
   return DB_COMMAND_OK;
 }
 
