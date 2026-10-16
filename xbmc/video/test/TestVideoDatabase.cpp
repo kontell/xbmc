@@ -1100,6 +1100,39 @@ protected:
 
   void Clean() { m_db.CleanDatabase(nullptr, {}, false); }
 
+  void Clean(const std::string& directory)
+  {
+    std::set<int> paths;
+    ASSERT_TRUE(m_db.GetPathsForCleaning(directory, "", paths));
+    ASSERT_FALSE(paths.empty());
+    m_db.CleanDatabase(nullptr, paths, false);
+  }
+
+  int CountFile(int idFile)
+  {
+    return m_db.GetSingleValueInt(
+        m_db.PrepareSQL("SELECT COUNT(*) FROM files WHERE idFile=%i", idFile));
+  }
+
+  // A plugin's movie with an extra, as a scan of the movie's folder files them: the movie by a URL
+  // with options, under its folder, and the extra by one without, under the add-on's root
+  void AddPluginMovieWithExtra(std::string& film, int& idMovie, std::string& extra, int& idExtra)
+  {
+    const std::string folder{std::string{PLUGIN_ROOT} + "movies/1/"};
+    SetContent(folder, "movies");
+    film = folder + "?id=1";
+    idMovie = AddMovie(film);
+    ASSERT_GT(idMovie, 0);
+    extra = folder + "extras/Trailer.mkv";
+    idExtra = AddAsset(idMovie, extra, VideoAssetType::EXTRA);
+    ASSERT_GT(idExtra, 0);
+    ASSERT_EQ(PLUGIN_ROOT, m_db.GetSingleValue(m_db.PrepareSQL(
+                               "SELECT strPath FROM path JOIN files ON files.idPath = path.idPath "
+                               "WHERE idFile=%i",
+                               idExtra)));
+    m_db.m_pluginAnswers.emplace(film, XFILE::PluginItemExists::YES);
+  }
+
   // A library item of a plugin, filed as the scanner files one under a folder with its content
   // set, where Kodi asks the plugin whether it still exists
   static constexpr const char* PLUGIN_ROOT = "plugin://plugin.video.test/";
@@ -2363,4 +2396,50 @@ TEST_F(TestVideoDatabaseClean, RemovesAPathStylePluginItemItsAddonSaysHasGone)
   Clean();
 
   EXPECT_EQ(-1, m_db.GetMovieId(film));
+}
+
+TEST_F(TestVideoDatabaseClean, AsksTheAddonAboutAnExtraFiledUnderItsRoot)
+{
+  std::string film;
+  std::string extra;
+  int idMovie{-1};
+  int idExtra{-1};
+  ASSERT_NO_FATAL_FAILURE(AddPluginMovieWithExtra(film, idMovie, extra, idExtra));
+  m_db.m_pluginAnswers.emplace(extra, XFILE::PluginItemExists::YES);
+
+  Clean();
+
+  EXPECT_EQ(1, CountFile(idExtra));
+}
+
+TEST_F(TestVideoDatabaseClean, CleaningAPluginMovieFolderRemovesItsExtraThatHasGone)
+{
+  std::string film;
+  std::string extra;
+  int idMovie{-1};
+  int idExtra{-1};
+  ASSERT_NO_FATAL_FAILURE(AddPluginMovieWithExtra(film, idMovie, extra, idExtra));
+  m_db.m_pluginAnswers.emplace(extra, XFILE::PluginItemExists::NO);
+
+  Clean(std::string{PLUGIN_ROOT} + "movies/1/");
+
+  EXPECT_EQ(idMovie, m_db.GetMovieId(film));
+  EXPECT_EQ(0, CountFile(idExtra));
+}
+
+TEST_F(TestVideoDatabaseClean, CleaningAMovieFolderRemovesItsVersionElsewhereThatHasGone)
+{
+  const std::string movies{Folder(m_root, "movies")};
+  AddSource(movies, "movies");
+  const std::string film{Folder(movies, "Film (2010)")};
+  const int idMovie{AddMovie(File(film, "Film (2010).mkv"))};
+  ASSERT_GT(idMovie, 0);
+  const std::string version{File(Folder(movies, "Other"), "Film (2010) Extended.mkv")};
+  const int idVersion{AddAsset(idMovie, version)};
+  ASSERT_GT(idVersion, 0);
+
+  ASSERT_TRUE(XFILE::CFile::Delete(version));
+  Clean(film);
+
+  EXPECT_EQ(0, CountFile(idVersion));
 }
