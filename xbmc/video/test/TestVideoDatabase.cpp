@@ -1586,3 +1586,15 @@ TEST_F(TestVideoDatabase, SetDefaultVideoVersionKeepsOnlyTheMovieArt)
                    " AND media_type = 'movie' AND type = 'fanart'"));
   EXPECT_EQ("old-fanart.jpg", m_db.GetArtForItem(movieId, KODI::MEDIA::TYPE::MOVIE, "fanart"));
 }
+
+TEST_F(TestVideoDatabase, NamesAreLookedUpThroughCaseInsensitiveIndices)
+{
+  for (const char* table : {"actor", "studio", "tag"})
+  {
+    EXPECT_EQ(1,
+              m_db.GetSingleValueInt(m_db.PrepareSQL(
+                  "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='ix_%s_nocase'",
+                  table)))
+        << table;
+  }
+}

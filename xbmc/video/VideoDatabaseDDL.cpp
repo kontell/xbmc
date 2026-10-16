@@ -303,6 +303,16 @@ void CVideoDatabaseDDL::CreateIndices(CDatabase& db)
                                 VIDEODB_ID_TV_TITLE, VIDEODB_ID_TV_PREMIERED));
 }
 
+void CVideoDatabaseDDL::CreateNameLookupIndices(CDatabase& db)
+{
+  // AddActor() and AddToTable() find a name with a case-insensitive LIKE, which SQLite can answer
+  // from an index only when the index uses NOCASE. Without one, each cast member, studio and tag
+  // of every item scanned is a scan of the whole table.
+  for (const char* table : {"actor", "studio", "tag"})
+    db.ExecuteQuery(
+        db.PrepareSQL("CREATE INDEX ix_%s_nocase ON %s (name COLLATE NOCASE)", table, table));
+}
+
 void CVideoDatabaseDDL::CreateTriggers(CDatabase& db)
 {
   CLog::Log(LOGINFO, "Creating video database triggers");
