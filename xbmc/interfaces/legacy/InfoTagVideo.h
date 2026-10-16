@@ -772,6 +772,41 @@ namespace XBMCAddon
       void setLanguage(const String& language) { m_language = language; }
 #endif
 
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_xbmc_audiostreamdetail
+      /// @brief \python_func{ getFlags() }
+      /// Get the flags of the stream.
+      ///
+      /// @return [list] Flags of the stream, by name
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      getFlags();
+#else
+      std::vector<String> getFlags() const { return m_flags; }
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_xbmc_audiostreamdetail
+      /// @brief \python_func{ setFlags(flags) }
+      /// Set the flags of the stream, by the names an NFO file's `<flag>` takes, such as
+      /// `default`, `forced` and `hearingimpaired`. A name Kodi doesn't know is ignored.
+      ///
+      /// @param flags              list - Flags of the stream.
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      setFlags(...);
+#else
+      void setFlags(std::vector<String> flags) { m_flags = std::move(flags); }
+#endif
+
 #ifndef SWIG
       CStreamDetailAudio* ToStreamDetailAudio() const;
 #endif
@@ -780,6 +815,7 @@ namespace XBMCAddon
       int m_channels;
       String m_codec;
       String m_language;
+      std::vector<String> m_flags;
     };
     /// @}
 
@@ -866,12 +902,48 @@ namespace XBMCAddon
       void setLanguage(const String& language) { m_language = language; }
 #endif
 
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_xbmc_subtitlestreamdetail
+      /// @brief \python_func{ getFlags() }
+      /// Get the flags of the stream.
+      ///
+      /// @return [list] Flags of the stream, by name
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      getFlags();
+#else
+      std::vector<String> getFlags() const { return m_flags; }
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_xbmc_subtitlestreamdetail
+      /// @brief \python_func{ setFlags(flags) }
+      /// Set the flags of the stream, by the names an NFO file's `<flag>` takes, such as
+      /// `default`, `forced` and `hearingimpaired`. A name Kodi doesn't know is ignored.
+      ///
+      /// @param flags              list - Flags of the stream.
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      setFlags(...);
+#else
+      void setFlags(std::vector<String> flags) { m_flags = std::move(flags); }
+#endif
+
 #ifndef SWIG
       CStreamDetailSubtitle* ToStreamDetailSubtitle() const;
 #endif
 
     private:
       String m_language;
+      std::vector<String> m_flags;
     };
     /// @}
 
