@@ -1440,9 +1440,13 @@ void CVideoDatabase::UpdateTables(int iVersion)
          {"movie", "tvshow", "seasons", "episode", "musicvideo", "sets", "genre", "tag"})
       AddAutoIncrement(table);
   }
+
+  if (iVersion < 152)
+    m_pDS->exec("DELETE FROM tag_link WHERE media_type = 'episode' AND media_id NOT IN "
+                "(SELECT idEpisode FROM episode)");
 }
 
 int CVideoDatabase::GetSchemaVersion() const
 {
-  return 151;
+  return 152;
 }
