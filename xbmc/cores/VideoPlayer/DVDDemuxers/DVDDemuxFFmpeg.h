@@ -99,6 +99,7 @@ public:
   bool SeekTime(double time, bool backwards = false, double* startpts = NULL) override;
   bool SeekByte(int64_t pos);
   int GetStreamLength() override;
+  double GetPresentationTimeOffset() override;
   CDemuxStream* GetStream(int iStreamId) const override;
   std::vector<CDemuxStream*> GetStreams() const override;
   int GetNrOfStreams() const override;
@@ -138,6 +139,8 @@ protected:
   void ResetVideoStreams();
   AVDictionary* GetFFMpegOptionsFromInput();
   double ConvertTimestamp(int64_t pts, int den, int num);
+  //! The timestamp, in seconds, that ConvertTimestamp() takes off every packet
+  double StartTime() const;
   bool IsProgramChange();
   unsigned int HLSSelectProgram();
 
