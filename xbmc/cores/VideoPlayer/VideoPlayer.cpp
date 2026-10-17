@@ -3523,9 +3523,8 @@ void CVideoPlayer::HandleMessages()
       assert(!(isTempoSpeed &&
                !m_processInfo->IsTempoAllowed(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL)));
 
-      const bool wasFFRW =
-          (m_playSpeed != DVD_PLAYSPEED_NORMAL && m_playSpeed != DVD_PLAYSPEED_PAUSE &&
-           !m_processInfo->IsTempoAllowed(static_cast<float>(m_playSpeed) / DVD_PLAYSPEED_NORMAL));
+      const bool wasFFRW = (m_playSpeed != DVD_PLAYSPEED_NORMAL &&
+                            m_playSpeed != DVD_PLAYSPEED_PAUSE && !m_playSpeedIsTempo);
 
       // Seek when returning to normal 1.0x, tempo play or pause from FF/RW
       // back from RW: clock is not in sync with current pts
@@ -3557,10 +3556,11 @@ void CVideoPlayer::HandleMessages()
       m_processInfo->SetFrameAdvance(false);
 
       m_playSpeed = speed;
+      m_playSpeedIsTempo = isTempoSpeed;
 
       m_caching = CACHESTATE_DONE;
       m_clock.SetSpeed(speed);
-      m_VideoPlayerAudio->SetSpeed(speed);
+      m_VideoPlayerAudio->SetSpeed(speed, isTempoSpeed);
       m_VideoPlayerVideo->SetSpeed(speed);
       m_streamPlayerSpeed = speed;
     }
@@ -3675,7 +3675,7 @@ void CVideoPlayer::SetCaching(ECacheState state)
      (state == CACHESTATE_DONE && m_caching != CACHESTATE_PLAY))
   {
     m_clock.SetSpeed(m_playSpeed);
-    m_VideoPlayerAudio->SetSpeed(m_playSpeed);
+    m_VideoPlayerAudio->SetSpeed(m_playSpeed, m_playSpeedIsTempo);
     m_VideoPlayerVideo->SetSpeed(m_playSpeed);
     m_streamPlayerSpeed = m_playSpeed;
   }
@@ -3712,6 +3712,7 @@ void CVideoPlayer::SetPlaySpeed(int speed)
   else
   {
     m_playSpeed = speed;
+    m_playSpeedIsTempo = false;
     m_streamPlayerSpeed = speed;
   }
 }
@@ -4752,7 +4753,7 @@ void CVideoPlayer::FlushBuffers(double pts, bool accurate, bool sync)
     m_renderManager.DiscardBuffer();
 
   if (m_playSpeed == DVD_PLAYSPEED_NORMAL || m_playSpeed == DVD_PLAYSPEED_PAUSE ||
-      m_processInfo->IsTempoAllowed(static_cast<float>(m_playSpeed) / DVD_PLAYSPEED_NORMAL))
+      m_playSpeedIsTempo)
   {
     // make sure players are properly flushed, should put them in stalled state
     auto msg = std::make_shared<CDVDMsgGeneralSynchronize>(1s, SYNCSOURCE_AUDIO | SYNCSOURCE_VIDEO);
