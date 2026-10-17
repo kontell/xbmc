@@ -421,6 +421,15 @@ int64_t CApplicationPlayer::GetTime() const
     return 0;
 }
 
+std::optional<int64_t> CApplicationPlayer::GetPresentationTime() const
+{
+  std::shared_ptr<const IPlayer> player = GetInternal();
+  if (player)
+    return CDataCacheCore::GetInstance().GetPresentationTime();
+  else
+    return std::nullopt;
+}
+
 int64_t CApplicationPlayer::GetMinTime() const
 {
   std::shared_ptr<const IPlayer> player = GetInternal();

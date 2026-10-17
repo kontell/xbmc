@@ -57,7 +57,10 @@
 #include "utils/Variant.h"
 #include "video/VideoDatabase.h"
 
+#include <algorithm>
+#include <limits>
 #include <map>
+#include <optional>
 #include <tuple>
 
 using namespace KODI;
@@ -1729,6 +1732,31 @@ JSONRPC_STATUS CPlayerOperations::GetPropertyValue(PlayerType player, const std:
       }
       case Picture:
         result = 1.0;
+        break;
+      default:
+        return FailedToExecute;
+    }
+  }
+  else if (property == "presentationtime")
+  {
+    switch (player)
+    {
+      case Video:
+      case Audio:
+      {
+        const auto& components = CServiceBroker::GetAppComponents();
+        const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+        const std::optional<int64_t> ms = appPlayer->GetPresentationTime();
+        if (ms)
+          MillisecondsToTimeObject(
+              static_cast<int>(std::clamp<int64_t>(*ms, 0, std::numeric_limits<int>::max())),
+              result);
+        else
+          result = CVariant(CVariant::VariantTypeNull);
+        break;
+      }
+      case Picture:
+        result = CVariant(CVariant::VariantTypeNull);
         break;
       default:
         return FailedToExecute;
