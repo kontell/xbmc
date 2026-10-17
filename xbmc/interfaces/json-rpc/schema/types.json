@@ -750,6 +750,7 @@
       "type",
       "partymode",
       "speed",
+      "tempo",
       "time",
       "percentage",
       "totaltime",
@@ -786,6 +787,9 @@
       },
       "speed": {
         "type": "integer"
+      },
+      "tempo": {
+        "type": "number"
       },
       "time": {
         "$ref": "Global.Time"
@@ -1036,6 +1040,9 @@
       },
       "speed": {
         "type": "integer"
+      },
+      "tempo": {
+        "type": "number"
       }
     }
   },
