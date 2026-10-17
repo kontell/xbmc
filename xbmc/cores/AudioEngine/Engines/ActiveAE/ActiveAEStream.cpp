@@ -51,6 +51,7 @@ CActiveAEStream::CActiveAEStream(AEAudioFormat* format, unsigned int streamid, C
   m_lastPts = 0;
   m_lastPtsJump = 0;
   m_clockSpeed = 1.0;
+  m_requestedResampleRatio = 1.0;
 }
 
 void CActiveAEStream::IncFreeBuffers()

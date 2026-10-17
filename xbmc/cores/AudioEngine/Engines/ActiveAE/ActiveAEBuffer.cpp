@@ -13,6 +13,7 @@
 #include "cores/AudioEngine/AEResampleFactory.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
 
+#include <algorithm>
 #include <memory>
 
 using namespace ActiveAE;
@@ -691,10 +692,8 @@ float CActiveAEBufferPoolAtempo::GetDelay()
 
 void CActiveAEBufferPoolAtempo::SetTempo(float tempo)
 {
-  if (tempo > 2.0f)
-    tempo = 2.0;
-  else if (tempo < 0.5f)
-    tempo = 0.5;
+  // the range FFmpeg's atempo filter accepts
+  tempo = std::clamp(tempo, 0.5f, 100.0f);
 
   if (tempo != m_tempo)
     m_changeFilter = true;
