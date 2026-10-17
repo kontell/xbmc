@@ -82,6 +82,7 @@
 #include <ranges>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -10361,7 +10362,14 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
       std::string strPaths;
       for (const auto& i : paths)
         strPaths += StringUtils::Format(",{}", i);
-      sql += PrepareSQL(" AND path.idPath IN (%s)", strPaths.substr(1).c_str());
+      // A movie's versions and extras go with it, wherever they are filed
+      sql += PrepareSQL(" AND (path.idPath IN (%s) OR files.idFile IN "
+                        "(SELECT videoversion.idFile FROM videoversion "
+                        "JOIN movie ON movie.idMovie = videoversion.idMedia "
+                        "AND videoversion.media_type = 'movie' "
+                        "JOIN files AS moviefile ON moviefile.idFile = movie.idFile "
+                        "WHERE moviefile.idPath IN (%s)))",
+                        strPaths.substr(1).c_str(), strPaths.substr(1).c_str());
     }
 
     // For directory caching to work properly, we need to sort the files by path
@@ -10381,13 +10389,19 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
           CMediaSourceSettings::GetInstance().GetSources(MediaSection::VIDEO));
       CServiceBroker::GetMediaManager().GetRemovableDrives(videoSources);
 
-      // Versions and extras, which can be added from outside the video sources
-      std::unordered_set<int> assetFiles;
-      m_pDS->query("SELECT idFile FROM videoversion WHERE NOT EXISTS "
-                   "(SELECT 1 FROM movie WHERE movie.idFile = videoversion.idFile)");
+      // Versions and extras, which can be added from outside the video sources, with the path
+      // of their movie
+      std::unordered_map<int, std::string> assetFiles;
+      m_pDS->query(
+          "SELECT videoversion.idFile, path.strPath FROM videoversion "
+          "JOIN movie ON movie.idMovie = videoversion.idMedia "
+          "AND videoversion.media_type = 'movie' "
+          "JOIN files ON files.idFile = movie.idFile "
+          "JOIN path ON path.idPath = files.idPath "
+          "WHERE NOT EXISTS (SELECT 1 FROM movie WHERE movie.idFile = videoversion.idFile)");
       while (!m_pDS->eof())
       {
-        assetFiles.insert(m_pDS->fv(0).get_asInt());
+        assetFiles.try_emplace(m_pDS->fv(0).get_asInt(), m_pDS->fv(1).get_asString());
         m_pDS->next();
       }
       m_pDS->close();
@@ -10422,6 +10436,10 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
           SScanSettings settings;
           bool foundDirectly = false;
           ScraperPtr scraper = GetScraperForPath(fullPath, settings, foundDirectly);
+          // A plugin URL with no options is filed under the add-on's root, which has no content
+          const auto asset{assetFiles.find(m_pDS2->fv("files.idFile").get_asInt())};
+          if (!scraper && asset != assetFiles.end())
+            scraper = GetScraperForPath(asset->second, settings, foundDirectly);
           if (scraper)
           {
             const PluginItemExists exists{
@@ -10622,6 +10640,23 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
         while (!m_pDS->eof())
         {
           pathsToInvalidate.emplace_back(m_pDS->fv("strPath").get_asString());
+          m_pDS->next();
+        }
+        m_pDS->close();
+
+        // The scanner finds a movie's versions and extras when it scans the movie's folder, and
+        // skips a folder whose hash matches. Clear it for a movie that loses one, wherever the
+        // file was filed, or the asset is not found again when it comes back.
+        m_pDS->query("SELECT DISTINCT path.strPath FROM videoversion "
+                     "JOIN movie ON movie.idMovie = videoversion.idMedia "
+                     "AND videoversion.media_type = 'movie' "
+                     "JOIN files ON files.idFile = movie.idFile "
+                     "JOIN path ON path.idPath = files.idPath "
+                     "WHERE videoversion.idFile <> movie.idFile AND videoversion.idFile IN " +
+                     filesToDelete);
+        while (!m_pDS->eof())
+        {
+          pathsToInvalidate.emplace_back(m_pDS->fv(0).get_asString());
           m_pDS->next();
         }
         m_pDS->close();
