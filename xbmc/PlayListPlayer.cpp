@@ -40,6 +40,7 @@
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
+#include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/ArtTypes.h"
 #include "utils/StringUtils.h"
@@ -880,7 +881,8 @@ void CPlayListPlayer::RecordMusicPlaylist(bool playedThrough)
   if (current.HasArt(ART::TYPE::FANART))
     track.fanart = current.GetArt(ART::TYPE::FANART);
 
-  m_history->Add(std::move(entry));
+  m_history->Add(std::move(entry), CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+                                       CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE));
 }
 
 bool CPlayListPlayer::RestorePlaylist(const CPlayListHistoryEntry& entry,
