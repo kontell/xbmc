@@ -45,6 +45,8 @@ public:
   void SetVolume(float volume) override;
   void SetDynamicRangeCompression(long drc) override;
   void SetSpeed(float speed = 0) override;
+  void SetTempo(float tempo) override;
+  bool SupportsTempo() const override;
   int GetCacheLevel() const override;
   void SetTotalTime(int64_t time) override;
   void SetTime(int64_t time) override;
@@ -70,6 +72,7 @@ public:
     int          m_audioBitrate;
     int          m_cacheLevel;
     bool         m_canSeek;
+    bool         m_canTempo;
   } m_playerGUIData;
 
 protected:
@@ -117,6 +120,7 @@ private:
   bool m_signalSpeedChange = false; /* true if OnPlaybackSpeedChange needs to be called */
   bool m_signalStarted = true;
   std::atomic_int m_playbackSpeed;           /* the playback speed (1 = normal) */
+  std::atomic<float> m_tempo{1.0f}; /* the playback tempo (1.0 = normal), on every stream */
   bool m_isPlaying = false;
   bool m_isPaused = false;
   bool m_isFinished = false; /* if there are no more songs in the queue */
@@ -153,6 +157,19 @@ private:
   void UpdateStreamInfoPlayNextAtFrame(StreamInfo *si, unsigned int crossFadingTime);
   void UpdateGUIData(StreamInfo *si);
   int64_t GetTimeInternal();
+
+  /*!
+   * \brief Seconds of content queued in si's IAEStream and not heard yet.
+   *
+   * IAEStream::GetDelay() is in output seconds; at a tempo they hold tempo times as much.
+   */
+  double QueuedSeconds(const StreamInfo& si) const;
+
+  /*!
+   * \brief Have si's IAEStream play at the tempo in force. A bitstream is left as it is.
+   */
+  void SetStreamTempo(StreamInfo* si) const;
+
   bool SetTimeInternal(int64_t time);
   bool SetTotalTimeInternal(int64_t time);
   void CloseFileCB(StreamInfo &si);
