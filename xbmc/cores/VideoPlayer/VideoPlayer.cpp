@@ -844,6 +844,7 @@ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options
   m_playerOptions = options;
 
   m_processInfo->SetPlayTimes(0,0,0,0);
+  m_processInfo->SetPresentationTimeOffset(std::nullopt);
   m_bAbortRequest = false;
   m_error = false;
   m_bCloseRequest = false;
@@ -3095,6 +3096,7 @@ void CVideoPlayer::HandleMessages()
       m_playerOptions = msg.GetOptions();
 
       m_processInfo->SetPlayTimes(0,0,0,0);
+      m_processInfo->SetPresentationTimeOffset(std::nullopt);
 
       m_outboundEvents->Submit([this]() {
         m_callback.OnPlayBackStarted(m_item);
@@ -5849,6 +5851,20 @@ void CVideoPlayer::UpdatePlayState(double timeout)
       state.time_offset = 0;
     }
 
+    // The position on the stream's own clock: the container's timestamp of the stream's
+    // time zero, from the add-on that demuxes it or from the demuxer, carried to the time
+    // shown. time is clock plus time_offset, so the clock's value is time less that.
+    double presentationOrigin = DVD_NOPTS_VALUE;
+    if (haveTimes)
+      presentationOrigin = times.ptsPresentationOffset;
+    else if (m_pDemuxer)
+      presentationOrigin = m_pDemuxer->GetPresentationTimeOffset();
+
+    if (presentationOrigin != DVD_NOPTS_VALUE)
+      state.presentationOffset = llrint((presentationOrigin - state.time_offset) / 1000.0);
+    else
+      state.presentationOffset.reset();
+
     if (pMenu)
     {
       if (!pMenu->GetState(state.player_state))
@@ -5962,6 +5978,7 @@ void CVideoPlayer::UpdatePlayState(double timeout)
   }
 
   m_processInfo->SetPlayTimes(state.startTime, state.time, state.timeMin, state.timeMax);
+  m_processInfo->SetPresentationTimeOffset(state.presentationOffset);
 
   std::unique_lock lock(m_StateSection);
   m_State = state;

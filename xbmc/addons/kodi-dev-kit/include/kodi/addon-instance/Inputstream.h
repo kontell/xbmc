@@ -1077,6 +1077,7 @@ public:
   /// | **PTS start** | `double` | @ref InputstreamTimes::SetPtsStart "SetPtsStart" | @ref InputstreamTimes::GetPtsStart "GetPtsStart"
   /// | **PTS begin** | `double` | @ref InputstreamTimes::SetPtsBegin "SetPtsBegin" | @ref InputstreamTimes::GetPtsBegin "GetPtsBegin"
   /// | **PTS end** | `double` | @ref InputstreamTimes::SetPtsEnd "SetPtsEnd" | @ref InputstreamTimes::GetPtsEnd "GetPtsEnd"
+  /// | **PTS presentation offset** | `double` | @ref InputstreamTimes::SetPtsPresentationOffset "SetPtsPresentationOffset" | @ref InputstreamTimes::GetPtsPresentationOffset "GetPtsPresentationOffset"
   ///
 
   /// @addtogroup cpp_kodi_addon_inputstream_Defs_Interface_InputstreamTimes
@@ -1105,6 +1106,19 @@ public:
 
   /// @brief To get with @ref SetPtsEnd changed values
   double GetPtsEnd() const { return m_cStructure->ptsEnd; }
+
+  /// @brief What to add to a pts of this stream to get the presentation timestamp the
+  /// container carries, the clock every player of the same broadcast or live stream shares.
+  /// STREAM_NOPTS_VALUE, the value Kodi passes in, when the add-on cannot tell.
+  ///
+  /// @note Since inputstream API 3.5.0
+  void SetPtsPresentationOffset(double offset) const
+  {
+    m_cStructure->ptsPresentationOffset = offset;
+  }
+
+  /// @brief To get with @ref SetPtsPresentationOffset changed values
+  double GetPtsPresentationOffset() const { return m_cStructure->ptsPresentationOffset; }
 
   ///@}
 

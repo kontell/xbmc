@@ -64,11 +64,14 @@ struct SPlayerState
     cache_time = 0.0;
     lastSeek = 0;
     streamsReady = false;
+    presentationOffset.reset();
   }
 
   double timestamp;         // last time of update
   double lastSeek;          // time of last seek
   double time_offset;       // difference between time and pts
+  // ms to add to time for the position on the stream's own clock, when the stream can tell
+  std::optional<int64_t> presentationOffset;
 
   double time;              // current playback time
   double timeMax;

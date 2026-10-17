@@ -18,6 +18,7 @@
 
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -104,6 +105,12 @@ public:
   bool HasTeletextCache() const;
   std::shared_ptr<TextCacheStruct_t> GetTeletextCache();
   int64_t GetTime() const;
+  /*!
+   * \brief The position on the stream's own clock, in ms: the presentation timestamp the
+   * container carries, which every player of the same broadcast or live stream shares.
+   * Nothing when the player cannot tell.
+   */
+  std::optional<int64_t> GetPresentationTime() const;
   int64_t GetMinTime() const;
   int64_t GetMaxTime() const;
   time_t GetStartTime() const;
