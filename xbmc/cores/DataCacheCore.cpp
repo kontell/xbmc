@@ -11,7 +11,9 @@
 #include "ServiceBroker.h"
 #include "cores/EdlEdit.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <mutex>
 #include <utility>
 
@@ -564,15 +566,43 @@ void CDataCacheCore::SetPlayTimes(time_t start, int64_t current, int64_t min, in
   m_timeInfo.m_time = current;
   m_timeInfo.m_timeMin = min;
   m_timeInfo.m_timeMax = max;
+  m_timeInfo.m_timeStamp = std::chrono::steady_clock::now();
 }
 
 void CDataCacheCore::GetPlayTimes(time_t &start, int64_t &current, int64_t &min, int64_t &max)
 {
   std::unique_lock lock(m_stateSection);
   start = m_timeInfo.m_startTime;
-  current = m_timeInfo.m_time;
+  current = CurrentPlayTime();
   min = m_timeInfo.m_timeMin;
   max = m_timeInfo.m_timeMax;
+}
+
+int64_t CDataCacheCore::CurrentPlayTime() const
+{
+  // the bound: a player that stopped storing its time must not run away
+  constexpr int64_t MAX_OFFSET_MS = 1000;
+
+  if (m_timeInfo.m_timeStamp == std::chrono::steady_clock::time_point{})
+    return m_timeInfo.m_time;
+
+  const double rate =
+      static_cast<double>(m_stateInfo.m_speed) * static_cast<double>(m_stateInfo.m_tempo);
+  if (rate == 0.0)
+    return m_timeInfo.m_time;
+
+  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - m_timeInfo.m_timeStamp)
+                           .count();
+  const int64_t offset =
+      std::clamp<int64_t>(std::llround(static_cast<double>(elapsed) * rate), -MAX_OFFSET_MS,
+                          MAX_OFFSET_MS);
+
+  int64_t time = m_timeInfo.m_time + offset;
+  if (m_timeInfo.m_timeMax > m_timeInfo.m_timeMin)
+    time = std::clamp(time, m_timeInfo.m_timeMin, m_timeInfo.m_timeMax);
+
+  return time;
 }
 
 time_t CDataCacheCore::GetStartTime()
@@ -584,7 +614,7 @@ time_t CDataCacheCore::GetStartTime()
 int64_t CDataCacheCore::GetPlayTime()
 {
   std::unique_lock lock(m_stateSection);
-  return m_timeInfo.m_time;
+  return CurrentPlayTime();
 }
 
 int64_t CDataCacheCore::GetMinTime()
