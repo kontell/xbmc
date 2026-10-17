@@ -1636,6 +1636,7 @@ bool CApplication::Stop(int exitCode)
   bool success = true;
 
   CLog::Log(LOGINFO, "Stopping player");
+  CServiceBroker::GetPlaylistPlayer().RecordMusicPlaylist();
   const auto appPlayer = GetComponent<CApplicationPlayer>();
   appPlayer->ClosePlayer();
 
@@ -2038,6 +2039,7 @@ void CApplication::StopPlaying()
     const auto appPlayer = GetComponent<CApplicationPlayer>();
     if (appPlayer->IsPlaying())
     {
+      CServiceBroker::GetPlaylistPlayer().RecordMusicPlaylist();
       {
         // let script threads into the GUI while we close, or they can deadlock us
         CSingleExit exitGfx(CServiceBroker::GetWinSystem()->GetGfxContext());
