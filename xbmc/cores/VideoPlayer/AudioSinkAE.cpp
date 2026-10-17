@@ -71,6 +71,10 @@ bool CAudioSinkAE::Create(const DVDAudioFrame &audioframe, AVCodecID codec, bool
   m_channelLayout = audioframe.format.m_channelLayout;
   m_dataType = audioframe.format.m_streamInfo.m_type;
 
+  // the rate asked for before the stream was (re)made; a bitstream plays as it is
+  if (!m_bPassthrough && m_requestedResampleRatio != 1.0)
+    m_pAudioStream->SetResampleRatio(m_requestedResampleRatio);
+
   return true;
 }
 
@@ -323,6 +327,14 @@ void CAudioSinkAE::SetResampleMode(int mode)
   {
     m_pAudioStream->SetResampleMode(mode);
   }
+}
+
+void CAudioSinkAE::SetResampleRatio(double ratio)
+{
+  std::unique_lock lock(m_critSection);
+  m_requestedResampleRatio = ratio;
+  if (m_pAudioStream && !m_bPassthrough)
+    m_pAudioStream->SetResampleRatio(ratio);
 }
 
 double CAudioSinkAE::GetClock()
