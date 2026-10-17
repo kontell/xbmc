@@ -4933,6 +4933,17 @@
           }
         ],
         "default": null
+      },
+      {
+        "name": "tag",
+        "type": [
+          "null",
+          {
+            "$ref": "Array.String",
+            "required": true
+          }
+        ],
+        "default": null
       }
     ],
     "returns": "string"
