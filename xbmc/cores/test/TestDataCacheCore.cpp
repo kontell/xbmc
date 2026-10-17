@@ -1,0 +1,75 @@
+/*
+ *  Copyright (C) 2026 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
+ *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
+ */
+
+#include "cores/DataCacheCore.h"
+
+#include <chrono>
+#include <thread>
+
+#include <gtest/gtest.h>
+
+using namespace std::chrono_literals;
+
+// A player stores its time on a cadence; between two stores the reading moves on at the
+// playing rate. The bounds below leave room for the sleep overshooting on a loaded box.
+
+TEST(TestDataCacheCore, PlayTimeMovesOnBetweenStoresAtThePlayingRate)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(1.0f, 1.0f);
+  cache.SetPlayTimes(0, 10000, 0, 60000);
+
+  std::this_thread::sleep_for(150ms);
+
+  const int64_t time = cache.GetPlayTime();
+  EXPECT_GE(time, 10140);
+  EXPECT_LE(time, 10600);
+}
+
+TEST(TestDataCacheCore, PlayTimeMovesOnAtTheTempo)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(2.0f, 1.0f);
+  cache.SetPlayTimes(0, 10000, 0, 60000);
+
+  std::this_thread::sleep_for(150ms);
+
+  const int64_t time = cache.GetPlayTime();
+  EXPECT_GE(time, 10280);
+  EXPECT_LE(time, 11200);
+}
+
+TEST(TestDataCacheCore, PlayTimeHoldsWhilePaused)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(1.0f, 0.0f);
+  cache.SetPlayTimes(0, 10000, 0, 60000);
+
+  std::this_thread::sleep_for(60ms);
+
+  EXPECT_EQ(cache.GetPlayTime(), 10000);
+}
+
+TEST(TestDataCacheCore, PlayTimeNeverRunsPastTheEnd)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(1.0f, 32.0f);
+  cache.SetPlayTimes(0, 59950, 0, 60000);
+
+  std::this_thread::sleep_for(100ms);
+
+  EXPECT_EQ(cache.GetPlayTime(), 60000);
+}
+
+TEST(TestDataCacheCore, PlayTimeIsWhatWasStoredBeforeAnyStore)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(1.0f, 1.0f);
+
+  EXPECT_EQ(cache.GetPlayTime(), 0);
+}
