@@ -258,7 +258,7 @@ void CVideoPlayerAudio::Process()
     int priority = 1;
     //Do we want a new audio frame?
     if (m_syncState == IDVDStreamPlayer::SYNC_STARTING ||              /* when not started */
-        m_processInfo.IsTempoAllowed(static_cast<float>(m_speed)/DVD_PLAYSPEED_NORMAL) ||
+        IsPlayingSpeed() || /* at normal speed or a tempo */
         m_speed <  DVD_PLAYSPEED_PAUSE  || /* when rewinding */
         (m_speed >  DVD_PLAYSPEED_NORMAL && m_audioClock < m_pClock->GetClock())) /* when behind clock in ff */
       priority = 0;
@@ -298,8 +298,7 @@ void CVideoPlayerAudio::Process()
       if (priority)
         continue;
 
-      if (m_processInfo.IsTempoAllowed(static_cast<float>(m_speed)/DVD_PLAYSPEED_NORMAL) &&
-          !m_stalled && m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
+      if (IsPlayingSpeed() && !m_stalled && m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
       {
         // while AE sync is active, we still have time to fill buffers
         if (m_syncTimer.IsTimePast())
@@ -374,9 +373,11 @@ void CVideoPlayerAudio::Process()
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_SETSPEED))
     {
-      double speed = std::static_pointer_cast<CDVDMsgInt>(pMsg)->m_value;
+      const auto msg = std::static_pointer_cast<CDVDMsgPlayerSetSpeed>(pMsg);
+      const int speed = msg->GetSpeed();
+      const bool isTempo = msg->IsTempo();
 
-      if (m_processInfo.IsTempoAllowed(static_cast<float>(speed)/DVD_PLAYSPEED_NORMAL))
+      if (speed == DVD_PLAYSPEED_NORMAL || isTempo)
       {
         if (speed != m_speed)
         {
@@ -391,7 +392,8 @@ void CVideoPlayerAudio::Process()
       {
         m_audioSink.Pause();
       }
-      m_speed = (int)speed;
+      m_speed = speed;
+      m_speedIsTempo = isTempo;
       UpdateResampleRatio();
 
       // A tempo plays the audio at a rate, which a bitstream cannot: decode it instead.
@@ -438,8 +440,7 @@ void CVideoPlayerAudio::Process()
         continue;
       }
 
-      if (!m_processInfo.IsTempoAllowed(static_cast<float>(m_speed) / DVD_PLAYSPEED_NORMAL) &&
-          m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
+      if (!IsPlayingSpeed() && m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
       {
         continue;
       }
@@ -663,8 +664,7 @@ void CVideoPlayerAudio::UpdateResampleRatio()
   m_rateFollowsSpeed = m_synctype == SYNC_DISCON;
 
   double ratio = 1.0;
-  if (m_synctype == SYNC_DISCON && m_speed != DVD_PLAYSPEED_NORMAL &&
-      m_processInfo.IsTempoAllowed(static_cast<float>(m_speed) / DVD_PLAYSPEED_NORMAL))
+  if (m_synctype == SYNC_DISCON && m_speedIsTempo && m_speed != DVD_PLAYSPEED_NORMAL)
     ratio = static_cast<double>(DVD_PLAYSPEED_NORMAL) / m_speed;
 
   m_audioSink.SetResampleRatio(ratio);
@@ -681,10 +681,21 @@ void CVideoPlayerAudio::OnExit()
 
 void CVideoPlayerAudio::SetSpeed(int speed)
 {
-  if(m_messageQueue.IsInited())
-    m_messageQueue.Put(std::make_shared<CDVDMsgInt>(CDVDMsg::PLAYER_SETSPEED, speed), 1);
+  SetSpeed(speed, false);
+}
+
+void CVideoPlayerAudio::SetSpeed(int speed, bool isTempo)
+{
+  if (m_messageQueue.IsInited())
+  {
+    const CDVDMsgPlayerSetSpeed::SpeedParams params = {speed, isTempo};
+    m_messageQueue.Put(std::make_shared<CDVDMsgPlayerSetSpeed>(params), 1);
+  }
   else
+  {
     m_speed = speed;
+    m_speedIsTempo = isTempo;
+  }
 }
 
 void CVideoPlayerAudio::Flush(bool sync)
