@@ -11,6 +11,7 @@
 #include "FileItem.h"
 #include "URL.h"
 #include "cores/MenuType.h"
+#include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "filesystem/IFileTypes.h"
 #include "utils/BitstreamStats.h"
 #include "utils/Geometry.h"
@@ -73,6 +74,10 @@ public:
       double ptsStart;
       double ptsBegin;
       double ptsEnd;
+      // What to add to a pts of this stream to get the presentation timestamp the container
+      // carries, the clock every player of the same broadcast or live stream shares.
+      // DVD_NOPTS_VALUE when the stream cannot tell.
+      double ptsPresentationOffset = DVD_NOPTS_VALUE;
     };
     virtual ~ITimes() = default;
     virtual bool GetTimes(Times &times) = 0;
