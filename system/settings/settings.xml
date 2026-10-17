@@ -459,6 +459,28 @@
           </dependencies>
         </setting>
       </group>
+      <group id="3" label="40814">
+        <setting id="musicplayer.playlisthistorysize" type="integer" label="40815" help="40816">
+          <level>1</level>
+          <default>20</default>
+          <constraints>
+            <minimum>5</minimum>
+            <step>5</step>
+            <maximum>100</maximum>
+          </constraints>
+          <control type="spinner" format="integer" />
+        </setting>
+        <setting id="musicplayer.restoreplaylistpaused" type="boolean" label="40817" help="40818">
+          <level>1</level>
+          <default>false</default>
+          <control type="toggle" />
+        </setting>
+        <setting id="musicplayer.restoreplaylistfromstart" type="boolean" label="40819" help="40820">
+          <level>1</level>
+          <default>false</default>
+          <control type="toggle" />
+        </setting>
+      </group>
     </category>
     <category id="discs" label="14087" help="36193">
       <group id="1" label="446">
@@ -4549,6 +4571,7 @@
               <option label="231">0</option> <!-- STARTUP_ACTION_NONE -->
               <option label="39101">1</option> <!-- STARTUP_ACTION_PLAY_TV -->
               <option label="39102">2</option> <!-- STARTUP_ACTION_PLAY_RADIO -->
+              <option label="40821">3</option> <!-- STARTUP_ACTION_RESTORE_PLAYLIST -->
             </options>
           </constraints>
           <control type="list" format="string" />
