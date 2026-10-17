@@ -548,6 +548,7 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
 
       CVariant param;
       param["player"]["speed"] = 1;
+      param["player"]["tempo"] = m_app.GetComponent<CApplicationPlayer>()->GetPlayTempo();
       param["player"]["playerid"] =
           static_cast<int>(CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
 
@@ -735,6 +736,7 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
     {
       CVariant param;
       param["player"]["speed"] = 1;
+      param["player"]["tempo"] = m_app.GetComponent<CApplicationPlayer>()->GetPlayTempo();
       param["player"]["playerid"] =
           static_cast<int>(CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
       CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "OnAVStart",
@@ -757,6 +759,7 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
 #endif
       CVariant param;
       param["player"]["speed"] = 1;
+      param["player"]["tempo"] = m_app.GetComponent<CApplicationPlayer>()->GetPlayTempo();
       param["player"]["playerid"] =
           static_cast<int>(CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
       CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "OnAVChange",
@@ -768,6 +771,7 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
     {
       CVariant param;
       param["player"]["speed"] = 0;
+      param["player"]["tempo"] = m_app.GetComponent<CApplicationPlayer>()->GetPlayTempo();
       param["player"]["playerid"] =
           static_cast<int>(CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
       CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "OnPause",
@@ -779,6 +783,7 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
     {
       CVariant param;
       param["player"]["speed"] = 1;
+      param["player"]["tempo"] = m_app.GetComponent<CApplicationPlayer>()->GetPlayTempo();
       param["player"]["playerid"] =
           static_cast<int>(CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
       CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "OnResume",
@@ -800,6 +805,7 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
       const auto& components = CServiceBroker::GetAppComponents();
       const auto appPlayer = components.GetComponent<CApplicationPlayer>();
       param["player"]["speed"] = static_cast<int>(appPlayer->GetPlaySpeed());
+      param["player"]["tempo"] = appPlayer->GetPlayTempo();
       CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "OnSeek",
                                                          m_app.CurrentFileItemPtr(), param);
 
@@ -811,7 +817,9 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
     case GUI_MSG_PLAYBACK_SPEED_CHANGED:
     {
       CVariant param;
+      // the speed is an integer, so a tempo reads as 1 there; the tempo says what it is
       param["player"]["speed"] = message.GetParam1();
+      param["player"]["tempo"] = m_app.GetComponent<CApplicationPlayer>()->GetPlayTempo();
       param["player"]["playerid"] =
           static_cast<int>(CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
       CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "OnSpeedChanged",
