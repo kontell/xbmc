@@ -12,7 +12,8 @@ enum StartupAction
 {
   STARTUP_ACTION_NONE = 0,
   STARTUP_ACTION_PLAY_TV,
-  STARTUP_ACTION_PLAY_RADIO
+  STARTUP_ACTION_PLAY_RADIO,
+  STARTUP_ACTION_RESTORE_PLAYLIST
 };
 
 // Do not change the numbers; external scripts depend on them
