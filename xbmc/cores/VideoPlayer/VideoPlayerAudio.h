@@ -41,6 +41,7 @@ public:
   void CloseStream(bool bWaitForBuffers) override;
 
   void SetSpeed(int speed) override;
+  void SetSpeed(int speed, bool isTempo) override;
   void Flush(bool sync) override;
 
   // waits until all available data has been rendered
@@ -92,6 +93,9 @@ protected:
   bool AllowPassthrough();
   //! Ask the stream for the playing rate when a tempo is in force and the audio is the clock.
   void UpdateResampleRatio();
+  //! Normal speed or a tempo: the audio is output and the clock follows it. Pause and
+  //! trickplay are not.
+  bool IsPlayingSpeed() const { return m_speed == DVD_PLAYSPEED_NORMAL || m_speedIsTempo; }
 
   CDVDMessageQueue m_messageQueue;
   CDVDMessageQueue& m_messageParent;
@@ -107,6 +111,7 @@ protected:
   BitstreamStats m_audioStats;
 
   int m_speed;
+  bool m_speedIsTempo = false; // m_speed is a tempo, not trickplay
   bool m_passthroughOffForTempo = false; // a tempo has the bitstream decoded
   bool m_stalled;
   bool m_paused;

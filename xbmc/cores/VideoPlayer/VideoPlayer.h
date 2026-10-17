@@ -616,6 +616,7 @@ protected:
   } m_content;
 
   int m_playSpeed;
+  bool m_playSpeedIsTempo = false; // m_playSpeed is a tempo, not trickplay
   int m_streamPlayerSpeed;
   int m_demuxerSpeed = DVD_PLAYSPEED_NORMAL;
   struct SSpeedState
