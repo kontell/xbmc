@@ -249,6 +249,10 @@ protected:
   int m_resampleMode;
   double m_resampleIntegral;
   double m_clockSpeed;
+  // The ratio the stream's owner asked for with SetResampleRatio(). The sync
+  // servo owns the ratio while it resamples (m_resampleMode); otherwise this
+  // one stands, across a flush and a re-configuration of the buffers.
+  double m_requestedResampleRatio;
   enum AVMatrixEncoding m_matrixEncoding;
   enum AVAudioServiceType m_audioServiceType;
   bool m_forceResampler;
