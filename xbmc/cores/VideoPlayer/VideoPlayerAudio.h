@@ -81,6 +81,11 @@ protected:
   //! codec changes, in which case we may want to switch passthrough on/off.
   bool SwitchCodecIfNeeded();
   void SetSyncType(bool passthrough);
+  //! Whether a bitstream may be output as it is: not with the display clock, not for a
+  //! realtime stream, and not while a tempo is asked for.
+  bool AllowPassthrough();
+  //! Ask the stream for the playing rate when a tempo is in force and the audio is the clock.
+  void UpdateResampleRatio();
 
   CDVDMessageQueue m_messageQueue;
   CDVDMessageQueue& m_messageParent;

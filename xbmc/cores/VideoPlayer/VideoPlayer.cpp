@@ -4227,7 +4227,8 @@ void CVideoPlayer::SetSpeed(float speed)
 
 void CVideoPlayer::SetTempo(float tempo)
 {
-  tempo = floor(tempo * 100.0f + 0.5f) / 100.0f;
+  // three decimals: the speed's own floor is 1/DVD_PLAYSPEED_NORMAL
+  tempo = floor(tempo * 1000.0f + 0.5f) / 1000.0f;
   if (m_processInfo->IsTempoAllowed(tempo))
   {
     int speed = tempo * DVD_PLAYSPEED_NORMAL;
@@ -5969,8 +5970,10 @@ void CVideoPlayer::UpdatePlayState(double timeout)
 
 bool CVideoPlayer::CanTempo()
 {
-  return CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
-      CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
+  // With the display clock the engine's sync servo resamples the audio to the clock;
+  // without it CVideoPlayerAudio asks the stream for the rate. Either way the clock
+  // runs at the tempo and the rest of the player follows the clock.
+  return true;
 }
 
 int64_t CVideoPlayer::GetUpdatedTime()
