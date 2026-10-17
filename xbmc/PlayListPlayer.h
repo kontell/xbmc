@@ -25,6 +25,8 @@ class CVariant;
 namespace KODI::PLAYLIST
 {
 class CPlayList;
+class CPlayListHistory;
+class CPlayListHistoryEntry;
 
 class CPlayListPlayer : public IMsgTargetCallback,
                         public KODI::MESSAGING::IMessageTarget
@@ -169,6 +171,24 @@ public:
 
   bool OnAction(const CAction &action);
 
+  /*! \brief The music playlists that were replaced, interrupted or stopped. */
+  CPlayListHistory& GetHistory() { return *m_history; }
+
+  /*! \brief Save the music playlist to the history if it is being played.
+   Called where this player is about to forget it, and by the application before
+   it closes the player, whose time is gone once it has.
+   \param playedThrough Whether the last item finished rather than being stopped.
+   */
+  void RecordMusicPlaylist(bool playedThrough = false);
+
+  /*! \brief Replace the music playlist with one from the history and play it
+   from where it was left.
+   \param entry The history entry.
+   \param startPaused Pause once playback has started.
+   \param fromTrackStart Start the track at the beginning rather than the saved second.
+   */
+  bool RestorePlaylist(const CPlayListHistoryEntry& entry, bool startPaused, bool fromTrackStart);
+
 protected:
   /*! \brief Returns true if the given is set to repeat all
    \param playlistId Playlist to be query
@@ -194,6 +214,9 @@ protected:
   std::chrono::time_point<std::chrono::steady_clock> m_failedSongsStart;
   int m_iCurrentSong;
   Id m_iCurrentPlayList{Id::TYPE_NONE};
+  bool m_musicPlaylistLive{false};
+  bool m_pauseWhenStarted{false};
+  std::unique_ptr<CPlayListHistory> m_history;
   CPlayList* m_PlaylistMusic;
   CPlayList* m_PlaylistVideo;
   CPlayList* m_PlaylistEmpty;
