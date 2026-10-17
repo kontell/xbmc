@@ -32,6 +32,7 @@
 #include "video/Bookmark.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <mutex>
 
@@ -41,6 +42,11 @@ using namespace std::chrono_literals;
 #define TIME_TO_CACHE_NEXT_FILE 5000 /* 5 seconds before end of song, start caching the next song */
 #define FAST_XFADE_TIME           80 /* 80 milliseconds */
 #define MAX_SKIP_XFADE_TIME     2000 /* max 2 seconds crossfade on track skip */
+
+// The tempo a listener can ask for. FFmpeg's atempo filter takes 0.5 to 100; speech is
+// still followed at 5x, and the OSD steps by 0.1.
+constexpr float MIN_TEMPO = 0.5f;
+constexpr float MAX_TEMPO = 5.0f;
 
 // PAP: Psycho-acoustic Audio Player
 // Supporting all open  audio codec standards.
@@ -208,6 +214,11 @@ bool PAPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options)
   m_fullScreen = options.fullscreen;
 
   m_requestedAudioStream = -1;
+
+  // An item the listener chose plays at normal speed, as VideoPlayer's does; an item queued
+  // after the playing one keeps the tempo.
+  m_tempo = 1.0f;
+  CDataCacheCore::GetInstance().SetSpeed(1.0f, m_playbackSpeed);
 
   if (m_streams.size() > 1 || !m_defaultCrossfadeMS || m_isPaused)
   {
@@ -507,6 +518,8 @@ inline bool PAPlayer::PrepareStream(StreamInfo *si)
   else
     // Clipping protection (when enabled in AE) by audio limiting, applied just where needed
     si->m_stream->SetAmplification(gain);
+
+  SetStreamTempo(si);
 
   /* if its not the first stream and crossfade is not enabled */
   if (m_currentStream && m_currentStream != si && !m_upcomingCrossfadeMS)
@@ -993,10 +1006,50 @@ void PAPlayer::SetDynamicRangeCompression(long drc)
 
 }
 
+void PAPlayer::SetTempo(float tempo)
+{
+  if (tempo < MIN_TEMPO || tempo > MAX_TEMPO)
+    return;
+
+  // three decimals: the player speed's own floor, and what the OSD rounds to
+  tempo = std::round(tempo * 1000.0f) / 1000.0f;
+  if (tempo == m_tempo)
+    return;
+
+  m_tempo = tempo;
+  CDataCacheCore::GetInstance().SetSpeed(m_tempo, m_playbackSpeed);
+
+  std::unique_lock lock(m_streamsLock);
+  for (StreamInfo* si : m_streams)
+    SetStreamTempo(si);
+
+  m_signalSpeedChange = true;
+}
+
+bool PAPlayer::SupportsTempo() const
+{
+  return m_playerGUIData.m_canTempo;
+}
+
+void PAPlayer::SetStreamTempo(StreamInfo* si) const
+{
+  // a bitstream cannot be stretched: it plays as it is, and SupportsTempo() says so
+  if (si->m_stream && si->m_audioFormat.m_dataFormat != AE_FMT_RAW)
+    si->m_stream->SetResampleRatio(1.0 / static_cast<double>(m_tempo.load()));
+}
+
+double PAPlayer::QueuedSeconds(const StreamInfo& si) const
+{
+  if (!si.m_stream)
+    return 0.0;
+
+  return si.m_stream->GetDelay() * static_cast<double>(m_tempo.load());
+}
+
 void PAPlayer::SetSpeed(float speed)
 {
   m_playbackSpeed = static_cast<int>(speed);
-  CDataCacheCore::GetInstance().SetSpeed(1.0, speed);
+  CDataCacheCore::GetInstance().SetSpeed(m_tempo, speed);
   if (m_playbackSpeed != 0 && m_isPaused)
   {
     m_isPaused = false;
@@ -1019,8 +1072,7 @@ int64_t PAPlayer::GetTimeInternal()
     return 0;
 
   double time = ((double)m_currentStream->m_framesSent / (double)m_currentStream->m_audioFormat.m_sampleRate);
-  if (m_currentStream->m_stream)
-    time -= m_currentStream->m_stream->GetDelay();
+  time -= QueuedSeconds(*m_currentStream);
   time = time * 1000.0;
 
   m_playerGUIData.m_time = (int64_t)time; //update for GUI
@@ -1050,9 +1102,8 @@ bool PAPlayer::SetTimeInternal(int64_t time)
     return false;
 
   m_currentStream->m_framesSent = time / 1000 * m_currentStream->m_audioFormat.m_sampleRate;
-
-  if (m_currentStream->m_stream)
-    m_currentStream->m_framesSent += m_currentStream->m_stream->GetDelay() * m_currentStream->m_audioFormat.m_sampleRate;
+  m_currentStream->m_framesSent +=
+      QueuedSeconds(*m_currentStream) * m_currentStream->m_audioFormat.m_sampleRate;
 
   return true;
 }
@@ -1187,6 +1238,7 @@ void PAPlayer::UpdateGUIData(StreamInfo *si)
   m_playerGUIData.m_sampleRate    = si->m_audioFormat.m_sampleRate;
   m_playerGUIData.m_channelCount  = si->m_audioFormat.m_channelLayout.Count();
   m_playerGUIData.m_canSeek       = si->m_decoder.CanSeek();
+  m_playerGUIData.m_canTempo = si->m_audioFormat.m_dataFormat != AE_FMT_RAW;
 
   const ICodec* codec = si->m_decoder.GetCodec();
 
@@ -1223,9 +1275,7 @@ void PAPlayer::CloseFileCB(StreamInfo &si)
   bookmark.totalTimeInSeconds = total / 1000;
   bookmark.timeInSeconds = (static_cast<double>(si.m_framesSent) /
                             static_cast<double>(si.m_audioFormat.m_sampleRate));
-
-  if (si.m_stream)
-    bookmark.timeInSeconds -= si.m_stream->GetDelay();
+  bookmark.timeInSeconds -= QueuedSeconds(si);
   bookmark.player = m_name;
   bookmark.playerState = GetPlayerState();
   CServiceBroker::GetJobManager()->Submit([=]() { cb->OnPlayerCloseFile(fileItem, bookmark); },
@@ -1314,6 +1364,8 @@ inline PAPlayer::RecreateResult PAPlayer::RecreateStream(StreamInfo* si,
     si->m_stream->SetReplayGain(1.0f / fabs(peak));
   else
     si->m_stream->SetAmplification(gain);
+
+  SetStreamTempo(si);
 
   if (slave)
     si->m_stream->RegisterSlave(slave->m_stream.get());
@@ -1531,9 +1583,7 @@ void PAPlayer::ProcessAudioStreamChange(std::unique_lock<CCriticalSection>& lock
         static_cast<double>(si->m_framesSent) / static_cast<double>(si->m_audioFormat.m_sampleRate);
     decodedTime += static_cast<int64_t>(sent * 1000.0);
 
-    double time = sent;
-    if (si->m_stream)
-      time -= si->m_stream->GetDelay();
+    double time = sent - QueuedSeconds(*si);
 
     currentTime += static_cast<int64_t>(time * 1000.0);
     currentTime = std::max(currentTime, si->m_startOffset);
