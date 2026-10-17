@@ -29,6 +29,7 @@
 #include "interfaces/python/XBPython.h"
 #include "network/Network.h"
 #include "peripherals/Peripherals.h"
+#include "playlists/PlayListHistory.h"
 #if defined(HAS_FILESYSTEM_SMB)
 #include "network/IWSDiscovery.h"
 #if defined(TARGET_WINDOWS)
@@ -174,6 +175,7 @@ bool CServiceManager::InitStageTwo(const std::string& profilesUserDataFolder)
   m_binaryAddonCache->Init();
 
   m_favouritesService = std::make_unique<CFavouritesService>(profilesUserDataFolder);
+  m_playlistPlayer->GetHistory().ReInit(profilesUserDataFolder);
 
   m_serviceAddons = std::make_unique<ADDON::CServiceAddonManager>(*m_addonMgr);
 
