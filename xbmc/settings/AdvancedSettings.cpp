@@ -244,7 +244,7 @@ void CAdvancedSettings::Initialize()
   m_DXVACheckCompatibility = false;
   m_DXVACheckCompatibilityPresent = false;
   m_videoFpsDetect = 1;
-  m_maxTempo = 1.55f;
+  m_maxTempo = 5.0f;
   m_videoPreferStereoStream = false;
 
   m_videoDefaultLatency = 0.0;
@@ -846,7 +846,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
 
     //0 = disable fps detect, 1 = only detect on timestamps with uniform spacing, 2 detect on all timestamps
     XMLUtils::GetInt(pElement, "fpsdetect", m_videoFpsDetect, 0, 2);
-    XMLUtils::GetFloat(pElement, "maxtempo", m_maxTempo, 1.5, 2.0);
+    XMLUtils::GetFloat(pElement, "maxtempo", m_maxTempo, 1.0f, 5.0f);
     XMLUtils::GetBoolean(pElement, "preferstereostream", m_videoPreferStereoStream);
 
     // Store global display latency settings

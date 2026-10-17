@@ -743,22 +743,25 @@ float CProcessInfo::GetNewTempo()
 
 float CProcessInfo::MinTempoPlatform()
 {
-  return 0.75f;
+  return 0.5f;
 }
 
 float CProcessInfo::MaxTempoPlatform()
 {
-  return 1.55f;
+  // FFmpeg's atempo filter goes to 100 and speech is still followed at 5. Video has to be
+  // decoded that much faster too; a platform that cannot narrows it here.
+  return 5.0f;
 }
 
 bool CProcessInfo::IsTempoAllowed(float tempo)
 {
-  if (tempo > MinTempoPlatform() &&
-      (tempo < MaxTempoPlatform() ||
-       tempo < CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_maxTempo + 0.05f))
-    return true;
+  // the platform's range, capped by the maxtempo advanced setting
+  const float platformMax = MaxTempoPlatform();
+  const float settingMax = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_maxTempo;
+  const float maxTempo = settingMax < platformMax ? settingMax : platformMax;
 
-  return false;
+  // both ends inclusive, with room for the float a 0.1 step lands on
+  return tempo > MinTempoPlatform() - 0.05f && tempo < maxTempo + 0.05f;
 }
 
 unsigned int CProcessInfo::GetMaxPassthroughOffSyncDuration() const
