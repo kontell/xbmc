@@ -426,8 +426,6 @@ protected:
     int64_t m_timeMin;
     /*! When m_time was stored */
     std::chrono::steady_clock::time_point m_timeStamp;
-
-
     /*! ms to add to m_time for the position on the stream's own clock, when known */
     std::optional<int64_t> m_presentationOffset;
   } m_timeInfo = {};
