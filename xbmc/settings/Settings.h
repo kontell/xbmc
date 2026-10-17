@@ -314,6 +314,11 @@ public:
   static constexpr auto SETTING_MUSICPLAYER_CROSSFADEALBUMTRACKS =
       "musicplayer.crossfadealbumtracks";
   static constexpr auto SETTING_MUSICPLAYER_VISUALISATION = "musicplayer.visualisation";
+  static constexpr auto SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE = "musicplayer.playlisthistorysize";
+  static constexpr auto SETTING_MUSICPLAYER_RESTOREPLAYLISTPAUSED =
+      "musicplayer.restoreplaylistpaused";
+  static constexpr auto SETTING_MUSICPLAYER_RESTOREPLAYLISTFROMSTART =
+      "musicplayer.restoreplaylistfromstart";
   static constexpr auto SETTING_MUSICFILES_SELECTACTION = "musicfiles.selectaction";
   static constexpr auto SETTING_MUSICFILES_USETAGS = "musicfiles.usetags";
   static constexpr auto SETTING_MUSICFILES_TRACKFORMAT = "musicfiles.trackformat";

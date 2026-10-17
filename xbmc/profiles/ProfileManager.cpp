@@ -22,6 +22,7 @@
 #include "addons/Service.h" //! @todo Remove me
 #include "addons/Skin.h"
 #include "application/Application.h" //! @todo Remove me
+#include "application/ApplicationEnums.h"
 #include "application/ApplicationPowerHandling.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "events/EventLog.h"
@@ -35,6 +36,7 @@
 #include "guilib/GUIWindowManager.h"
 #include "guilib/StereoscopicsManager.h" //! @todo Remove me
 #include "input/InputManager.h"
+#include "messaging/ApplicationMessenger.h"
 #include "music/MusicLibraryQueue.h"
 #include "network/Network.h" //! @todo Remove me
 #include "network/NetworkServices.h" //! @todo Remove me
@@ -434,6 +436,11 @@ void CProfileManager::FinalizeLoadProfile()
     pvrManager.Init();
     serviceAddons.Start();
     g_application.UpdateLibraries();
+
+    if (m_settings->GetInt(CSettings::SETTING_LOOKANDFEEL_STARTUPACTION) ==
+        STARTUP_ACTION_RESTORE_PLAYLIST)
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr,
+                                                 "Playlist.Restore(latest)");
   }
 
   stereoscopicsManager.Initialize();
