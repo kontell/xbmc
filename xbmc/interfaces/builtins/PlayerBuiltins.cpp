@@ -120,7 +120,10 @@ static int RestorePlaylist(const std::vector<std::string>& params)
     index = static_cast<size_t>(dialog->GetSelectedItem());
   }
 
-  playlistPlayer.RestorePlaylist(entries[index], false, false);
+  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  playlistPlayer.RestorePlaylist(
+      entries[index], settings->GetBool(CSettings::SETTING_MUSICPLAYER_RESTOREPLAYLISTPAUSED),
+      settings->GetBool(CSettings::SETTING_MUSICPLAYER_RESTOREPLAYLISTFROMSTART));
   return 0;
 }
 
