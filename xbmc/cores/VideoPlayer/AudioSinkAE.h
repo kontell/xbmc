@@ -54,6 +54,13 @@ public:
   double GetResampleRatio();
 
   void SetResampleMode(int mode);
+
+  /*!
+   * \brief Ask the stream to play at a rate: output samples per input sample, 1/tempo.
+   * Kept across a re-creation of the stream; a bitstream is left as it is.
+   */
+  void SetResampleRatio(double ratio);
+
   void Flush();
   void Drain();
   void AbortAddPackets();
@@ -70,6 +77,7 @@ protected:
   double m_syncError;
   unsigned int m_syncErrorTime;
   double m_resampleRatio = 0.0; // invalid
+  double m_requestedResampleRatio = 1.0;
   CCriticalSection m_critSection;
 
   AEDataFormat m_dataFormat;
