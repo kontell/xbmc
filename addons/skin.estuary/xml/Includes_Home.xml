@@ -417,7 +417,7 @@
 			<item>
 				<label>$LOCALIZE[40807]</label>
 				<onclick>Playlist.Restore</onclick>
-				<thumb>DefaultMusicRecentlyPlayed.png</thumb>
+				<thumb>DefaultMusicPlaylistHistory.png</thumb>
 			</item>
 		</content>
 	</include>
