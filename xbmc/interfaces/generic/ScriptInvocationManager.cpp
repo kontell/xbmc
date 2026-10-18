@@ -191,15 +191,13 @@ CReusableInvokerClaim CScriptInvocationManager::ClaimReusableInvoker(const std::
 
   if (m_lastInvokerThread)
   {
-    // The interpreter is only worth claiming together with the plugin handle it
-    // was created for. Without one the caller has to allocate a new handle and
-    // would run on a fresh invoker anyway, so claiming here would just mark a
-    // slot that the returned claim could never be matched back to.
-    if (m_lastPluginHandle >= 0 && m_lastInvokerThread->Reuseable(script) &&
-        m_lastInvokerThread->Claim())
+    // Reuse the parked interpreter whatever handle it carries. A slot left by a
+    // handle-less run has m_lastPluginHandle == -1; the caller allocates a real
+    // handle for it and calls RebindReusableHandle.
+    if (m_lastInvokerThread->Reuseable(script) && m_lastInvokerThread->Claim())
     {
       m_lastInvokerThread->GetInvoker()->Reset();
-      CLog::Log(LOGDEBUG, "{} - claimed reusable plugin handle {} on LanguageInvokerThread {}",
+      CLog::Log(LOGDEBUG, "{} - claimed reusable invoker (plugin handle {}) on LanguageInvokerThread {}",
                 __FUNCTION__, m_lastPluginHandle, m_lastInvokerThread->GetId());
       return {m_lastInvokerThread, m_lastPluginHandle};
     }
@@ -227,6 +225,21 @@ void CScriptInvocationManager::ReleaseReservedInvoker(int pluginHandle)
   // own interpreter. Drop its claim and leave it parked for the next reuse.
   if (m_lastInvokerThread && m_lastPluginHandle == pluginHandle)
     m_lastInvokerThread->ReleaseClaim();
+}
+
+void CScriptInvocationManager::RebindReusableHandle(CReusableInvokerClaim& claim, int newHandle)
+{
+  std::unique_lock lock(m_critSection);
+  // Called by a caller that reused a handle-less slot and allocated a real
+  // handle for it. Rebind only while the claim still refers to the current slot,
+  // so a slot replaced in between cannot be pointed at this caller's handle;
+  // then GetLanguageInvoker's claimed-by-caller check matches and later listings
+  // reuse this interpreter by that handle. Keep the claim's own handle in step.
+  if (m_lastInvokerThread && claim.m_thread == m_lastInvokerThread)
+  {
+    m_lastPluginHandle = newHandle;
+    claim.m_pluginHandle = newHandle;
+  }
 }
 
 std::shared_ptr<ILanguageInvoker> CScriptInvocationManager::GetLanguageInvoker(

@@ -43,10 +43,18 @@ protected:
 
     // reuse the claimed script handle or get a new one if necessary
     HandleType handle;
-    if (claim.IsValid())
+    if (claim.IsValid() && claim.GetPluginHandle() >= 0)
     {
       handle = claim.GetPluginHandle();
       ReuseScriptHandle(handle, script);
+    }
+    else if (claim.IsValid())
+    {
+      // A slot left by a handle-less run of this add-on: adopt the interpreter
+      // but give it a real handle for this listing's callbacks, and point the
+      // slot at it.
+      handle = GetNewScriptHandle(script);
+      manager.RebindReusableHandle(claim, handle);
     }
     else
     {
