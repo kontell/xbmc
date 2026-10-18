@@ -26192,7 +26192,7 @@ msgstr ""
 #. Shown when no music playlist has been saved to the history yet
 #: xbmc/interfaces/builtins/PlayerBuiltins.cpp
 msgctxt "#40808"
-msgid "No playlist has been set aside yet. A playlist is saved whenever it is replaced, interrupted or stopped."
+msgid "No playlist has been set aside yet. A playlist is saved whenever it is replaced, interrupted, stopped or played through."
 msgstr ""
 
 #. First detail line of a playlist history row: the track that was playing, the number of tracks and how many were still to play

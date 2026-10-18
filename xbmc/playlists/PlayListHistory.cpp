@@ -146,8 +146,12 @@ bool CPlayListHistoryEntry::IsRepeatOf(const CPlayListHistoryEntry& other) const
 void CPlayListHistoryEntry::GetItems(CFileItemList& items) const
 {
   CMusicDatabase db;
-  const bool library = db.Open();
-  // Songs by file name, for each folder of the playlist, queried once.
+  GetItems(items, db.Open() ? &db : nullptr);
+}
+
+void CPlayListHistoryEntry::GetItems(CFileItemList& items, CMusicDatabase* library) const
+{
+  // The songs of each folder of the playlist, queried once.
   std::map<std::string, std::map<std::string, std::vector<CSong>>> folders;
 
   for (const CPlayListHistoryTrack& track : tracks)
@@ -162,9 +166,10 @@ void CPlayListHistoryEntry::GetItems(CFileItemList& items) const
       if (songs == folders.end())
       {
         songs = folders.emplace(folder, std::map<std::string, std::vector<CSong>>{}).first;
-        db.GetSongsByPath(folder, songs->second);
+        library->GetSongsByPath(folder, songs->second);
       }
-      const auto song = songs->second.find(fileName);
+      // Keyed by the folder and file name joined, as the database builds a song's path.
+      const auto song = songs->second.find(URIUtils::AddFileToFolder(folder, fileName));
       if (song != songs->second.end() && !song->second.empty())
       {
         // A cue sheet gives several songs one file; take the one that was saved.
