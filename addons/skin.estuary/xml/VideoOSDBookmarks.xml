@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <window>
 	<defaultcontrol always="true">2</defaultcontrol>
-	<onload condition="!Player.HasVideo">SetFocus(11)</onload>
 	<include>Animation_DialogPopupOpenClose</include>
 	<controls>
 		<control type="button">
