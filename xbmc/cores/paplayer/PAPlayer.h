@@ -18,6 +18,8 @@
 #include <atomic>
 #include <list>
 #include <mutex>
+#include <string>
+#include <utility>
 #include <vector>
 
 class IAEStream;
@@ -55,6 +57,14 @@ public:
   int GetAudioStreamCount() const override;
   int GetAudioStream() override;
   void SetAudioStream(int iStream) override;
+
+  int GetChapterCount() const override;
+  int GetChapter() const override;
+  void GetChapterName(std::string& strChapterName, int chapterIdx = -1) const override;
+  int64_t GetChapterPos(int chapterIdx = -1) const override;
+  int SeekChapter(int iChapter) override;
+
+  bool OnAction(const CAction& action) override;
 
   // implementation of IJobCallback
   void OnJobComplete(unsigned int jobID, bool success, CJob *job) override;
@@ -107,6 +117,8 @@ private:
     IAE::StreamPtr m_stream; /* the playback stream */
     float m_volume;                      /* the initial volume level to set the stream to on creation */
 
+    std::vector<std::pair<std::string, int64_t>> m_chapters; /* name and start in ms, on the track's clock */
+
     bool m_isSlaved;                     /* true if the stream has been slaved to another */
     StreamInfo* m_slavedTo = nullptr; /* the stream that owns it while slaved, and resumes it */
     bool m_waitOnDrain;                  /* wait for stream being drained in AE */
@@ -136,6 +148,7 @@ private:
   StreamList          m_finishing;           /* finishing streams */
   int m_jobCounter = 0;
   CEvent              m_jobEvent;
+  int64_t m_chapterSeekTarget = -1; /* start of the chapter sought, until it is heard */
   int64_t m_newForcedPlayerTime = -1;
   int64_t m_newForcedTotalTime = -1;
   std::unique_ptr<CProcessInfo> m_processInfo;
@@ -205,5 +218,27 @@ private:
    * \brief Ask for a stream, unless something has already been asked for.
    */
   void QueueAudioStreamRequest(int iStream);
+
+  /*!
+   * \brief Take the chapters of si's track, from its music tag or else from its file.
+   *
+   * Moved onto the track's clock and kept to the part of the file the track plays. A track left
+   * with fewer than two has none.
+   */
+  void UpdateChapters(StreamInfo& si) const;
+
+  /*!
+   * \brief The chapter playing, from 1, or 0 when there is none.
+   *
+   * Must be called with m_streamsLock held.
+   */
+  int GetChapterInternal() const;
+
+  /*!
+   * \brief The time chapters are told by: the time played, or a chapter sought and not yet heard.
+   *
+   * Must be called with m_streamsLock held.
+   */
+  int64_t GetChapterTime() const;
 };
 
