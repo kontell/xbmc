@@ -1004,3 +1004,9 @@ msgstr ""
 msgctxt "#31615"
 msgid "Subtitle language"
 msgstr ""
+
+#: /xml/MusicOSD.xml
+#. Label of the music OSD button that opens the list of chapters
+msgctxt "#31616"
+msgid "Chapters"
+msgstr ""
