@@ -19,14 +19,20 @@
 #include <vector>
 
 class CLanguageInvokerThread;
+class CScriptInvocationManager;
 
 /*!
- * \brief RAII claim on the reusable language invoker and its plugin handle.
+ * \brief RAII lease on the reusable language invoker slot and its plugin handle.
  *
- * While a claim is held CScriptInvocationManager will neither hand that invoker
- * to another script nor release it as idle. Dropping the claim - on scope exit,
- * an early return, or an exception - is what puts the slot back in circulation,
- * so a caller cannot leak the claimed state by forgetting to clean up.
+ * A claim keeps CScriptInvocationManager from handing the reusable invoker to
+ * another script or releasing it as idle. It takes one of two forms:
+ *  - a reuse claim, which carries a parked interpreter and the plugin handle it
+ *    was created for, handed out by ClaimReusableInvoker; and
+ *  - a reservation, which carries no interpreter yet but holds the slot for the
+ *    handle a fresh run is about to publish, handed out by ReserveReusableInvoker.
+ * Either way, dropping the claim - on scope exit, an early return, or an
+ * exception - is what puts the slot back in circulation, so a caller cannot
+ * leak the leased state by forgetting to clean up.
  */
 class CReusableInvokerClaim
 {
@@ -40,24 +46,32 @@ public:
   CReusableInvokerClaim(const CReusableInvokerClaim&) = delete;
   CReusableInvokerClaim& operator=(const CReusableInvokerClaim&) = delete;
 
-  //! \brief True if a reusable invoker and its plugin handle were claimed.
+  //! \brief True if a parked interpreter was claimed for reuse.
   bool IsValid() const { return m_thread != nullptr; }
 
   //! \brief The claimed plugin handle, or -1 if nothing was claimed.
   int GetPluginHandle() const { return m_pluginHandle; }
 
-  //! \brief Drop the claim. Safe to call on an invalid claim and more than once.
+  //! \brief Drop the claim. Safe to call on an empty claim and more than once.
   void Release();
 
 private:
   friend class CScriptInvocationManager;
+  //! Reuse form: carries the parked interpreter and its handle.
   CReusableInvokerClaim(std::shared_ptr<CLanguageInvokerThread> thread, int pluginHandle)
     : m_thread(std::move(thread)),
       m_pluginHandle(pluginHandle)
   {
   }
+  //! Reservation form: holds the slot for a handle a fresh run will publish.
+  CReusableInvokerClaim(CScriptInvocationManager* manager, int pluginHandle)
+    : m_manager(manager),
+      m_pluginHandle(pluginHandle)
+  {
+  }
 
   std::shared_ptr<CLanguageInvokerThread> m_thread;
+  CScriptInvocationManager* m_manager{nullptr};
   int m_pluginHandle{-1};
 };
 
@@ -98,6 +112,21 @@ public:
    * \return The claim, which is invalid if nothing reusable was available
    */
   CReusableInvokerClaim ClaimReusableInvoker(const std::string& script);
+
+  /*!
+   * \brief Reserve the reusable slot for a handle a fresh run is about to publish.
+   *
+   * Used when ClaimReusableInvoker found nothing to reuse and the caller has
+   * allocated a new plugin handle. The returned claim holds no interpreter yet;
+   * when a reusable run publishes an invoker for this handle it is born claimed,
+   * and destroying this claim - after the caller has removed the handle - is
+   * what releases it. This keeps a concurrent listing from reusing the handle
+   * before the run that created it has finished with it.
+   *
+   * \param pluginHandle The handle the caller is about to run with
+   * \return The reservation claim
+   */
+  CReusableInvokerClaim ReserveReusableInvoker(int pluginHandle);
 
   /*!
    * \brief Executes the given script asynchronously in a separate thread.
@@ -193,6 +222,7 @@ public:
 
 protected:
   friend class CLanguageInvokerThread;
+  friend class CReusableInvokerClaim;
 
   void OnExecutionDone(int scriptId);
 
@@ -213,6 +243,10 @@ private:
 
   LanguageInvokerThread getInvokerThread(int scriptId) const;
   void ReleaseLastInvokerIfIdle();
+  //! Drop a reservation taken by ReserveReusableInvoker: release the claim on
+  //! the reusable slot if it still holds the reserved handle. Called by
+  //! CReusableInvokerClaim::Release().
+  void ReleaseReservedInvoker(int pluginHandle);
   //! True if the last reusable thread is claimed, has a script queued, or is
   //! running one. Caller must hold m_critSection.
   bool LastInvokerOccupied() const;

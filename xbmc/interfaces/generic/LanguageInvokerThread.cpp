@@ -50,7 +50,12 @@ bool CLanguageInvokerThread::Claim()
 
 void CLanguageInvokerThread::ReleaseClaim()
 {
+  std::unique_lock<std::mutex> lck(m_mutex);
   m_claimed = false;
+  // Dropping the claim can be what makes a parked thread retirable (e.g. a run
+  // that ended Failed), so wake the loop to re-evaluate rather than leaving it
+  // parked until the next manager call.
+  m_condition.notify_one();
 }
 
 bool CLanguageInvokerThread::execute(const std::string &script, const std::vector<std::string> &arguments)
@@ -60,13 +65,11 @@ bool CLanguageInvokerThread::execute(const std::string &script, const std::vecto
 
   std::unique_lock<std::mutex> lck(m_mutex);
 
-  // The Process() loop has gone but the thread has not: CThread::IsRunning()
-  // stays true all through OnExit()/Py_EndInterpreter, so a restart set here
-  // would notify a condition variable nobody waits on and the script would
-  // silently never run. Create() is not an alternative either - it calls
-  // exit(1) while the previous thread has not fulfilled its promise. Refuse,
-  // and let the caller start a fresh thread.
-  if (m_processDone)
+  // Refuse once the loop has decided to finish (m_processDone) or been asked to
+  // stop (m_bStop): a restart set here would be dropped by the loop's keepGoing
+  // test or notify a condition nobody waits on, and the caller would wait on a
+  // script that never runs. Let the caller start a fresh thread instead.
+  if (m_processDone || m_bStop)
     return false;
 
   m_script = script;
@@ -129,6 +132,7 @@ void CLanguageInvokerThread::Process()
   while (keepGoing)
   {
     m_restart = false;
+    m_executing = true;
     const std::string script = m_script;
     const std::vector<std::string> args = m_args;
     // Execute() talks to the GUI and to other invokers. Holding m_mutex
@@ -138,12 +142,15 @@ void CLanguageInvokerThread::Process()
     lckdl.unlock();
     m_invoker->Execute(script, args);
     lckdl.lock();
+    m_executing = false;
 
-    // A claimed invoker was Reset() on purpose by whoever claimed it, so its
-    // state says nothing about whether this thread is still worth keeping.
-    // Reading it unconditionally raced that Reset() and retired the very
-    // thread the claimer was about to run its script on.
-    if (!IsClaimed() && m_invoker->GetState() != InvokerStateScriptDone)
+    // The state here is this run's own outcome. A concurrent claimer can only
+    // Reset() (to Uninitialized) a thread it has claimed, so a terminal failure
+    // is always ours to act on; an Uninitialized seen under someone else's
+    // claim is their Reset() and must not retire the thread they will run.
+    const InvokerState state = m_invoker->GetState();
+    if (state == InvokerStateFailed || state == InvokerStateExecutionDone ||
+        (!IsClaimed() && state != InvokerStateScriptDone))
       m_reusable = false;
 
     m_condition.wait(lckdl,
@@ -159,6 +166,16 @@ void CLanguageInvokerThread::Process()
 
 void CLanguageInvokerThread::OnExit()
 {
+  // OnExit() always runs, including when Process() left by exception, so this
+  // is where the thread is guaranteed to be marked finished. Without it a
+  // Process() that threw would keep IsProcessDone() false with IsRunning() also
+  // false, which IsBusy() reports as busy for the rest of the session.
+  {
+    std::unique_lock<std::mutex> lck(m_mutex);
+    m_processDone = true;
+    m_condition.notify_one();
+  }
+
   if (m_invoker == NULL)
     return;
 
