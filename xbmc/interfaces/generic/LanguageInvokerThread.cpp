@@ -19,7 +19,7 @@ CLanguageInvokerThread::CLanguageInvokerThread(std::shared_ptr<ILanguageInvoker>
     CThread("LanguageInvoker"),
     m_invoker(std::move(invoker)),
     m_invocationManager(invocationManager),
-    m_reusable(reuseable)
+    m_mayReuse(reuseable)
 { }
 
 CLanguageInvokerThread::~CLanguageInvokerThread()
@@ -50,12 +50,10 @@ bool CLanguageInvokerThread::Claim()
 
 void CLanguageInvokerThread::ReleaseClaim()
 {
-  std::unique_lock<std::mutex> lck(m_mutex);
+  // m_claimed is atomic and no wait predicate depends on it, so just drop it. A
+  // run that ended non-reusable has already retired itself to Done; the claim
+  // holder outlives it and this is a harmless no-op on its phase.
   m_claimed = false;
-  // Dropping the claim can be what makes a parked thread retirable (e.g. a run
-  // that ended Failed), so wake the loop to re-evaluate rather than leaving it
-  // parked until the next manager call.
-  m_condition.notify_one();
 }
 
 bool CLanguageInvokerThread::execute(const std::string &script, const std::vector<std::string> &arguments)
@@ -65,11 +63,10 @@ bool CLanguageInvokerThread::execute(const std::string &script, const std::vecto
 
   std::unique_lock<std::mutex> lck(m_mutex);
 
-  // Refuse once the loop has decided to finish (m_processDone) or been asked to
-  // stop (m_bStop): a restart set here would be dropped by the loop's keepGoing
-  // test or notify a condition nobody waits on, and the caller would wait on a
-  // script that never runs. Let the caller start a fresh thread instead.
-  if (m_processDone || m_bStop)
+  // Refuse once the loop has left (Done) or been asked to stop: a restart set
+  // here would be dropped by the loop or notify a condition nobody waits on, and
+  // the caller would wait on a script that never runs. Start a fresh thread.
+  if (m_phase == Phase::Done || m_bStop)
     return false;
 
   m_script = script;
@@ -77,7 +74,7 @@ bool CLanguageInvokerThread::execute(const std::string &script, const std::vecto
 
   if (CThread::IsRunning())
   {
-    m_restart = true;
+    m_phase = Phase::Queued;
     m_condition.notify_one();
     return true;
   }
@@ -124,58 +121,67 @@ void CLanguageInvokerThread::OnStartup()
 
 void CLanguageInvokerThread::Process()
 {
-  if (m_invoker == NULL)
-    return;
-
   std::unique_lock<std::mutex> lckdl(m_mutex);
-  bool keepGoing = true;
-  while (keepGoing)
+  if (m_invoker == NULL)
   {
-    m_restart = false;
-    m_executing = true;
+    m_phase = Phase::Done;
+    return;
+  }
+
+  for (;;)
+  {
+    m_phase = Phase::Running;
     const std::string script = m_script;
     const std::vector<std::string> args = m_args;
-    // Execute() talks to the GUI and to other invokers. Holding m_mutex
-    // across it deadlocks Home.xml load: a JobWorker in Release()/restart
-    // waits for this lock, the app thread waits for that job, and this
-    // script waits for the GUI.
+    // Execute() talks to the GUI and to other invokers. Holding m_mutex across
+    // it deadlocks Home.xml load: a JobWorker in Release()/restart waits for
+    // this lock, the app thread waits for that job, and this script waits for
+    // the GUI.
     lckdl.unlock();
-    m_invoker->Execute(script, args);
+    try
+    {
+      m_invoker->Execute(script, args);
+    }
+    catch (...)
+    {
+      // Settle the phase before unwinding: until it is Done, execute() would
+      // treat this dying thread as able to take another script.
+      lckdl.lock();
+      m_phase = Phase::Done;
+      m_condition.notify_one();
+      throw;
+    }
     lckdl.lock();
-    m_executing = false;
 
-    // The state here is this run's own outcome. A concurrent claimer can only
-    // Reset() (to Uninitialized) a thread it has claimed, so a terminal failure
-    // is always ours to act on; an Uninitialized seen under someone else's
-    // claim is their Reset() and must not retire the thread they will run.
-    const InvokerState state = m_invoker->GetState();
-    if (state == InvokerStateFailed || state == InvokerStateExecutionDone ||
-        (!IsClaimed() && state != InvokerStateScriptDone))
-      m_reusable = false;
+    // This run's own outcome, read on this thread before any claimer can Reset()
+    // the invoker. Only a clean finish on a reuse-enabled thread parks; anything
+    // else retires it even with a claim still held, since the claim holder's
+    // wait ends on this thread reaching OnExit(), not the reverse.
+    const bool reusable = m_mayReuse && m_invoker->GetState() == InvokerStateScriptDone;
+    if (m_bStop || !reusable)
+    {
+      m_phase = Phase::Done;
+      break;
+    }
 
-    m_condition.wait(lckdl,
-                     [this] { return m_bStop || m_restart || (!m_reusable && !IsClaimed()); });
-
-    // A claim keeps the loop open, so a stop request does not have to be
-    // ignored to protect a script that has just been handed to this thread.
-    keepGoing = (m_restart || m_reusable || IsClaimed()) && !m_bStop;
-    if (!keepGoing)
-      m_processDone = true; // set under m_mutex, before execute() can look again
+    // Park the idle interpreter and wait for the next script or a stop. A restart
+    // handed over during the run already set Queued; leave it for the predicate.
+    if (m_phase != Phase::Queued)
+      m_phase = Phase::Parked;
+    m_condition.wait(lckdl, [this] { return m_bStop || m_phase == Phase::Queued; });
+    if (m_bStop)
+    {
+      m_phase = Phase::Done;
+      break;
+    }
   }
 }
 
 void CLanguageInvokerThread::OnExit()
 {
-  // OnExit() always runs, including when Process() left by exception, so this
-  // is where the thread is guaranteed to be marked finished. Without it a
-  // Process() that threw would keep IsProcessDone() false with IsRunning() also
-  // false, which IsBusy() reports as busy for the rest of the session.
-  {
-    std::unique_lock<std::mutex> lck(m_mutex);
-    m_processDone = true;
-    m_condition.notify_one();
-  }
-
+  // Process() has already settled the phase at Done on its way out, including
+  // the exception path, so there is nothing left to do here but notify the
+  // manager the run is done.
   if (m_invoker == NULL)
     return;
 
