@@ -144,6 +144,16 @@ namespace XBMCAddon
       return infoTag->GetLastPlayed().GetAsW3CDateTime();
     }
 
+    double InfoTagMusic::getResumeTime()
+    {
+      return infoTag->GetResumePoint().timeInSeconds;
+    }
+
+    double InfoTagMusic::getResumeTimeTotal()
+    {
+      return infoTag->GetResumePoint().totalTimeInSeconds;
+    }
+
     String InfoTagMusic::getComment()
     {
       return infoTag->GetComment();
@@ -304,6 +314,12 @@ namespace XBMCAddon
       setDateAddedRaw(infoTag, dateAdded);
     }
 
+    void InfoTagMusic::setResumePoint(double time, double totalTime /* = 0.0 */)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      setResumePointRaw(infoTag, time, totalTime);
+    }
+
     void InfoTagMusic::setMusicBrainzTrackID(const String& musicBrainzTrackID)
     {
       XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
@@ -449,6 +465,17 @@ namespace XBMCAddon
     void InfoTagMusic::setDateAddedRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& dateAdded)
     {
       infoTag->SetDateAdded(dateAdded);
+    }
+
+    void InfoTagMusic::setResumePointRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
+                                         double time,
+                                         double totalTime /* = 0.0 */)
+    {
+      auto resumePoint = infoTag->GetResumePoint();
+      resumePoint.timeInSeconds = time;
+      if (totalTime > 0.0)
+        resumePoint.totalTimeInSeconds = totalTime;
+      infoTag->SetResumePoint(resumePoint);
     }
 
     void InfoTagMusic::setMusicBrainzTrackIDRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
