@@ -91,6 +91,10 @@ bool CGUIDialogVideoBookmarks::OnMessage(CGUIMessage& message)
 
       CGUIWindow::OnMessage(message);
       Update();
+
+      // a skin can hide the buttons over audio, the default control with them
+      if (!GetFocusedControl())
+        m_viewControl.SetFocused();
       return true;
     }
     break;
