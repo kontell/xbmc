@@ -129,6 +129,20 @@ public:
   CReusableInvokerClaim ReserveReusableInvoker(int pluginHandle);
 
   /*!
+   * \brief Point the claimed reusable slot at a freshly allocated handle.
+   *
+   * Used when ClaimReusableInvoker handed back a slot a handle-less run had left
+   * (plugin handle -1): the caller allocates a real handle for its callbacks and
+   * calls this so GetLanguageInvoker still recognises its claim. The claim is
+   * matched against the current slot so the handle can never be bound to a
+   * different interpreter, and its own handle is updated to match.
+   *
+   * \param claim The caller's claim on the slot, taken by ClaimReusableInvoker
+   * \param newHandle The handle the caller allocated for this run
+   */
+  void RebindReusableHandle(CReusableInvokerClaim& claim, int newHandle);
+
+  /*!
    * \brief Executes the given script asynchronously in a separate thread.
    *
    * \param script Path to the script to be executed
