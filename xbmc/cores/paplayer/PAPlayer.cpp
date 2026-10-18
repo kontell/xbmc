@@ -19,6 +19,8 @@
 #include "cores/AudioEngine/Utils/AEUtil.h"
 #include "cores/DataCacheCore.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
+#include "input/actions/Action.h"
+#include "input/actions/ActionIDs.h"
 #include "jobs/JobManager.h"
 #include "messaging/ApplicationMessenger.h"
 #include "music/MusicFileItemClassify.h"
@@ -376,6 +378,7 @@ bool PAPlayer::QueueNextFileEx(const CFileItem &file, bool fadeIn)
   si->m_audioFormat = si->m_decoder.GetFormat();
   // si->m_startOffset already initialized
   si->m_endOffset = file.GetEndOffset();
+  UpdateChapters(*si);
   si->m_bytesPerSample = CAEUtil::DataFormatToBits(si->m_audioFormat.m_dataFormat) >> 3;
   si->m_bytesPerFrame = si->m_bytesPerSample * si->m_audioFormat.m_channelLayout.Count();
   si->m_started = false;
@@ -844,6 +847,7 @@ inline bool PAPlayer::ProcessStream(StreamInfo *si, double &freeBufferTime)
 
       *si->m_fileItem = *si->m_nextFileItem;
       si->m_nextFileItem.reset();
+      UpdateChapters(*si);
 
       int64_t streamTotalTime = si->m_decoder.TotalTime() - si->m_startOffset;
       if (si->m_endOffset)
@@ -1026,6 +1030,9 @@ int64_t PAPlayer::GetTimeInternal()
   m_playerGUIData.m_time = (int64_t)time; //update for GUI
   CDataCacheCore::GetInstance().SetPlayTimes(0, time, 0, m_playerGUIData.m_totalTime);
 
+  if (m_chapterSeekTarget >= 0 && m_currentStream->m_seekFrame == -1 && time >= m_chapterSeekTarget)
+    m_chapterSeekTarget = -1;
+
   return (int64_t)time;
 }
 
@@ -1157,6 +1164,7 @@ void PAPlayer::SeekTime(int64_t iTime /*=0*/)
   if (m_playbackSpeed != 1)
     SetSpeed(1);
 
+  m_chapterSeekTarget = -1;
   m_currentStream->m_seekFrame = (int)((float)m_currentStream->m_audioFormat.m_sampleRate * ((float)iTime + (float)m_currentStream->m_startOffset) / 1000.0f);
   m_callback.OnPlayBackSeek(iTime, seekOffset);
 }
@@ -1200,6 +1208,14 @@ void PAPlayer::UpdateGUIData(StreamInfo *si)
     total = m_currentStream->m_endOffset;
   total -= m_currentStream->m_startOffset;
   m_playerGUIData.m_totalTime = total;
+
+  // whole seconds, as VideoPlayer publishes them
+  std::vector<std::pair<std::string, int64_t>> chapters;
+  chapters.reserve(si->m_chapters.size());
+  for (const auto& [name, start] : si->m_chapters)
+    chapters.emplace_back(name, (start + 500) / 1000);
+  CServiceBroker::GetDataCacheCore().SetChapters(chapters);
+  m_chapterSeekTarget = -1;
 
   CServiceBroker::GetDataCacheCore().SignalAudioInfoChange();
 }
@@ -1636,4 +1652,159 @@ void PAPlayer::ProcessAudioStreamChange(std::unique_lock<CCriticalSection>& lock
 
   UpdateGUIData(si);
   CLog::Log(LOGINFO, "PAPlayer::ProcessAudioStreamChange - Switched to audio stream {}", iStream);
+}
+
+void PAPlayer::UpdateChapters(StreamInfo& si) const
+{
+  std::vector<std::pair<std::string, int64_t>> chapters;
+  const MUSIC_INFO::CMusicInfoTag* tag =
+      si.m_fileItem->HasMusicInfoTag() ? si.m_fileItem->GetMusicInfoTag() : nullptr;
+  if (tag && !tag->GetChapterMarks().empty())
+  {
+    for (const ChapterDetails& chapter : tag->GetChapterMarks())
+      chapters.emplace_back(chapter.name, chapter.startTimeMs.count());
+  }
+  else if (const ICodec* codec = si.m_decoder.GetCodec())
+    chapters = codec->GetChapters();
+
+  std::ranges::stable_sort(chapters, {}, &std::pair<std::string, int64_t>::second);
+
+  si.m_chapters.clear();
+  for (size_t i = 0; i < chapters.size(); ++i)
+  {
+    const int64_t start = chapters[i].second;
+    if (si.m_endOffset && start >= si.m_endOffset)
+      break;
+
+    // the chapter the track starts in is its first, from 0
+    if (i + 1 < chapters.size() && chapters[i + 1].second <= si.m_startOffset)
+      continue;
+
+    si.m_chapters.emplace_back(chapters[i].first,
+                               std::max(start, si.m_startOffset) - si.m_startOffset);
+  }
+
+  if (si.m_chapters.size() < 2)
+    si.m_chapters.clear();
+}
+
+int64_t PAPlayer::GetChapterTime() const
+{
+  return std::max(m_playerGUIData.m_time, m_chapterSeekTarget);
+}
+
+int PAPlayer::GetChapterInternal() const
+{
+  const StreamInfo* si = PlayingStream();
+  if (!si)
+    return 0;
+
+  const auto next = std::ranges::upper_bound(si->m_chapters, GetChapterTime(), {},
+                                             &std::pair<std::string, int64_t>::second);
+  return static_cast<int>(std::distance(si->m_chapters.begin(), next));
+}
+
+int PAPlayer::GetChapterCount() const
+{
+  std::unique_lock lock(m_streamsLock);
+  const StreamInfo* si = PlayingStream();
+  return si ? static_cast<int>(si->m_chapters.size()) : 0;
+}
+
+int PAPlayer::GetChapter() const
+{
+  std::unique_lock lock(m_streamsLock);
+  return GetChapterInternal();
+}
+
+void PAPlayer::GetChapterName(std::string& strChapterName, int chapterIdx) const
+{
+  std::unique_lock lock(m_streamsLock);
+  const StreamInfo* si = PlayingStream();
+  if (!si)
+    return;
+
+  if (chapterIdx == -1)
+    chapterIdx = GetChapterInternal();
+  if (chapterIdx > 0 && chapterIdx <= static_cast<int>(si->m_chapters.size()))
+    strChapterName = si->m_chapters[chapterIdx - 1].first;
+}
+
+int64_t PAPlayer::GetChapterPos(int chapterIdx) const
+{
+  std::unique_lock lock(m_streamsLock);
+  const StreamInfo* si = PlayingStream();
+  if (!si)
+    return -1;
+
+  if (chapterIdx == -1)
+    chapterIdx = GetChapterInternal();
+  if (chapterIdx > 0 && chapterIdx <= static_cast<int>(si->m_chapters.size()))
+    return (si->m_chapters[chapterIdx - 1].second + 500) / 1000;
+
+  return -1;
+}
+
+int PAPlayer::SeekChapter(int iChapter)
+{
+  {
+    std::unique_lock lock(m_streamsLock);
+    if (!m_currentStream || iChapter < 1 ||
+        iChapter > static_cast<int>(m_currentStream->m_chapters.size()))
+      return -1;
+
+    const int64_t start = m_currentStream->m_chapters[iChapter - 1].second;
+    SeekTime(start);
+    m_chapterSeekTarget = start;
+  }
+
+  m_callback.OnPlayBackSeekChapter(iChapter);
+  return 0;
+}
+
+bool PAPlayer::OnAction(const CAction& action)
+{
+  // As VideoPlayer does, with the same 5 seconds in which previous goes back a chapter rather than
+  // to the start of this one. Past the last chapter, or before the first, the action is left to
+  // the playlist.
+  int chapter = 0;
+  switch (action.GetID())
+  {
+    case ACTION_NEXT_ITEM:
+    {
+      std::unique_lock lock(m_streamsLock);
+      if (!m_currentStream)
+        return false;
+
+      const int current = GetChapterInternal();
+      if (current >= static_cast<int>(m_currentStream->m_chapters.size()))
+        return false;
+
+      chapter = current + 1;
+      break;
+    }
+    case ACTION_PREV_ITEM:
+    {
+      std::unique_lock lock(m_streamsLock);
+      if (!m_currentStream)
+        return false;
+
+      const int current = GetChapterInternal();
+      if (current == 0)
+        return false;
+
+      const int64_t start = m_currentStream->m_chapters[current - 1].second;
+      if (GetChapterTime() >= start + 5000)
+        chapter = current;
+      else if (current > 1)
+        chapter = current - 1;
+      else
+        return false;
+      break;
+    }
+    default:
+      return false;
+  }
+
+  return SeekChapter(chapter) == 0;
 }

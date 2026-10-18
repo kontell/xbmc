@@ -1164,6 +1164,14 @@ bool CApplication::OnAction(const CAction &action)
     return true;
   }
 
+  // In the visualisation window, and the music OSD over it, audio with chapters steps through
+  // them before the playlist moves on. The player declines when there is no chapter that way.
+  if ((action.GetID() == ACTION_NEXT_ITEM || action.GetID() == ACTION_PREV_ITEM) &&
+      appPlayer->IsPlayingAudio() && appPlayer->GetChapterCount() > 1 &&
+      CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VISUALISATION &&
+      !CurrentFileItem().IsPVRChannel() && appPlayer->OnAction(action))
+    return true;
+
   // Now check with the playlist player if action can be handled.
   // In case of ACTION_PREV_ITEM, we only allow the playlist player to take it if we're less than ACTION_PREV_ITEM_THRESHOLD seconds into playback.
   if (!(action.GetID() == ACTION_PREV_ITEM && appPlayer->CanSeek() &&
