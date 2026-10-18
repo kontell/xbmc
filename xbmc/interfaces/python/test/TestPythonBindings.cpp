@@ -134,6 +134,25 @@ li.getVideoInfoTag().setStudios(['a', None])
 )py"));
 }
 
+TEST_F(TestPythonBindings, MusicChaptersAsTuples)
+{
+  if (!s_pythonUp)
+    GTEST_SKIP() << "python runtime not initialized";
+  ASSERT_TRUE(s_mainImportOk);
+  EXPECT_TRUE(RunPy(R"py(
+import xbmcgui
+tag = xbmcgui.ListItem('chapters', '', '', True).getMusicInfoTag()
+tag.setChapters([(0.0, 754.25, 'One'), (754.25, 1500, 'Two')])
+tag.setChapters([])
+try:
+    tag.setChapters([('0', 1.0, 'One')])
+except TypeError:
+    pass
+else:
+    raise AssertionError('a start that is not a number was taken')
+)py"));
+}
+
 TEST_F(TestPythonBindings, BytesAsString)
 {
   if (!s_pythonUp)
