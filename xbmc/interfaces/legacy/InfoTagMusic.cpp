@@ -16,6 +16,9 @@
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 
+#include <chrono>
+#include <cmath>
+
 namespace XBMCAddon
 {
   namespace xbmc
@@ -341,6 +344,12 @@ namespace XBMCAddon
       setSongVideoURLRaw(infoTag, songVideoURL);
     }
 
+    void InfoTagMusic::setChapters(const std::vector<Tuple<double, double, std::string>>& chapters)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      setChaptersRaw(infoTag, chapters);
+    }
+
     void InfoTagMusic::setDbIdRaw(MUSIC_INFO::CMusicInfoTag* infoTag, int dbId, const String& type)
     {
       infoTag->SetDatabaseId(dbId, type);
@@ -479,6 +488,22 @@ namespace XBMCAddon
                                           const String& songVideoURL)
     {
       infoTag->SetSongVideoURL(songVideoURL);
+    }
+
+    void InfoTagMusic::setChaptersRaw(
+        MUSIC_INFO::CMusicInfoTag* infoTag,
+        const std::vector<Tuple<double, double, std::string>>& chapters)
+    {
+      std::vector<ChapterDetails> marks;
+      marks.reserve(chapters.size());
+      for (const auto& chapter : chapters)
+      {
+        ChapterDetails& mark = marks.emplace_back();
+        mark.startTimeMs = std::chrono::milliseconds(std::llround(chapter.first() * 1000.0));
+        mark.endTimeMs = std::chrono::milliseconds(std::llround(chapter.second() * 1000.0));
+        mark.name = chapter.third();
+      }
+      infoTag->SetChapterMarks(marks);
     }
   }
 }

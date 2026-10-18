@@ -9,6 +9,7 @@
 #pragma once
 
 #include "AddonClass.h"
+#include "Tuple.h"
 
 #include <vector>
 
@@ -1029,6 +1030,32 @@ namespace XBMCAddon
       void setSongVideoURL(const String& songVideoURL);
 #endif
 
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagMusic
+      /// @brief \python_func{ setChapters(chapters) }
+      /// Set the chapters of the music item. PAPlayer plays them in place of any the file has,
+      /// and an empty list clears them.
+      ///
+      /// @param chapters           list - `[ (start, end, title) ]`, with start and end in seconds
+      ///                           from the start of the file.
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      /// **Example:**
+      /// ~~~~~~~~~~~~~{.py}
+      /// ...
+      /// musictag.setChapters([(0.0, 754.2, "Opening Credits"), (754.2, 2311.0, "Chapter 1")])
+      /// ...
+      /// ~~~~~~~~~~~~~
+      ///
+      setChapters(...);
+#else
+      void setChapters(const std::vector<Tuple<double, double, std::string>>& chapters);
+#endif
+
 #ifndef SWIG
       static void setDbIdRaw(MUSIC_INFO::CMusicInfoTag* infoTag, int dbId, const String& type);
       static void setURLRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& url);
@@ -1063,6 +1090,8 @@ namespace XBMCAddon
       static void setCommentRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& comment);
       static void setSongVideoURLRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
                                      const String& songVideoURL);
+      static void setChaptersRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
+                                 const std::vector<Tuple<double, double, std::string>>& chapters);
 #endif
     };
     //@}
