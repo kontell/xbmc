@@ -138,6 +138,17 @@
 					<width>1450</width>
 					<height>40</height>
 					<aligny>center</aligny>
+					<label>$INFO[Player.Chapter,[COLOR button_focus]$LOCALIZE[21396]:[/COLOR] ]$INFO[Player.ChapterCount,/]$INFO[Player.ChapterName, - ]</label>
+					<shadowcolor>black</shadowcolor>
+					<scroll>true</scroll>
+					<visible>Integer.IsGreater(Player.ChapterCount,1)</visible>
+				</control>
+				<control type="label">
+					<top>210</top>
+					<width>1450</width>
+					<height>40</height>
+					<aligny>center</aligny>
+					<animation effect="slide" end="0,45" time="0" condition="Integer.IsGreater(Player.ChapterCount,1)">Conditional</animation>
 					<label>$VAR[OSDNextLabelVar]</label>
 					<shadowcolor>black</shadowcolor>
 					<scroll>true</scroll>
