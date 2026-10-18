@@ -88,6 +88,9 @@ protected:
   //! codec changes, in which case we may want to switch passthrough on/off.
   bool SwitchCodecIfNeeded();
   void SetSyncType(bool passthrough);
+  //! Whether the audio is resampled to the clock: with the display clock, and for a realtime
+  //! stream except at a tempo, when the audio is the clock as for any other stream.
+  bool ResampleToClock() const;
   //! Whether a bitstream may be output as it is: not with the display clock, not for a
   //! realtime stream, and not while a tempo is asked for.
   bool AllowPassthrough();
