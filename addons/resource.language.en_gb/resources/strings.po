@@ -26240,7 +26240,7 @@ msgstr ""
 #. Description of setting with label #40815 "Playlists to keep"
 #: system/settings/settings.xml
 msgctxt "#40816"
-msgid "How many music playlists that were replaced, interrupted or stopped are kept for restoring."
+msgid "How many music playlists that were replaced, interrupted, stopped or played through are kept for restoring."
 msgstr ""
 
 #. Setting "musicplayer.restoreplaylistpaused"
