@@ -337,6 +337,11 @@ const std::vector<ChapterDetails>& CMusicInfoTag::GetChapterMarks() const
   return m_chapters;
 }
 
+const CBookmark& CMusicInfoTag::GetResumePoint() const
+{
+  return m_resumePoint;
+}
+
 void CMusicInfoTag::SetURL(std::string_view strURL)
 {
   m_strURL = strURL;
@@ -808,6 +813,11 @@ void CMusicInfoTag::SetChapterMarks(const std::vector<ChapterDetails>& chapters)
   m_chapters = chapters;
 }
 
+void CMusicInfoTag::SetResumePoint(const CBookmark& resumePoint)
+{
+  m_resumePoint = resumePoint;
+}
+
 void CMusicInfoTag::SetArtist(const CArtist& artist)
 {
   SetArtist(artist.strArtist);
@@ -1157,6 +1167,8 @@ void CMusicInfoTag::Archive(CArchive& ar)
     ar << m_bitrate;
     ar << m_channels;
     ar << m_songVideoURL;
+    ar << m_resumePoint.timeInSeconds;
+    ar << m_resumePoint.totalTimeInSeconds;
   }
   else
   {
@@ -1225,6 +1237,8 @@ void CMusicInfoTag::Archive(CArchive& ar)
     ar >> m_bitrate;
     ar >> m_channels;
     ar >> m_songVideoURL;
+    ar >> m_resumePoint.timeInSeconds;
+    ar >> m_resumePoint.totalTimeInSeconds;
   }
 }
 
@@ -1282,6 +1296,8 @@ void CMusicInfoTag::Clear()
   m_stationArt.clear();
   m_songVideoURL.clear();
   m_chapters.clear();
+  m_resumePoint.Reset();
+  m_resumePoint.type = CBookmark::RESUME;
 }
 
 void CMusicInfoTag::AppendArtist(const std::string &artist)

@@ -17,6 +17,7 @@
 #include "utils/IArchivable.h"
 #include "utils/ISerializable.h"
 #include "utils/ISortable.h"
+#include "video/Bookmark.h"
 
 #include <string>
 #include <string_view>
@@ -94,6 +95,7 @@ public:
   const EmbeddedArtInfo &GetCoverArtInfo() const;
   const ReplayGain& GetReplayGain() const;
   const std::vector<ChapterDetails>& GetChapterMarks() const;
+  const CBookmark& GetResumePoint() const;
   AudioType::Type GetAlbumReleaseType() const;
 
   void SetURL(std::string_view strURL);
@@ -168,6 +170,7 @@ public:
   void SetStationArt(std::string_view strStationArt);
   void SetSongVideoURL(std::string_view songVideoURL); // link to video of song
   void SetChapterMarks(const std::vector<ChapterDetails>& chapters);
+  void SetResumePoint(const CBookmark& resumePoint);
 
   /*! \brief Append a unique artist to the artist list
    Checks if we have this artist already added, and if not adds it to the songs artist list.
@@ -269,6 +272,7 @@ private:
   std::string m_stationArt; // Used to fetch thumb URL for Shoutcasts
   std::string m_songVideoURL; // link to a video for a song
   std::vector<ChapterDetails> m_chapters; // Ch No., name, start time, end time
+  CBookmark m_resumePoint;
 
   EmbeddedArtInfo m_coverArt; ///< art information
 
