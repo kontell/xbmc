@@ -7,10 +7,15 @@
  */
 
 #include "FileItem.h"
+#include "FileItemList.h"
 #include "filesystem/File.h"
+#include "filesystem/SpecialProtocol.h"
+#include "music/Album.h"
+#include "music/MusicDatabase.h"
 #include "music/tags/MusicInfoTag.h"
 #include "playlists/PlayList.h"
 #include "playlists/PlayListHistory.h"
+#include "settings/AdvancedSettings.h"
 #include "test/TestUtils.h"
 #include "utils/URIUtils.h"
 
@@ -77,6 +82,27 @@ protected:
 
   XFILE::CFile* m_marker{nullptr};
   std::string m_folder;
+};
+
+class TestPlayListHistoryLibrary : public ::testing::Test
+{
+protected:
+  void SetUp() override
+  {
+    m_settings.type = "sqlite3";
+    m_settings.host = CSpecialProtocol::TranslatePath("special://temp/");
+    ASSERT_EQ(CDatabase::ConnectionState::STATE_CONNECTED,
+              m_db.Connect("TestPlayListHistoryLibrary", m_settings, true));
+  }
+
+  void TearDown() override
+  {
+    m_db.Close();
+    XFILE::CFile::Delete(m_settings.host + "TestPlayListHistoryLibrary.db");
+  }
+
+  DatabaseSettings m_settings;
+  CMusicDatabase m_db;
 };
 } // namespace
 
@@ -183,4 +209,48 @@ TEST_F(TestPlayListHistory, AddTrimsToTheMaximum)
   EXPECT_EQ(history.Entries().size(), static_cast<size_t>(PLAYLIST::CPlayListHistory::MAX_ENTRIES));
   EXPECT_DOUBLE_EQ(history.Entries().front().seconds,
                    10.0 * PLAYLIST::CPlayListHistory::MAX_ENTRIES);
+}
+
+TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheLibrarySongForATrackThatHasOne)
+{
+  CAlbum album;
+  album.strAlbum = "Album";
+  CSong plugin;
+  plugin.strTitle = "One";
+  plugin.strFileName = "plugin://plugin.audio.test/music/album/1.flac";
+  plugin.iTimesPlayed = 3;
+  album.songs.emplace_back(plugin);
+  CSong file;
+  file.strTitle = "Two";
+  file.strFileName = "/music/album/2.flac";
+  file.iTimesPlayed = 1;
+  album.songs.emplace_back(file);
+  ASSERT_TRUE(m_db.AddAlbum(album, -1));
+
+  PLAYLIST::CPlayListHistoryEntry entry;
+  for (const std::string& path : {plugin.strFileName, file.strFileName,
+                                  std::string("/music/elsewhere/3.flac")})
+  {
+    PLAYLIST::CPlayListHistoryTrack track;
+    track.path = path;
+    track.title = "Saved";
+    entry.tracks.emplace_back(std::move(track));
+  }
+
+  CFileItemList items;
+  entry.GetItems(items, &m_db);
+  ASSERT_EQ(items.Size(), 3);
+
+  const MUSIC_INFO::CMusicInfoTag* tag = items[0]->GetMusicInfoTag();
+  EXPECT_EQ(tag->GetDatabaseId(), album.songs[0].idSong);
+  EXPECT_EQ(tag->GetPlayCount(), 3);
+  EXPECT_EQ(tag->GetTitle(), "One");
+  EXPECT_EQ(items[0]->GetDynPath(), plugin.strFileName);
+
+  EXPECT_EQ(items[1]->GetMusicInfoTag()->GetDatabaseId(), album.songs[1].idSong);
+  EXPECT_EQ(items[1]->GetMusicInfoTag()->GetPlayCount(), 1);
+
+  EXPECT_EQ(items[2]->GetMusicInfoTag()->GetDatabaseId(), -1);
+  EXPECT_EQ(items[2]->GetMusicInfoTag()->GetTitle(), "Saved");
+  EXPECT_EQ(items[2]->GetPath(), "/music/elsewhere/3.flac");
 }

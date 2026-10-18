@@ -15,6 +15,7 @@
 #include <vector>
 
 class CFileItemList;
+class CMusicDatabase;
 
 namespace KODI::PLAYLIST
 {
@@ -84,6 +85,13 @@ public:
    * \brief Build the items to queue: the library's row for a track that has one, the saved facts otherwise.
    */
   void GetItems(CFileItemList& items) const;
+
+  /*!
+   * \brief Build the items to queue, matching tracks against the given library.
+   * \param items The items.
+   * \param library An open music database, or nullptr to build every item from the saved facts.
+   */
+  void GetItems(CFileItemList& items, CMusicDatabase* library) const;
 };
 
 /*!

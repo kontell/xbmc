@@ -26,6 +26,7 @@
 #include "filesystem/VideoDatabaseFile.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/TextureManager.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
 #include "interfaces/AnnouncementManager.h"
@@ -42,6 +43,7 @@
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/ArtTypes.h"
+#include "utils/DefaultArt.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
@@ -906,8 +908,10 @@ bool CPlayListPlayer::RestorePlaylist(const CPlayListHistoryEntry& entry,
   Add(Id::TYPE_MUSIC, items);
   SetCurrentPlaylist(Id::TYPE_MUSIC);
 
+  const bool hasIcon = CServiceBroker::GetGUI()->GetTextureManager().HasTexture(
+      ART::DEFAULT::MUSIC_PLAYLIST_HISTORY);
   CGUIDialogKaiToast::QueueNotification(
-      CGUIDialogKaiToast::Info,
+      hasIcon ? ART::DEFAULT::MUSIC_PLAYLIST_HISTORY : ART::DEFAULT::ICON_INFO,
       CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(40813), entry.Title());
 
   m_pauseWhenStarted = startPaused;
