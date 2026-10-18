@@ -36,10 +36,8 @@ public:
     if (m_bStop || IsClaimed() || IsProcessDone() || GetState() != InvokerStateScriptDone)
       return false;
 
-    // m_script and m_reusable are written by execute() and Process() under
-    // m_mutex. Reading them unlocked from the manager thread was a data race on
-    // a std::string: a concurrent assignment can reallocate the buffer while
-    // the comparison walks it.
+    // m_script and m_reusable are guarded by m_mutex; the manager thread must
+    // not read them unlocked.
     std::unique_lock<std::mutex> lck(m_mutex);
     return m_reusable && m_script == script;
   }
@@ -76,37 +74,29 @@ public:
   /*!
    * \brief True unless this thread is idle and safe to retire.
    *
-   * IsActive() cannot answer this on its own: it is false for
-   * InvokerStateUninitialized, which is where a thread sits both when a claimer
-   * has Reset() it and when it has been published as the reusable one but has
-   * not started. Releasing either loses a script that nothing will run again.
-   * The state alone cannot answer it either - a claim dropped without ever
-   * running leaves the same Uninitialized, and that one must stay releasable or
-   * it pins the slot for the session.
+   * A claimed thread is spoken for; a parked one with neither a script running
+   * nor one queued is idle. The remaining case is a thread published as the
+   * reusable one before its loop has started, which must not be retired out
+   * from under the script it is about to run.
    */
   bool IsBusy() const
   {
     if (IsClaimed())
       return true;
 
-    // The loop has left. Nothing more can run here whatever the invoker says,
-    // and the slot has to be given up or it is pinned for good.
+    // The loop has left for good; the slot has to be given up or it is pinned.
     if (IsProcessDone())
       return false;
 
-    // Published as the reusable thread, but execute() has not reached Create()
-    // yet. A Release() landing here sets m_bStop, Create() clears it again, and
-    // the loop then parks for ever on a thread nothing can reach: the
-    // interpreter is retained and the script stays marked running.
+    // Published as the reusable thread, but the loop has not started yet.
     if (!CThread::IsRunning())
       return true;
 
-    // The loop is parked. Busy only if a script is already running or queued -
-    // execute() returns as soon as it has set the restart, and the handle-less
-    // path drops its claim at that point, so the queued script is all that is
-    // left marking the thread. An invoker left Uninitialized by a claim that
-    // was dropped without running is idle and must stay releasable.
-    return m_invoker->IsActive() || HasQueuedScript();
+    // The loop is running: busy while a script is executing or queued. m_executing
+    // spans the whole Execute() call, including the window before the invoker's
+    // first setState() where its own state still reads idle.
+    std::unique_lock<std::mutex> lck(m_mutex);
+    return m_executing || m_restart;
   }
 
   virtual void Release();
@@ -121,13 +111,6 @@ protected:
   void OnException() override;
 
 private:
-  //! \brief True once execute() has queued a script the Process() loop has not taken yet.
-  bool HasQueuedScript() const
-  {
-    std::unique_lock<std::mutex> lck(m_mutex);
-    return m_restart;
-  }
-
   std::shared_ptr<ILanguageInvoker> m_invoker;
   CScriptInvocationManager *m_invocationManager;
   std::string m_script;
@@ -140,6 +123,9 @@ private:
   std::condition_variable m_condition;
   bool m_restart = false;
   bool m_reusable = false;
+  //! True while the Process() loop is inside Execute(), set under m_mutex before
+  //! the lock is dropped for the run and cleared when it is retaken.
+  bool m_executing = false;
   std::atomic<bool> m_claimed{false};
   std::atomic<bool> m_processDone{false};
 };

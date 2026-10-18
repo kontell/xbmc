@@ -35,11 +35,11 @@ protected:
     if (script == nullptr || addon == nullptr)
       return false;
 
-    // Claim the reusable invoker for as long as the script runs. Destroying the
+    // Hold the reusable slot for as long as this handle is live. Destroying the
     // claim - here or on any early return - is what hands it back, so no exit
     // path can leave the slot marked in use.
-    const CReusableInvokerClaim claim =
-        CScriptInvocationManager::GetInstance().ClaimReusableInvoker(addon->LibPath());
+    auto& manager = CScriptInvocationManager::GetInstance();
+    CReusableInvokerClaim claim = manager.ClaimReusableInvoker(addon->LibPath());
 
     // reuse the claimed script handle or get a new one if necessary
     HandleType handle;
@@ -49,7 +49,13 @@ protected:
       ReuseScriptHandle(handle, script);
     }
     else
+    {
       handle = GetNewScriptHandle(script);
+      // A fresh reusable interpreter is published for this handle while the run
+      // executes; reserve the slot so a concurrent listing cannot claim that
+      // interpreter and reuse this handle before RemoveScriptHandle() below.
+      claim = manager.ReserveReusableInvoker(handle);
+    }
 
     // run the script
     auto result = CScriptRunner::RunScript(addon, url, handle, resume);
