@@ -1749,7 +1749,9 @@ int PAPlayer::SeekChapter(int iChapter)
 {
   {
     std::unique_lock lock(m_streamsLock);
-    if (!m_currentStream || iChapter < 1 ||
+    // A stream that cannot seek refuses a chapter, as SeekTime() would do nothing there; Next and
+    // Previous then go to the playlist (OnAction)
+    if (!m_currentStream || !CanSeek() || iChapter < 1 ||
         iChapter > static_cast<int>(m_currentStream->m_chapters.size()))
       return -1;
 
