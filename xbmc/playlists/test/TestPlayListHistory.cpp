@@ -388,3 +388,33 @@ TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheCueSheetSongThatWasSaved)
   EXPECT_EQ(items[1]->GetMusicInfoTag()->GetDatabaseId(), album.songs[0].idSong);
   EXPECT_EQ(items[2]->GetMusicInfoTag()->GetDatabaseId(), album.songs[2].idSong);
 }
+
+TEST_F(TestPlayListHistory, AddKeepsNothingWhenAskedToKeepNone)
+{
+  PLAYLIST::CPlayList playlist;
+  playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
+
+  PLAYLIST::CPlayListHistory history(m_folder);
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false), 0);
+  EXPECT_TRUE(history.Entries().empty());
+  EXPECT_FALSE(XFILE::CFile::Exists(m_file));
+}
+
+TEST_F(TestPlayListHistory, TrimDropsTheOldestAndZeroEmptiesTheHistory)
+{
+  PLAYLIST::CPlayList playlist;
+  playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
+
+  PLAYLIST::CPlayListHistory history(m_folder);
+  for (int i = 1; i <= 3; ++i)
+    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0 * i, false), 20);
+
+  history.Trim(2);
+  ASSERT_EQ(history.Entries().size(), 2u);
+  EXPECT_DOUBLE_EQ(history.Entries().back().seconds, 20.0);
+  EXPECT_EQ(PLAYLIST::CPlayListHistory(m_folder).Entries().size(), 2u);
+
+  history.Trim(0);
+  EXPECT_TRUE(history.Entries().empty());
+  EXPECT_TRUE(PLAYLIST::CPlayListHistory(m_folder).Entries().empty());
+}

@@ -861,6 +861,10 @@ void CPlayListPlayer::RecordMusicPlaylist(bool playedThrough)
   m_musicPlaylistLive = false;
   if (g_partyModeManager.IsEnabled())
     return;
+  const int keep = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+      CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE);
+  if (keep <= 0)
+    return;
 
   const CPlayList& playlist = GetPlaylist(Id::TYPE_MUSIC);
   if (playlist.size() == 0)
@@ -884,8 +888,7 @@ void CPlayListPlayer::RecordMusicPlaylist(bool playedThrough)
   if (current.HasArt(ART::TYPE::FANART))
     track.fanart = current.GetArt(ART::TYPE::FANART);
 
-  m_history->Add(std::move(entry), CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
-                                       CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE));
+  m_history->Add(std::move(entry), keep);
 }
 
 bool CPlayListPlayer::RestorePlaylist(const CPlayListHistoryEntry& entry,
