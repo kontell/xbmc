@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <mutex>
 
@@ -796,15 +797,30 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
           return;
         case CActiveAEControlProtocol::STREAMRESAMPLERATIO:
           par = reinterpret_cast<MsgStreamParameter*>(msg->data);
-          // Remembered, so that it survives a flush and a re-configuration of the
-          // buffers, and so that SyncStream() can hold it while the servo is off.
-          // While the servo resamples it owns the ratio and this one waits.
-          par->stream->m_requestedResampleRatio = par->parameter.double_par;
-          if (par->stream->m_processingBuffers && !par->stream->m_resampleMode)
+          // While the servo resamples it owns the ratio and this one waits; the servo needs
+          // a clock to run.
+          if (par->stream->m_processingBuffers &&
+              (!par->stream->m_resampleMode || !par->stream->m_pClock))
           {
-            par->stream->m_processingBuffers->SetRR(par->stream->m_requestedResampleRatio,
+            if (par->stream->m_pClock &&
+                par->parameter.double_par != par->stream->m_requestedResampleRatio)
+            {
+              // What the sink and the stream's buffers hold was made at the old ratio, and
+              // RunStages() would read it at the new one: sync waits until it has played.
+              AEDelayStatus status;
+              m_stats.GetDelay(status);
+              const double held =
+                  status.GetDelay() +
+                  static_cast<double>(par->stream->m_processingBuffers->GetDelay());
+              par->stream->m_ratioSettle.Set(
+                  std::chrono::milliseconds(std::lround(held * 1000.0)));
+            }
+            par->stream->m_processingBuffers->SetRR(par->parameter.double_par,
                                                      m_settings.atempoThreshold);
           }
+          // Remembered, so that it survives a flush and a re-configuration of the
+          // buffers, and so that SyncStream() can hold it while the servo is off.
+          par->stream->m_requestedResampleRatio = par->parameter.double_par;
           return;
         case CActiveAEControlProtocol::STREAMFFMPEGINFO:
           MsgStreamFFmpegInfo *info;
@@ -2165,7 +2181,8 @@ bool CActiveAE::RunStages()
       if ((*it)->m_paused && (*it)->m_started && m_settings.lowLatencyMode)
         m_targetBufferLevel = m_initialTargetBufferLevel;
 
-      if ((*it)->m_paused || !(*it)->m_started || !(*it)->m_processingBuffers || !(*it)->m_pClock)
+      if ((*it)->m_paused || !(*it)->m_started || !(*it)->m_processingBuffers ||
+          !(*it)->m_pClock || !(*it)->m_ratioSettle.IsTimePast())
         continue;
 
       if ((*it)->m_processingBuffers->m_outputSamples.empty())
