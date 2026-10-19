@@ -55,6 +55,42 @@ TEST(TestDataCacheCore, PlayTimeHoldsWhilePaused)
   EXPECT_EQ(cache.GetPlayTime(), 10000);
 }
 
+TEST(TestDataCacheCore, PlayTimeKeepsItsPlaceWhenPaused)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(1.0f, 1.0f);
+  cache.SetPlayTimes(0, 10000, 0, 60000);
+
+  std::this_thread::sleep_for(150ms);
+  cache.SetSpeed(1.0f, 0.0f);
+
+  const int64_t paused = cache.GetPlayTime();
+  EXPECT_GE(paused, 10140);
+  EXPECT_LE(paused, 10600);
+
+  std::this_thread::sleep_for(60ms);
+  EXPECT_EQ(cache.GetPlayTime(), paused);
+}
+
+TEST(TestDataCacheCore, PlayTimeKeepsItsPlaceWhenTheTempoChanges)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(1.0f, 1.0f);
+  cache.SetPlayTimes(0, 10000, 0, 60000);
+
+  std::this_thread::sleep_for(150ms);
+  const int64_t before = cache.GetPlayTime();
+  cache.SetSpeed(2.0f, 1.0f);
+  const int64_t after = cache.GetPlayTime();
+
+  // the time already played is not played again at the new tempo
+  EXPECT_GE(after, before);
+  EXPECT_LE(after, before + 50);
+
+  std::this_thread::sleep_for(100ms);
+  EXPECT_GE(cache.GetPlayTime(), after + 190);
+}
+
 TEST(TestDataCacheCore, PlayTimeNeverRunsPastTheEnd)
 {
   CDataCacheCore cache;

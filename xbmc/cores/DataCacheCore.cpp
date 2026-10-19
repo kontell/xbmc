@@ -487,6 +487,15 @@ void CDataCacheCore::SetSpeed(float tempo, float speed)
 {
   std::unique_lock lock(m_stateSection);
 
+  // Bank the time played at the old rate, so the new rate moves the play time on from now
+  // rather than from the last store
+  if (tempo * speed != m_stateInfo.m_tempo * m_stateInfo.m_speed &&
+      m_timeInfo.m_timeStamp != std::chrono::steady_clock::time_point{})
+  {
+    m_timeInfo.m_time = CurrentPlayTime();
+    m_timeInfo.m_timeStamp = std::chrono::steady_clock::now();
+  }
+
   m_stateInfo.m_tempo = tempo;
   m_stateInfo.m_speed = speed;
 }
