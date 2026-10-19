@@ -314,8 +314,8 @@ TEST_F(TestPlayListHistory, AddReplacesTheSavedHistory)
   playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
 
   PLAYLIST::CPlayListHistory history(m_folder);
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false));
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 20.0, false));
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false), 20);
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 20.0, false), 20);
 
   PLAYLIST::CPlayListHistory reloaded(m_folder);
   ASSERT_EQ(reloaded.Entries().size(), 2u);
@@ -328,7 +328,7 @@ TEST_F(TestPlayListHistory, LoadReadsANewHistoryLeftBesideTheFile)
   playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
   {
     PLAYLIST::CPlayListHistory history(m_folder);
-    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 42.5, false));
+    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 42.5, false), 20);
   }
   // As a quit leaves it between removing the old history and renaming the new one into place.
   ASSERT_TRUE(XFILE::CFile::Rename(m_file, m_file + ".tmp"));
@@ -349,7 +349,7 @@ TEST_F(TestPlayListHistory, AddKeepsThePartOfTheFileEachCueSheetTrackPlays)
   playlist[1]->SetStartOffset(52000);
 
   PLAYLIST::CPlayListHistory history(m_folder);
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 12.0, false));
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 12.0, false), 20);
 
   PLAYLIST::CPlayListHistory reloaded(m_folder);
   ASSERT_EQ(reloaded.Entries().size(), 1u);
