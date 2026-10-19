@@ -13,6 +13,7 @@
 #include "addons/AddonSystemSettings.h"
 #include "addons/Skin.h"
 #include "application/AppParams.h"
+#include "application/ApplicationSettingsHandling.h"
 #include "cores/VideoPlayer/VideoRenderers/BaseRenderer.h"
 #include "filesystem/File.h"
 #include "guilib/GUIFontManager.h"
@@ -432,6 +433,8 @@ void CSettings::InitializeOptionFillers()
   GetSettingsManager()->RegisterSettingOptionsFiller("cmsgammamodes", CDisplaySettings::SettingOptionsCmsGammaModesFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("videoseeksteps", CSeekHandler::SettingOptionsSeekStepsFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("startupwindows", ADDON::CSkinInfo::SettingOptionsStartupWindowsFiller);
+  GetSettingsManager()->RegisterSettingOptionsFiller(
+      "startupactions", CApplicationSettingsHandling::SettingOptionsStartupActionsFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("audiostreamlanguages", CLangInfo::SettingOptionsAudioStreamLanguagesFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("subtitlestreamlanguages", CLangInfo::SettingOptionsSubtitleStreamLanguagesFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("subtitledownloadlanguages", CLangInfo::SettingOptionsSubtitleDownloadlanguagesFiller);
@@ -494,6 +497,7 @@ void CSettings::UninitializeOptionFillers()
   GetSettingsManager()->UnregisterSettingOptionsFiller("videoseeksteps");
   GetSettingsManager()->UnregisterSettingOptionsFiller("shutdownstates");
   GetSettingsManager()->UnregisterSettingOptionsFiller("startupwindows");
+  GetSettingsManager()->UnregisterSettingOptionsFiller("startupactions");
   GetSettingsManager()->UnregisterSettingOptionsFiller("audiostreamlanguages");
   GetSettingsManager()->UnregisterSettingOptionsFiller("subtitlestreamlanguages");
   GetSettingsManager()->UnregisterSettingOptionsFiller("subtitledownloadlanguages");
