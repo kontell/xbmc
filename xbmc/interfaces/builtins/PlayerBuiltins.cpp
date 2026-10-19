@@ -81,14 +81,17 @@ static int RestorePlaylist(const std::vector<std::string>& params)
   // A copy: the history can grow while the dialog is open.
   const std::vector<PLAYLIST::CPlayListHistoryEntry> entries =
       playlistPlayer.GetHistory().Entries();
+  const bool latest = !params.empty() && StringUtils::EqualsNoCase(params[0], "latest");
   if (entries.empty())
   {
-    MESSAGING::HELPERS::ShowOKDialogText(CVariant{40807}, CVariant{40808});
+    // The dialog form says why nothing is listed; 'latest', which runs at startup, stays silent.
+    if (!latest)
+      MESSAGING::HELPERS::ShowOKDialogText(CVariant{40807}, CVariant{40808});
     return 0;
   }
 
   size_t index = 0;
-  if (params.empty() || !StringUtils::EqualsNoCase(params[0], "latest"))
+  if (!latest)
   {
     CGUIDialogSelect* dialog =
         CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(
@@ -919,7 +922,8 @@ static int SubtitleShiftDown(const std::vector<std::string>& params)
 ///     ,
 ///     Put a music playlist that was replaced\, interrupted or stopped back and play it from
 ///     where it was left. Asks which one\, unless 'latest' is given.
-///     @param[in] latest                Restore the newest playlist without asking (optional).
+///     @param[in] latest                Restore the newest playlist without asking\, or do
+///                                      nothing when there is none (optional).
 ///   }
 ///   \table_row2_l{
 ///     <b>`Playlist.PlayOffset(positionType[\,position])`</b>
