@@ -50,12 +50,7 @@ bool CLanguageInvokerThread::Claim()
 
 void CLanguageInvokerThread::ReleaseClaim()
 {
-  std::unique_lock<std::mutex> lck(m_mutex);
   m_claimed = false;
-  // Dropping the claim can be what makes a parked thread retirable (e.g. a run
-  // that ended Failed), so wake the loop to re-evaluate rather than leaving it
-  // parked until the next manager call.
-  m_condition.notify_one();
 }
 
 bool CLanguageInvokerThread::execute(const std::string &script, const std::vector<std::string> &arguments)
@@ -153,12 +148,11 @@ void CLanguageInvokerThread::Process()
         (!IsClaimed() && state != InvokerStateScriptDone))
       m_reusable = false;
 
-    m_condition.wait(lckdl,
-                     [this] { return m_bStop || m_restart || (!m_reusable && !IsClaimed()); });
+    // Retire a run that is not reusable even while it is claimed: the claim's
+    // holder may be waiting for this thread to exit before it lets go.
+    m_condition.wait(lckdl, [this] { return m_bStop || m_restart || !m_reusable; });
 
-    // A claim keeps the loop open, so a stop request does not have to be
-    // ignored to protect a script that has just been handed to this thread.
-    keepGoing = (m_restart || m_reusable || IsClaimed()) && !m_bStop;
+    keepGoing = (m_restart || m_reusable) && !m_bStop;
     if (!keepGoing)
       m_processDone = true; // set under m_mutex, before execute() can look again
   }
