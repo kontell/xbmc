@@ -10,6 +10,7 @@
 
 #include "AddonUtils.h"
 #include "ServiceBroker.h"
+#include "interfaces/legacy/Exception.h"
 #include "music/tags/MusicInfoTag.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
@@ -494,13 +495,23 @@ namespace XBMCAddon
         MUSIC_INFO::CMusicInfoTag* infoTag,
         const std::vector<Tuple<double, double, std::string>>& chapters)
     {
+      // 2^63: llround() of a time in milliseconds from here up does not fit its int64
+      constexpr double limitMs = 9223372036854775808.0;
+
       std::vector<ChapterDetails> marks;
       marks.reserve(chapters.size());
       for (const auto& chapter : chapters)
       {
+        const double start = chapter.first();
+        const double end = chapter.second();
+        if (!std::isfinite(start) || !std::isfinite(end) || start < 0.0 || end < start ||
+            end * 1000.0 >= limitMs)
+          throw WrongTypeException("InfoTagMusic.setChapters: a chapter's start and end must be "
+                                   "finite seconds from 0, and its end not before its start");
+
         ChapterDetails& mark = marks.emplace_back();
-        mark.startTimeMs = std::chrono::milliseconds(std::llround(chapter.first() * 1000.0));
-        mark.endTimeMs = std::chrono::milliseconds(std::llround(chapter.second() * 1000.0));
+        mark.startTimeMs = std::chrono::milliseconds(std::llround(start * 1000.0));
+        mark.endTimeMs = std::chrono::milliseconds(std::llround(end * 1000.0));
         mark.name = chapter.third();
       }
       infoTag->SetChapterMarks(marks);

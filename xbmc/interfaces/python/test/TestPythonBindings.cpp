@@ -141,15 +141,17 @@ TEST_F(TestPythonBindings, MusicChaptersAsTuples)
   ASSERT_TRUE(s_mainImportOk);
   EXPECT_TRUE(RunPy(R"py(
 import xbmcgui
-tag = xbmcgui.ListItem('chapters', '', '', True).getMusicInfoTag()
+item = xbmcgui.ListItem('chapters', '', '', True)
+tag = item.getMusicInfoTag()
 tag.setChapters([(0.0, 754.25, 'One'), (754.25, 1500, 'Two')])
 tag.setChapters([])
-try:
-    tag.setChapters([('0', 1.0, 'One')])
-except TypeError:
-    pass
-else:
-    raise AssertionError('a start that is not a number was taken')
+for chapters in ([('0', 1.0, 'One')], [(float('nan'), 1.0, 'One')], [(10.0, 5.0, 'One')]):
+    try:
+        tag.setChapters(chapters)
+    except TypeError:
+        pass
+    else:
+        raise AssertionError('setChapters took %r' % (chapters,))
 )py"));
 }
 

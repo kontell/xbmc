@@ -1038,7 +1038,9 @@ namespace XBMCAddon
       /// and an empty list clears them.
       ///
       /// @param chapters           list - `[ (start, end, title) ]`, with start and end in seconds
-      ///                           from the start of the file.
+      ///                           from the start of the file. A time that is not a finite
+      ///                           number, a start below 0 or an end before its start raises
+      ///                           TypeError, and the item's chapters stay as they were.
       ///
       ///
       ///-----------------------------------------------------------------------
