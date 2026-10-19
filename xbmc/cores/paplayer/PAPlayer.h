@@ -113,6 +113,7 @@ private:
     bool m_isSlaved;                     /* true if the stream has been slaved to another */
     StreamInfo* m_slavedTo = nullptr; /* the stream that owns it while slaved, and resumes it */
     bool m_waitOnDrain;                  /* wait for stream being drained in AE */
+    float m_tempo = 1.0f; /* the tempo it plays at: a stream kept for a cross-fade keeps its own */
   };
 
   typedef std::list<StreamInfo*> StreamList;
@@ -120,7 +121,7 @@ private:
   bool m_signalSpeedChange = false; /* true if OnPlaybackSpeedChange needs to be called */
   bool m_signalStarted = true;
   std::atomic_int m_playbackSpeed;           /* the playback speed (1 = normal) */
-  std::atomic<float> m_tempo{1.0f}; /* the playback tempo (1.0 = normal), on every stream */
+  std::atomic<float> m_tempo{1.0f}; /* the playback tempo (1.0 = normal) */
   bool m_isPlaying = false;
   bool m_isPaused = false;
   bool m_isFinished = false; /* if there are no more songs in the queue */
