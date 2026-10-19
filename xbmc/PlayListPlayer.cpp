@@ -896,16 +896,18 @@ bool CPlayListPlayer::RestorePlaylist(const CPlayListHistoryEntry& entry,
     return false;
 
   const auto [position, seconds] = entry.Start(fromTrackStart);
-  if (seconds > 0.0)
+  const CFileItemPtr resumed = seconds > 0.0 ? items.Get(position) : nullptr;
+  const int64_t trackStart = resumed ? resumed->GetStartOffset() : 0;
+  if (resumed)
   {
-    const CFileItemPtr item = items.Get(position);
-    const int64_t offset = item->GetStartOffset() + CUtil::ConvertSecsToMilliSecs(seconds);
+    const int64_t offset = trackStart + CUtil::ConvertSecsToMilliSecs(seconds);
     // PAPlayer times a cue sheet track from its own start only while the start offset is where
     // the track starts; a bookmark into the file resumes it, as it does an audiobook chapter.
-    if (item->GetEndOffset() > 0 || item->GetProperty(ITEM::PROPERTY::ITEM_START).asInteger() > 0)
-      item->SetProperty(ITEM::PROPERTY::AUDIOBOOK_BOOKMARK, offset);
+    if (resumed->GetEndOffset() > 0 ||
+        resumed->GetProperty(ITEM::PROPERTY::ITEM_START).asInteger() > 0)
+      resumed->SetProperty(ITEM::PROPERTY::AUDIOBOOK_BOOKMARK, offset);
     else
-      item->SetStartOffset(offset);
+      resumed->SetStartOffset(offset);
   }
 
   // Clearing records the playlist being replaced, so it comes before SetShuffle() reorders it.
@@ -923,7 +925,15 @@ bool CPlayListPlayer::RestorePlaylist(const CPlayListHistoryEntry& entry,
       CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(40813), entry.Title());
 
   m_pauseWhenStarted = startPaused;
-  if (!Play(position, ""))
+  const bool started = Play(position, "");
+  // The player has its own copy of the item now. The saved second is for this start only: played
+  // again, the track starts from its beginning.
+  if (resumed)
+  {
+    resumed->SetStartOffset(trackStart);
+    resumed->ClearProperty(ITEM::PROPERTY::AUDIOBOOK_BOOKMARK);
+  }
+  if (!started)
   {
     m_pauseWhenStarted = false;
     return false;
