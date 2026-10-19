@@ -760,8 +760,10 @@ bool CProcessInfo::IsTempoAllowed(float tempo)
   const float settingMax = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_maxTempo;
   const float maxTempo = settingMax < platformMax ? settingMax : platformMax;
 
-  // both ends inclusive, with room for the float a 0.1 step lands on
-  return tempo > MinTempoPlatform() - 0.05f && tempo < maxTempo + 0.05f;
+  // both ends inclusive, with room for the float a 0.1 step lands on and nothing more: the audio
+  // cannot follow a clock set outside them
+  constexpr float rounding = 0.0005f;
+  return tempo >= MinTempoPlatform() - rounding && tempo <= maxTempo + rounding;
 }
 
 unsigned int CProcessInfo::GetMaxPassthroughOffSyncDuration() const

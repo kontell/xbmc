@@ -3495,14 +3495,15 @@ void CVideoPlayer::HandleMessages()
       }
 
       const SpeedChangeNotifications notifications =
-          GetSpeedChangeNotifications(m_playSpeed, speed, msg->IsTempo());
+          GetSpeedChangeNotifications(m_playSpeed, m_playSpeedIsTempo, speed, msg->IsTempo());
 
       if (notifications.resumed)
         m_callback.OnPlayBackResumed();
 
       if (notifications.speedChanged)
       {
-        m_callback.OnPlayBackSpeedChanged(speed / DVD_PLAYSPEED_NORMAL);
+        // a tempo plays at normal speed: the announcement reads the tempo itself
+        m_callback.OnPlayBackSpeedChanged(msg->IsTempo() ? 1 : speed / DVD_PLAYSPEED_NORMAL);
         m_processInfo->SeekFinished(0);
       }
 
@@ -3542,7 +3543,11 @@ void CVideoPlayer::HandleMessages()
       }
 
       if (isTempoSpeed)
+      {
+        // a tempo plays at normal speed, so it ends any trickplay
+        m_processInfo->SetSpeed(1.0f);
         m_processInfo->SetTempo(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL);
+      }
       else
         m_processInfo->SetSpeed(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL);
 
@@ -3691,19 +3696,22 @@ void CVideoPlayer::SetCaching(ECacheState state)
   m_clock.SetSpeedAdjust(0);
 }
 
-CVideoPlayer::SpeedChangeNotifications CVideoPlayer::GetSpeedChangeNotifications(int previousSpeed,
-                                                                                 int newSpeed,
-                                                                                 bool isTempo)
+CVideoPlayer::SpeedChangeNotifications CVideoPlayer::GetSpeedChangeNotifications(
+    int previousSpeed, bool previousIsTempo, int newSpeed, bool isTempo)
 {
   SpeedChangeNotifications notifications;
 
   const bool wasPaused = (previousSpeed == DVD_PLAYSPEED_PAUSE);
   const bool unpausedToNormal = wasPaused && (newSpeed == DVD_PLAYSPEED_NORMAL || isTempo);
+  // Trickplay and a tempo at the same speed are reported apart, as speed or as tempo
+  const bool modeChanged = newSpeed == previousSpeed && newSpeed != DVD_PLAYSPEED_NORMAL &&
+                           isTempo != previousIsTempo;
 
   if (wasPaused && newSpeed != DVD_PLAYSPEED_PAUSE && !unpausedToNormal)
     notifications.resumed = true;
 
-  if (newSpeed != DVD_PLAYSPEED_PAUSE && newSpeed != previousSpeed && !unpausedToNormal)
+  if (newSpeed != DVD_PLAYSPEED_PAUSE && (newSpeed != previousSpeed || modeChanged) &&
+      !unpausedToNormal)
     notifications.speedChanged = true;
 
   return notifications;
