@@ -17,6 +17,7 @@
 #include "playlists/PlayListHistory.h"
 #include "settings/AdvancedSettings.h"
 #include "test/TestUtils.h"
+#include "utils/ItemProperties.h"
 #include "utils/URIUtils.h"
 
 #include <memory>
@@ -64,6 +65,30 @@ std::shared_ptr<CFileItem> Item(const std::string& path,
   return item;
 }
 
+CSong CueSong(const std::string& file, const std::string& title, int track, int start, int end)
+{
+  CSong song;
+  song.strTitle = title;
+  song.strFileName = file;
+  song.iTrack = track;
+  song.iStartOffset = start;
+  song.iEndOffset = end;
+  return song;
+}
+
+PLAYLIST::CPlayListHistoryTrack SavedTrack(const std::string& path,
+                                           const std::string& title,
+                                           int start = 0,
+                                           int end = 0)
+{
+  PLAYLIST::CPlayListHistoryTrack track;
+  track.path = path;
+  track.title = title;
+  track.startOffset = start;
+  track.endOffset = end;
+  return track;
+}
+
 class TestPlayListHistory : public ::testing::Test
 {
 protected:
@@ -71,17 +96,21 @@ protected:
   {
     m_marker = XBMC_CREATETEMPFILE(".xml");
     m_folder = CXBMCTestUtils::Instance().TempFileDirectory(m_marker);
-    XFILE::CFile::Delete(URIUtils::AddFileToFolder(m_folder, "playlisthistory.xml"));
+    m_file = URIUtils::AddFileToFolder(m_folder, "playlisthistory.xml");
+    XFILE::CFile::Delete(m_file);
+    XFILE::CFile::Delete(m_file + ".tmp");
   }
 
   void TearDown() override
   {
-    XFILE::CFile::Delete(URIUtils::AddFileToFolder(m_folder, "playlisthistory.xml"));
+    XFILE::CFile::Delete(m_file);
+    XFILE::CFile::Delete(m_file + ".tmp");
     XBMC_DELETETEMPFILE(m_marker);
   }
 
   XFILE::CFile* m_marker{nullptr};
   std::string m_folder;
+  std::string m_file;
 };
 
 class TestPlayListHistoryLibrary : public ::testing::Test
@@ -154,6 +183,31 @@ TEST(TestPlayListHistoryEntry, ARepeatHasTheSameTracksTrackAndSecond)
   EXPECT_FALSE(Entry(10, 3, 70.4).IsRepeatOf(entry));
   EXPECT_FALSE(Entry(10, 2, 75.0).IsRepeatOf(entry));
   EXPECT_FALSE(Entry(9, 2, 70.4).IsRepeatOf(entry));
+}
+
+TEST(TestPlayListHistoryEntry, ARepeatHasTheSamePartsOfItsFiles)
+{
+  const PLAYLIST::CPlayListHistoryEntry entry = Entry(2, 0, 10.0);
+  PLAYLIST::CPlayListHistoryEntry other = entry;
+  other.tracks[1].startOffset = 40000;
+  EXPECT_FALSE(other.IsRepeatOf(entry));
+}
+
+TEST(TestPlayListHistoryEntry, GetItemsPlaysOnlyTheSavedPartOfAFile)
+{
+  PLAYLIST::CPlayListHistoryEntry entry = Entry(2, 0, 0.0);
+  entry.tracks[1].startOffset = 40000;
+  entry.tracks[1].endOffset = 80000;
+
+  CFileItemList items;
+  entry.GetItems(items, nullptr);
+  ASSERT_EQ(items.Size(), 2);
+  EXPECT_EQ(items[0]->GetStartOffset(), 0);
+  EXPECT_EQ(items[0]->GetEndOffset(), 0);
+  EXPECT_FALSE(items[0]->HasProperty(ITEM::PROPERTY::ITEM_START));
+  EXPECT_EQ(items[1]->GetStartOffset(), 40000);
+  EXPECT_EQ(items[1]->GetEndOffset(), 80000);
+  EXPECT_EQ(items[1]->GetProperty(ITEM::PROPERTY::ITEM_START).asInteger(), 40000);
 }
 
 TEST_F(TestPlayListHistory, AddKeepsThePlaylistAndPersistsIt)
@@ -253,4 +307,85 @@ TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheLibrarySongForATrackThatHasO
   EXPECT_EQ(items[2]->GetMusicInfoTag()->GetDatabaseId(), -1);
   EXPECT_EQ(items[2]->GetMusicInfoTag()->GetTitle(), "Saved");
   EXPECT_EQ(items[2]->GetPath(), "/music/elsewhere/3.flac");
+}
+
+TEST_F(TestPlayListHistory, AddReplacesTheSavedHistory)
+{
+  PLAYLIST::CPlayList playlist;
+  playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
+
+  PLAYLIST::CPlayListHistory history(m_folder);
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false));
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 20.0, false));
+
+  PLAYLIST::CPlayListHistory reloaded(m_folder);
+  ASSERT_EQ(reloaded.Entries().size(), 2u);
+  EXPECT_DOUBLE_EQ(reloaded.Entries().front().seconds, 20.0);
+}
+
+TEST_F(TestPlayListHistory, LoadReadsANewHistoryLeftBesideTheFile)
+{
+  PLAYLIST::CPlayList playlist;
+  playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
+  {
+    PLAYLIST::CPlayListHistory history(m_folder);
+    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 42.5, false));
+  }
+  // As a quit leaves it between removing the old history and renaming the new one into place.
+  ASSERT_TRUE(XFILE::CFile::Rename(m_file, m_file + ".tmp"));
+
+  PLAYLIST::CPlayListHistory reloaded(m_folder);
+  ASSERT_EQ(reloaded.Entries().size(), 1u);
+  EXPECT_DOUBLE_EQ(reloaded.Entries().front().seconds, 42.5);
+}
+
+TEST_F(TestPlayListHistory, AddKeepsThePartOfTheFileEachCueSheetTrackPlays)
+{
+  PLAYLIST::CPlayList playlist;
+  playlist.Add(std::make_shared<CFileItem>(CueSong("/music/tones.flac", "Low", 1, 0, 40000)));
+  playlist.Add(
+      std::make_shared<CFileItem>(CueSong("/music/tones.flac", "Middle", 2, 40000, 80000)));
+  playlist.Add(std::make_shared<CFileItem>(CueSong("/music/tones.flac", "High", 3, 80000, 0)));
+  // A start offset moved to resume part-way in.
+  playlist[1]->SetStartOffset(52000);
+
+  PLAYLIST::CPlayListHistory history(m_folder);
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 12.0, false));
+
+  PLAYLIST::CPlayListHistory reloaded(m_folder);
+  ASSERT_EQ(reloaded.Entries().size(), 1u);
+  const auto& tracks = reloaded.Entries().front().tracks;
+  ASSERT_EQ(tracks.size(), 3u);
+  EXPECT_EQ(tracks[0].startOffset, 0);
+  EXPECT_EQ(tracks[0].endOffset, 40000);
+  EXPECT_EQ(tracks[1].startOffset, 40000);
+  EXPECT_EQ(tracks[1].endOffset, 80000);
+  EXPECT_EQ(tracks[2].startOffset, 80000);
+  EXPECT_EQ(tracks[2].endOffset, 0);
+}
+
+TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheCueSheetSongThatWasSaved)
+{
+  const std::string file = "/music/tones/tones.flac";
+  CAlbum album;
+  album.strAlbum = "Tones";
+  album.songs.emplace_back(CueSong(file, "Tone", 1, 0, 40000));
+  album.songs.emplace_back(CueSong(file, "Tone", 2, 40000, 80000));
+  album.songs.emplace_back(CueSong(file, "High", 3, 80000, 0));
+  ASSERT_TRUE(m_db.AddAlbum(album, -1));
+
+  // The first two share a title and were saved with their parts; the third was saved without.
+  PLAYLIST::CPlayListHistoryEntry entry;
+  entry.tracks.push_back(SavedTrack(file, "Tone", 40000, 80000));
+  entry.tracks.push_back(SavedTrack(file, "Tone", 0, 40000));
+  entry.tracks.push_back(SavedTrack(file, "High"));
+
+  CFileItemList items;
+  entry.GetItems(items, &m_db);
+  ASSERT_EQ(items.Size(), 3);
+  EXPECT_EQ(items[0]->GetMusicInfoTag()->GetDatabaseId(), album.songs[1].idSong);
+  EXPECT_EQ(items[0]->GetStartOffset(), 40000);
+  EXPECT_EQ(items[0]->GetEndOffset(), 80000);
+  EXPECT_EQ(items[1]->GetMusicInfoTag()->GetDatabaseId(), album.songs[0].idSong);
+  EXPECT_EQ(items[2]->GetMusicInfoTag()->GetDatabaseId(), album.songs[2].idSong);
 }
