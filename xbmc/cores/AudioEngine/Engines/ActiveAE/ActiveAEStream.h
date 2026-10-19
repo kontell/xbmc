@@ -253,6 +253,8 @@ protected:
   // servo owns the ratio while it resamples (m_resampleMode); otherwise this
   // one stands, across a flush and a re-configuration of the buffers.
   double m_requestedResampleRatio;
+  // Runs while the output made at the previous requested ratio plays out.
+  XbmcThreads::EndTime<> m_ratioSettle;
   enum AVMatrixEncoding m_matrixEncoding;
   enum AVAudioServiceType m_audioServiceType;
   bool m_forceResampler;
