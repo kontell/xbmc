@@ -30,6 +30,9 @@ struct CPlayListHistoryTrack
   std::string thumb;
   std::string fanart;
   int duration{0};
+  // The part of the file a cue sheet track plays, in milliseconds; both 0 for the whole file.
+  int startOffset{0};
+  int endOffset{0};
 };
 
 /*!

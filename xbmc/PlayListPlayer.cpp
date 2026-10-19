@@ -44,6 +44,7 @@
 #include "settings/SettingsComponent.h"
 #include "utils/ArtTypes.h"
 #include "utils/DefaultArt.h"
+#include "utils/ItemProperties.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
@@ -898,13 +899,20 @@ bool CPlayListPlayer::RestorePlaylist(const CPlayListHistoryEntry& entry,
   if (seconds > 0.0)
   {
     const CFileItemPtr item = items.Get(position);
-    item->SetStartOffset(item->GetStartOffset() + CUtil::ConvertSecsToMilliSecs(seconds));
+    const int64_t offset = item->GetStartOffset() + CUtil::ConvertSecsToMilliSecs(seconds);
+    // PAPlayer times a cue sheet track from its own start only while the start offset is where
+    // the track starts; a bookmark into the file resumes it, as it does an audiobook chapter.
+    if (item->GetEndOffset() > 0 || item->GetProperty(ITEM::PROPERTY::ITEM_START).asInteger() > 0)
+      item->SetProperty(ITEM::PROPERTY::AUDIOBOOK_BOOKMARK, offset);
+    else
+      item->SetStartOffset(offset);
   }
 
-  // Add() reshuffles a shuffled list, which would lose the saved order.
-  SetShuffle(Id::TYPE_MUSIC, false);
+  // Clearing records the playlist being replaced, so it comes before SetShuffle() reorders it.
   ClearPlaylist(Id::TYPE_MUSIC);
   Reset();
+  // Add() reshuffles a shuffled list, which would lose the saved order.
+  SetShuffle(Id::TYPE_MUSIC, false);
   Add(Id::TYPE_MUSIC, items);
   SetCurrentPlaylist(Id::TYPE_MUSIC);
 
