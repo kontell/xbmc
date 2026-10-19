@@ -12,7 +12,11 @@
 #include "settings/lib/ISettingCallback.h"
 #include "settings/lib/ISettingsHandler.h"
 
+#include <memory>
+#include <vector>
+
 class TiXmlNode;
+struct IntegerSettingOption;
 
 /*!
  * \brief Class handling application support for settings.
@@ -22,6 +26,15 @@ class CApplicationSettingsHandling : public ISettingCallback,
                                      public ISettingsHandler,
                                      public ISubSettings
 {
+public:
+  /*!
+   * \brief The "Perform on startup" choices. Restoring the last music playlist is one only while
+   * the history of music playlists is on.
+   */
+  static void SettingOptionsStartupActionsFiller(const std::shared_ptr<const CSetting>& setting,
+                                                 std::vector<IntegerSettingOption>& list,
+                                                 int& current);
+
 protected:
   void RegisterSettings();
   void UnregisterSettings();

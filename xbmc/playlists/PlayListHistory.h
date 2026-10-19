@@ -111,9 +111,12 @@ public:
   /*!
    * \brief Put an entry at the front of the history, unless it repeats the newest one.
    * \param entry The entry.
-   * \param keep How many entries to keep.
+   * \param keep How many entries to keep; with 0 the entry is not added.
    */
   void Add(CPlayListHistoryEntry entry, int keep);
+
+  /*! \brief Drop the oldest entries beyond the given number; 0 empties the history. */
+  void Trim(int keep);
 
   const std::vector<CPlayListHistoryEntry>& Entries() const { return m_entries; }
 
