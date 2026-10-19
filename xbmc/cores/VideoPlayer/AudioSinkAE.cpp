@@ -164,7 +164,8 @@ unsigned int CAudioSinkAE::AddPackets(const DVDAudioFrame &audioframe)
     lock.lock();
   } while (!m_bAbort);
 
-  m_playingPts = audioframe.pts + audioframe.duration - GetDelay();
+  // the delay is output time, which at a tempo stands for that much more of the stream
+  m_playingPts = audioframe.pts + audioframe.duration - GetDelay() * PlayRate();
   m_timeOfPts = m_pClock->GetAbsoluteClock();
 
   return total - frames;
@@ -335,6 +336,26 @@ void CAudioSinkAE::SetResampleRatio(double ratio)
   m_requestedResampleRatio = ratio;
   if (m_pAudioStream && !m_bPassthrough)
     m_pAudioStream->SetResampleRatio(ratio);
+}
+
+double CAudioSinkAE::PlayRate() const
+{
+  return m_bPassthrough || m_requestedResampleRatio <= 0.0 ? 1.0 : 1.0 / m_requestedResampleRatio;
+}
+
+double CAudioSinkAE::GetPlayRate()
+{
+  std::unique_lock lock(m_critSection);
+  return PlayRate();
+}
+
+double CAudioSinkAE::GetRateChangeDelay()
+{
+  std::unique_lock lock(m_critSection);
+  if (!m_pAudioStream || m_bPassthrough)
+    return 0.0;
+
+  return m_pAudioStream->GetDelay() * DVD_TIME_BASE;
 }
 
 double CAudioSinkAE::GetClock()
