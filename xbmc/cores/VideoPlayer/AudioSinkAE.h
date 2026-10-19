@@ -61,6 +61,18 @@ public:
    */
   void SetResampleRatio(double ratio);
 
+  /*!
+   * \brief The stream's own time per second of output: the tempo asked for with
+   * SetResampleRatio(), and 1.0 for a bitstream. GetDelay() and GetMaxDelay() are output time.
+   */
+  double GetPlayRate();
+
+  /*!
+   * \brief How long until audio added now is heard, in DVD time, for a new ratio to reach it;
+   * 0.0 for a bitstream, which no ratio reaches.
+   */
+  double GetRateChangeDelay();
+
   void Flush();
   void Drain();
   void AbortAddPackets();
@@ -79,6 +91,7 @@ protected:
   double m_resampleRatio = 0.0; // invalid
   double m_requestedResampleRatio = 1.0;
   CCriticalSection m_critSection;
+  double PlayRate() const;
 
   AEDataFormat m_dataFormat;
   unsigned int m_sampleRate;
