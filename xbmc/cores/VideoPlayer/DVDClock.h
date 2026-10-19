@@ -34,6 +34,11 @@ public:
 
   void Reset() { m_bReset = true; }
   void SetSpeed(int iSpeed);
+  /*!
+   * \brief Change speed at a later absolute time, for output that is heard later than it is
+   * asked for. A speed change before then, a pause or a reset takes the place of it.
+   */
+  void SetSpeedAt(int iSpeed, double absolute);
   void SetSpeedAdjust(double adjust);
   double GetSpeedAdjust() const;
 
@@ -61,6 +66,8 @@ protected:
   double SystemToAbsolute(int64_t system) const;
   int64_t AbsoluteToSystem(double absolute) const;
   double SystemToPlaying(int64_t system);
+  //! Take a speed change set with SetSpeedAt() whose time has come. Hold m_critSection.
+  void CommitDueSpeed(int64_t system);
 
   mutable CCriticalSection m_critSection;
   int64_t m_systemUsed;
@@ -83,5 +90,10 @@ protected:
   double m_frameTime;
 
   double m_maxspeedadjust;
+
+  bool m_speedPending = false;
+  int m_pendingSpeed = 0;
+  int64_t m_pendingSystem = 0;
+  int64_t m_pendingUsed = 0;
   CCriticalSection m_speedsection;
 };

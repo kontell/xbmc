@@ -326,7 +326,8 @@ void CVideoPlayerAudio::Process()
                 "CVideoPlayerAudio - CDVDMsg::GENERAL_RESYNC({:f}), level: {}, cache: {:f}", pts,
                 m_messageQueue.GetLevel(), m_audioSink.GetDelay());
 
-      double delay = m_audioSink.GetDelay();
+      // in the stream's own time, which a tempo stretches
+      double delay = m_audioSink.GetDelay() * m_audioSink.GetPlayRate();
       if (pts > m_audioClock - delay + 0.5 * DVD_TIME_BASE)
       {
         m_audioSink.Flush();
@@ -588,8 +589,10 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
       m_stalled = false;
       SStartMsg msg;
       msg.player = VideoPlayer_AUDIO;
-      msg.cachetotal = m_audioSink.GetMaxDelay() * DVD_TIME_BASE;
-      msg.cachetime = m_audioSink.GetDelay();
+      // in the stream's own time, which a tempo stretches
+      const double rate = m_audioSink.GetPlayRate();
+      msg.cachetotal = m_audioSink.GetMaxDelay() * DVD_TIME_BASE * rate;
+      msg.cachetime = m_audioSink.GetDelay() * rate;
       msg.timestamp = audioframe.hasTimestamp ? audioframe.pts : DVD_NOPTS_VALUE;
       m_messageParent.Put(std::make_shared<CDVDMsgType<SStartMsg>>(CDVDMsg::PLAYER_STARTED, msg));
 
@@ -654,6 +657,8 @@ void CVideoPlayerAudio::UpdateResampleRatio()
   // With the display clock the engine's sync servo resamples the audio to the clock,
   // a tempo included. With the audio as the clock nothing would move it, so the rate
   // is asked of the stream: 1/tempo output samples per input sample.
+  m_rateFollowsSpeed = m_synctype == SYNC_DISCON;
+
   double ratio = 1.0;
   if (m_synctype == SYNC_DISCON && m_speed != DVD_PLAYSPEED_NORMAL &&
       m_processInfo.IsTempoAllowed(static_cast<float>(m_speed) / DVD_PLAYSPEED_NORMAL))

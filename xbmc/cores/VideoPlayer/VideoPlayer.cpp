@@ -3546,10 +3546,22 @@ void CVideoPlayer::HandleMessages()
 
       m_processInfo->SetFrameAdvance(false);
 
+      // A change between playing speeds reaches the audio as a rate, which the audio already
+      // queued does not get: the clock changes speed when the new rate is heard, so that the
+      // picture keeps to the sound.
+      const bool playingBefore = m_playSpeed != DVD_PLAYSPEED_PAUSE && !wasFFRW;
+      const bool playingAfter = speed == DVD_PLAYSPEED_NORMAL || isTempoSpeed;
+      const double rateDelay = playingBefore && playingAfter && speed != m_playSpeed
+                                   ? m_VideoPlayerAudio->GetRateChangeDelay()
+                                   : 0.0;
+
       m_playSpeed = speed;
 
       m_caching = CACHESTATE_DONE;
-      m_clock.SetSpeed(speed);
+      if (rateDelay > 0.0)
+        m_clock.SetSpeedAt(speed, m_clock.GetAbsoluteClock() + rateDelay);
+      else
+        m_clock.SetSpeed(speed);
       m_VideoPlayerAudio->SetSpeed(speed);
       m_VideoPlayerVideo->SetSpeed(speed);
       m_streamPlayerSpeed = speed;

@@ -97,6 +97,10 @@ void CDVDClock::Pause(bool pause)
 
   if (pause && !m_paused)
   {
+    // a speed due later is the one to resume at
+    if (m_speedPending)
+      SetSpeed(m_pendingSpeed);
+
     if (!m_pauseClock)
       m_speedAfterPause = m_systemFrequency * DVD_PLAYSPEED_NORMAL / m_systemUsed;
     else
@@ -133,6 +137,9 @@ void CDVDClock::SetSpeed(int iSpeed)
   // this will sometimes be a little bit of due to rounding errors, ie clock might jump a bit when changing speed
   std::unique_lock lock(m_critSection);
 
+  CommitDueSpeed(m_videoRefClock->GetTime());
+  m_speedPending = false;
+
   if (m_paused)
   {
     m_speedAfterPause = iSpeed;
@@ -158,6 +165,38 @@ void CDVDClock::SetSpeed(int iSpeed)
 
   m_startClock = current - (int64_t)((double)(current - m_startClock) * newfreq / m_systemUsed);
   m_systemUsed = newfreq;
+}
+
+void CDVDClock::SetSpeedAt(int iSpeed, double absolute)
+{
+  std::unique_lock lock(m_critSection);
+
+  const int64_t current = m_videoRefClock->GetTime();
+  const int64_t at = AbsoluteToSystem(absolute);
+  if (m_paused || m_pauseClock || m_bReset || iSpeed == DVD_PLAYSPEED_PAUSE || at <= current)
+  {
+    SetSpeed(iSpeed);
+    return;
+  }
+
+  CommitDueSpeed(current);
+  m_speedPending = true;
+  m_pendingSpeed = iSpeed;
+  m_pendingSystem = at;
+  m_pendingUsed = m_systemFrequency * DVD_PLAYSPEED_NORMAL / iSpeed;
+}
+
+void CDVDClock::CommitDueSpeed(int64_t system)
+{
+  if (!m_speedPending || system < m_pendingSystem)
+    return;
+
+  // as SetSpeed() does, at the time the change was due
+  m_startClock = m_pendingSystem - static_cast<int64_t>(
+                                       static_cast<double>(m_pendingSystem - m_startClock) *
+                                       m_pendingUsed / m_systemUsed);
+  m_systemUsed = m_pendingUsed;
+  m_speedPending = false;
 }
 
 void CDVDClock::SetSpeedAdjust(double adjust)
@@ -217,6 +256,7 @@ double CDVDClock::ErrorAdjust(double error, const char* log)
 void CDVDClock::Discontinuity(double clock, double absolute)
 {
   std::unique_lock lock(m_critSection);
+  CommitDueSpeed(AbsoluteToSystem(absolute));
   m_startClock = AbsoluteToSystem(absolute);
   if(m_pauseClock)
     m_pauseClock = m_startClock;
@@ -297,12 +337,21 @@ double CDVDClock::SystemToPlaying(int64_t system)
     m_speedAdjust = 0;
     m_vSyncAdjust = 0;
     m_bReset = false;
+    m_speedPending = false;
   }
 
   if (m_pauseClock)
     current = m_pauseClock;
   else
     current = system;
+
+  // a speed change that has come due but is not yet taken runs from its own time
+  if (m_speedPending && current > m_pendingSystem)
+    return DVD_TIME_BASE *
+               (static_cast<double>(m_pendingSystem - m_startClock + m_systemAdjust) /
+                    m_systemUsed +
+                static_cast<double>(current - m_pendingSystem) / m_pendingUsed) +
+           m_iDisc;
 
   return DVD_TIME_BASE * (double)(current - m_startClock + m_systemAdjust) / m_systemUsed + m_iDisc;
 }
@@ -311,6 +360,7 @@ double CDVDClock::GetClockSpeed() const
 {
   std::unique_lock lock(m_critSection);
 
-  double speed = (double)m_systemFrequency / m_systemUsed;
+  const bool due = m_speedPending && m_videoRefClock->GetTime() >= m_pendingSystem;
+  double speed = (double)m_systemFrequency / (due ? m_pendingUsed : m_systemUsed);
   return m_videoRefClock->GetSpeed() * speed + m_speedAdjust;
 }

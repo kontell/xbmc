@@ -18,6 +18,7 @@
 #include "threads/Thread.h"
 #include "utils/BitstreamStats.h"
 
+#include <atomic>
 #include <list>
 #include <mutex>
 #include <utility>
@@ -58,6 +59,11 @@ public:
 
   std::string GetPlayerInfo() override;
   int GetAudioChannels() override;
+
+  double GetRateChangeDelay() override
+  {
+    return m_rateFollowsSpeed ? m_audioSink.GetRateChangeDelay() : 0.0;
+  }
 
   double GetCurrentPts() override
   {
@@ -107,6 +113,8 @@ protected:
   XbmcThreads::EndTime<> m_syncTimer;
 
   int m_synctype;
+  //! Whether a speed reaches the stream as a resample ratio (not with the display clock)
+  std::atomic<bool> m_rateFollowsSpeed{false};
   int m_prevsynctype;
 
   bool   m_prevskipped;
