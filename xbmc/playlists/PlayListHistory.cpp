@@ -21,6 +21,7 @@
 #include "resources/ResourcesComponent.h"
 #include "utils/ArtTypes.h"
 #include "utils/FileUtils.h"
+#include "utils/ItemProperties.h"
 #include "utils/StringUtils.h"
 #include "utils/TimeFormat.h"
 #include "utils/URIUtils.h"
@@ -36,6 +37,7 @@ namespace KODI::PLAYLIST
 namespace
 {
 constexpr const char* HISTORY_FILE = "playlisthistory.xml";
+constexpr const char* NEW_FILE_SUFFIX = ".tmp";
 
 // An offset shorter than this is not worth resuming at.
 constexpr double MIN_RESUME_SECONDS = 5.0;
@@ -140,7 +142,8 @@ bool CPlayListHistoryEntry::IsRepeatOf(const CPlayListHistoryEntry& other) const
   return position == other.position &&
          std::abs(seconds - other.seconds) < REPEAT_TOLERANCE_SECONDS &&
          std::ranges::equal(
-             tracks, other.tracks, [](const auto& a, const auto& b) { return a.path == b.path; });
+             tracks, other.tracks, [](const auto& a, const auto& b)
+             { return a.path == b.path && a.startOffset == b.startOffset; });
 }
 
 void CPlayListHistoryEntry::GetItems(CFileItemList& items) const
@@ -156,6 +159,8 @@ void CPlayListHistoryEntry::GetItems(CFileItemList& items, CMusicDatabase* libra
 
   for (const CPlayListHistoryTrack& track : tracks)
   {
+    // One of the tracks a cue sheet makes of a file.
+    const bool part = track.startOffset > 0 || track.endOffset > 0;
     std::shared_ptr<CFileItem> item;
     if (library)
     {
@@ -172,12 +177,16 @@ void CPlayListHistoryEntry::GetItems(CFileItemList& items, CMusicDatabase* libra
       const auto song = songs->second.find(URIUtils::AddFileToFolder(folder, fileName));
       if (song != songs->second.end() && !song->second.empty())
       {
-        // A cue sheet gives several songs one file; take the one that was saved.
-        const auto byTitle = std::ranges::find_if(song->second, [&track](const CSong& s)
-                                                  { return s.strTitle == track.title; });
-        const CSong& found = byTitle != song->second.end() ? *byTitle : song->second.front();
-        item = std::make_shared<CFileItem>(found);
-        item->SetDynPath(found.strFileName);
+        // A cue sheet gives several songs one file; take the one that was saved, by where it
+        // starts, else by title.
+        const std::vector<CSong>& candidates = song->second;
+        auto found = part ? std::ranges::find(candidates, track.startOffset, &CSong::iStartOffset)
+                          : candidates.end();
+        if (found == candidates.end())
+          found = std::ranges::find(candidates, track.title, &CSong::strTitle);
+        const CSong& chosen = found != candidates.end() ? *found : candidates.front();
+        item = std::make_shared<CFileItem>(chosen);
+        item->SetDynPath(chosen.strFileName);
       }
     }
 
@@ -191,6 +200,13 @@ void CPlayListHistoryEntry::GetItems(CFileItemList& items, CMusicDatabase* libra
       tag->SetAlbum(track.album);
       tag->SetDuration(track.duration);
       tag->SetLoaded(true);
+      if (part)
+      {
+        // Marked as CFileItem::SetFromSong() marks a cue sheet song, so only its part plays.
+        item->SetStartOffset(track.startOffset);
+        item->SetEndOffset(track.endOffset);
+        item->SetProperty(ITEM::PROPERTY::ITEM_START, track.startOffset);
+      }
     }
 
     if (!track.thumb.empty() && !item->HasArt(ART::TYPE::THUMB))
@@ -226,6 +242,9 @@ CPlayListHistoryEntry CPlayListHistoryEntry::FromPlayList(const CPlayList& playl
     const std::shared_ptr<const CFileItem> item = playlist[i];
     CPlayListHistoryTrack track;
     track.path = item->GetDynPath();
+    // Where a cue sheet track starts: a resume point moves the start offset, not this.
+    track.startOffset = static_cast<int>(item->GetProperty(ITEM::PROPERTY::ITEM_START).asInteger());
+    track.endOffset = static_cast<int>(item->GetEndOffset());
     track.thumb = item->GetArt(ART::TYPE::THUMB);
     track.fanart = item->GetArt(ART::TYPE::FANART);
     if (item->HasMusicInfoTag())
@@ -267,19 +286,23 @@ void CPlayListHistory::Add(CPlayListHistoryEntry entry)
 
 bool CPlayListHistory::Load()
 {
-  if (!CFileUtils::Exists(m_file))
+  // A save cut short between removing the old history and renaming the new one leaves the new one.
+  std::string file = m_file;
+  if (!CFileUtils::Exists(file))
+    file = m_file + NEW_FILE_SUFFIX;
+  if (!CFileUtils::Exists(file))
     return false;
 
   CXBMCTinyXML2 doc;
-  if (!doc.LoadFile(m_file))
+  if (!doc.LoadFile(file))
   {
-    CLog::LogF(LOGERROR, "Unable to load {}", m_file);
+    CLog::LogF(LOGERROR, "Unable to load {}", file);
     return false;
   }
   const tinyxml2::XMLElement* root = doc.RootElement();
   if (!root || !StringUtils::EqualsNoCase(root->Value(), "playlisthistory"))
   {
-    CLog::LogF(LOGERROR, "{} is not a playlist history", m_file);
+    CLog::LogF(LOGERROR, "{} is not a playlist history", file);
     return false;
   }
 
@@ -302,6 +325,8 @@ bool CPlayListHistory::Load()
       XMLUtils::GetString(trackNode, "thumb", track.thumb);
       XMLUtils::GetString(trackNode, "fanart", track.fanart);
       XMLUtils::GetInt(trackNode, "duration", track.duration);
+      XMLUtils::GetInt(trackNode, "startoffset", track.startOffset);
+      XMLUtils::GetInt(trackNode, "endoffset", track.endOffset);
       if (!track.path.empty())
         entry.tracks.emplace_back(std::move(track));
     }
@@ -346,17 +371,28 @@ bool CPlayListHistory::Save() const
         XMLUtils::SetString(trackNode, "thumb", track.thumb);
       if (!track.fanart.empty())
         XMLUtils::SetString(trackNode, "fanart", track.fanart);
+      if (track.startOffset > 0)
+        XMLUtils::SetInt(trackNode, "startoffset", track.startOffset);
+      if (track.endOffset > 0)
+        XMLUtils::SetInt(trackNode, "endoffset", track.endOffset);
       node->InsertEndChild(trackNode);
     }
     root->InsertEndChild(node);
   }
 
-  // Written beside the file and renamed, so a quit mid-write leaves the old history.
-  const std::string temp = m_file + ".tmp";
-  if (!doc.SaveFile(temp) || !XFILE::CFile::Rename(temp, m_file))
+  // Written beside the file and renamed, so a quit mid-write leaves the old history. Windows
+  // will not rename over a file, so the old one goes first; Load() falls back to the new one.
+  const std::string temp = m_file + NEW_FILE_SUFFIX;
+  if (!doc.SaveFile(temp))
   {
     CLog::LogF(LOGERROR, "Unable to save {}", m_file);
     XFILE::CFile::Delete(temp);
+    return false;
+  }
+  XFILE::CFile::Delete(m_file);
+  if (!XFILE::CFile::Rename(temp, m_file))
+  {
+    CLog::LogF(LOGERROR, "Unable to save {}", m_file);
     return false;
   }
   return true;
