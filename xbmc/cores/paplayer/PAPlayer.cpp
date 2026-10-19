@@ -465,6 +465,9 @@ bool PAPlayer::QueueNextFileEx(const CFileItem &file, bool fadeIn)
 
   /* add the stream to the list */
   std::unique_lock lock(m_streamsLock);
+  // SetTempo() reaches only the streams in the list
+  if (si->m_tempo != m_tempo)
+    SetStreamTempo(si);
   m_streams.push_back(si);
   //update the current stream to start playing the next track at the correct frame.
   UpdateStreamInfoPlayNextAtFrame(m_currentStream, m_upcomingCrossfadeMS);
@@ -1008,7 +1011,7 @@ void PAPlayer::SetDynamicRangeCompression(long drc)
 
 void PAPlayer::SetTempo(float tempo)
 {
-  if (tempo < MIN_TEMPO || tempo > MAX_TEMPO)
+  if (!(tempo >= MIN_TEMPO && tempo <= MAX_TEMPO))
     return;
 
   // three decimals: the player speed's own floor, and what the OSD rounds to
@@ -1034,8 +1037,15 @@ bool PAPlayer::SupportsTempo() const
 void PAPlayer::SetStreamTempo(StreamInfo* si) const
 {
   // a bitstream cannot be stretched: it plays as it is, and SupportsTempo() says so
-  if (si->m_stream && si->m_audioFormat.m_dataFormat != AE_FMT_RAW)
-    si->m_stream->SetResampleRatio(1.0 / static_cast<double>(m_tempo.load()));
+  if (si->m_audioFormat.m_dataFormat == AE_FMT_RAW)
+  {
+    si->m_tempo = 1.0f;
+    return;
+  }
+
+  si->m_tempo = m_tempo;
+  if (si->m_stream)
+    si->m_stream->SetResampleRatio(1.0 / static_cast<double>(si->m_tempo));
 }
 
 double PAPlayer::QueuedSeconds(const StreamInfo& si) const
@@ -1043,7 +1053,7 @@ double PAPlayer::QueuedSeconds(const StreamInfo& si) const
   if (!si.m_stream)
     return 0.0;
 
-  return si.m_stream->GetDelay() * static_cast<double>(m_tempo.load());
+  return si.m_stream->GetDelay() * static_cast<double>(si.m_tempo);
 }
 
 void PAPlayer::SetSpeed(float speed)
