@@ -97,9 +97,9 @@ void CDVDClock::Pause(bool pause)
 
   if (pause && !m_paused)
   {
-    // a speed due later is the one to resume at
-    if (m_speedPending)
-      SetSpeed(m_pendingSpeed);
+    // the last speed asked for is the one to resume at
+    if (!m_pendingSpeeds.empty())
+      SetSpeed(m_pendingSpeeds.back().speed);
 
     if (!m_pauseClock)
       m_speedAfterPause = m_systemFrequency * DVD_PLAYSPEED_NORMAL / m_systemUsed;
@@ -138,7 +138,7 @@ void CDVDClock::SetSpeed(int iSpeed)
   std::unique_lock lock(m_critSection);
 
   CommitDueSpeed(m_videoRefClock->GetTime());
-  m_speedPending = false;
+  m_pendingSpeeds.clear();
 
   if (m_paused)
   {
@@ -180,23 +180,25 @@ void CDVDClock::SetSpeedAt(int iSpeed, double absolute)
   }
 
   CommitDueSpeed(current);
-  m_speedPending = true;
-  m_pendingSpeed = iSpeed;
-  m_pendingSystem = at;
-  m_pendingUsed = m_systemFrequency * DVD_PLAYSPEED_NORMAL / iSpeed;
+  // output is heard in the order it is asked for, so a change due no later than one still to
+  // come takes its place
+  while (!m_pendingSpeeds.empty() && m_pendingSpeeds.back().system >= at)
+    m_pendingSpeeds.pop_back();
+  m_pendingSpeeds.push_back({iSpeed, at, m_systemFrequency * DVD_PLAYSPEED_NORMAL / iSpeed});
 }
 
 void CDVDClock::CommitDueSpeed(int64_t system)
 {
-  if (!m_speedPending || system < m_pendingSystem)
-    return;
-
-  // as SetSpeed() does, at the time the change was due
-  m_startClock = m_pendingSystem - static_cast<int64_t>(
-                                       static_cast<double>(m_pendingSystem - m_startClock) *
-                                       m_pendingUsed / m_systemUsed);
-  m_systemUsed = m_pendingUsed;
-  m_speedPending = false;
+  while (!m_pendingSpeeds.empty() && system >= m_pendingSpeeds.front().system)
+  {
+    const PendingSpeed& due = m_pendingSpeeds.front();
+    // as SetSpeed() does, at the time the change was due
+    m_startClock =
+        due.system - static_cast<int64_t>(static_cast<double>(due.system - m_startClock) *
+                                          due.used / m_systemUsed);
+    m_systemUsed = due.used;
+    m_pendingSpeeds.pop_front();
+  }
 }
 
 void CDVDClock::SetSpeedAdjust(double adjust)
@@ -337,7 +339,7 @@ double CDVDClock::SystemToPlaying(int64_t system)
     m_speedAdjust = 0;
     m_vSyncAdjust = 0;
     m_bReset = false;
-    m_speedPending = false;
+    m_pendingSpeeds.clear();
   }
 
   if (m_pauseClock)
@@ -345,22 +347,35 @@ double CDVDClock::SystemToPlaying(int64_t system)
   else
     current = system;
 
-  // a speed change that has come due but is not yet taken runs from its own time
-  if (m_speedPending && current > m_pendingSystem)
-    return DVD_TIME_BASE *
-               (static_cast<double>(m_pendingSystem - m_startClock + m_systemAdjust) /
-                    m_systemUsed +
-                static_cast<double>(current - m_pendingSystem) / m_pendingUsed) +
-           m_iDisc;
+  // speed changes that have come due but are not yet taken run from their own times
+  int64_t from = m_startClock - m_systemAdjust;
+  int64_t used = m_systemUsed;
+  double playing = 0.0;
+  for (const PendingSpeed& change : m_pendingSpeeds)
+  {
+    if (change.system >= current)
+      break;
+    playing += static_cast<double>(change.system - from) / used;
+    from = change.system;
+    used = change.used;
+  }
+  playing += static_cast<double>(current - from) / used;
 
-  return DVD_TIME_BASE * (double)(current - m_startClock + m_systemAdjust) / m_systemUsed + m_iDisc;
+  return DVD_TIME_BASE * playing + m_iDisc;
 }
 
 double CDVDClock::GetClockSpeed() const
 {
   std::unique_lock lock(m_critSection);
 
-  const bool due = m_speedPending && m_videoRefClock->GetTime() >= m_pendingSystem;
-  double speed = (double)m_systemFrequency / (due ? m_pendingUsed : m_systemUsed);
+  const int64_t current = m_videoRefClock->GetTime();
+  int64_t used = m_systemUsed;
+  for (const PendingSpeed& change : m_pendingSpeeds)
+  {
+    if (change.system > current)
+      break;
+    used = change.used;
+  }
+  double speed = (double)m_systemFrequency / used;
   return m_videoRefClock->GetSpeed() * speed + m_speedAdjust;
 }

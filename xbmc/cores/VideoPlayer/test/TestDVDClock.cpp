@@ -52,6 +52,46 @@ TEST(TestDVDClock, ClockIsContinuousWhenTheSpeedChanges)
   EXPECT_NEAR(now, expected, TOLERANCE);
 }
 
+TEST(TestDVDClock, SetSpeedAtTakesEachChangeInTurn)
+{
+  CDVDClock clock;
+  clock.Discontinuity(0);
+  clock.SetSpeed(DVD_PLAYSPEED_NORMAL);
+
+  // a ramp asked for faster than it is heard: each step runs for its own while
+  const double start = clock.GetAbsoluteClock();
+  clock.SetSpeedAt(2 * DVD_PLAYSPEED_NORMAL, start + DVD_MSEC_TO_TIME(200));
+  clock.SetSpeedAt(3 * DVD_PLAYSPEED_NORMAL, start + DVD_MSEC_TO_TIME(400));
+  std::this_thread::sleep_for(300ms);
+  EXPECT_NEAR(clock.GetClockSpeed(), 2.0, 1e-6);
+
+  std::this_thread::sleep_for(200ms);
+  EXPECT_NEAR(clock.GetClockSpeed(), 3.0, 1e-6);
+
+  // 200 ms at 1x, 200 ms at 2x, then 3x to the moment of the reading
+  double absolute = 0;
+  const double now = clock.GetClock(absolute);
+  const double expected =
+      DVD_MSEC_TO_TIME(600) + 3 * (absolute - start - DVD_MSEC_TO_TIME(400));
+  EXPECT_NEAR(now, expected, TOLERANCE);
+}
+
+TEST(TestDVDClock, SetSpeedAtReplacesAChangeDueNoEarlier)
+{
+  CDVDClock clock;
+  clock.Discontinuity(0);
+  clock.SetSpeed(DVD_PLAYSPEED_NORMAL);
+
+  const double start = clock.GetAbsoluteClock();
+  clock.SetSpeedAt(2 * DVD_PLAYSPEED_NORMAL, start + DVD_MSEC_TO_TIME(400));
+  clock.SetSpeedAt(3 * DVD_PLAYSPEED_NORMAL, start + DVD_MSEC_TO_TIME(200));
+  std::this_thread::sleep_for(300ms);
+  EXPECT_NEAR(clock.GetClockSpeed(), 3.0, 1e-6);
+
+  std::this_thread::sleep_for(200ms);
+  EXPECT_NEAR(clock.GetClockSpeed(), 3.0, 1e-6);
+}
+
 TEST(TestDVDClock, SetSpeedReplacesAPendingChange)
 {
   CDVDClock clock;
@@ -72,8 +112,10 @@ TEST(TestDVDClock, PauseTakesAPendingChange)
   clock.SetSpeed(DVD_PLAYSPEED_NORMAL);
 
   clock.SetSpeedAt(2 * DVD_PLAYSPEED_NORMAL, clock.GetAbsoluteClock() + DVD_MSEC_TO_TIME(1000));
+  clock.SetSpeedAt(3 * DVD_PLAYSPEED_NORMAL, clock.GetAbsoluteClock() + DVD_MSEC_TO_TIME(1200));
   clock.Pause(true);
   clock.Pause(false);
 
-  EXPECT_NEAR(clock.GetClockSpeed(), 2.0, 1e-6);
+  // the last speed asked for
+  EXPECT_NEAR(clock.GetClockSpeed(), 3.0, 1e-6);
 }
