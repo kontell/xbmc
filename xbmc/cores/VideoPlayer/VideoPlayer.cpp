@@ -799,7 +799,7 @@ CVideoPlayer::CVideoPlayer(IPlayerCallback& callback)
   // if we have a gui, register the cache
   m_processInfo->SetDataCache(&CServiceBroker::GetDataCacheCore());
   m_processInfo->SetSpeed(1.0);
-  m_processInfo->SetTempo(1.0);
+  m_processInfo->SetTempo(1.0, false);
   m_processInfo->SetFrameAdvance(false);
 
   CreatePlayers();
@@ -1428,7 +1428,7 @@ void CVideoPlayer::Prepare()
   CFFmpegLog::SetLogLevel(1);
   SetPlaySpeed(DVD_PLAYSPEED_NORMAL);
   m_processInfo->SetSpeed(1.0);
-  m_processInfo->SetTempo(1.0);
+  m_processInfo->SetTempo(1.0, false);
   m_processInfo->SetFrameAdvance(false);
   m_State.Clear();
   m_CurrentVideo.hint.Clear();
@@ -2541,7 +2541,8 @@ void CVideoPlayer::HandlePlaySpeed()
     float currentTempo = m_processInfo->GetNewTempo();
     if (currentTempo != 1.0f)
     {
-      SetTempo(1.0f);
+      // a correction goes back as one
+      SetTempo(1.0f, m_processInfo->IsTempoCorrection());
     }
   }
   // Faster than its source, a realtime stream plays what it holds ahead of the position until it
@@ -2560,7 +2561,7 @@ void CVideoPlayer::HandlePlaySpeed()
               "tempo {:.3f}, back to normal speed. Audio: {} - Video: {}",
               static_cast<double>(m_playSpeed) / DVD_PLAYSPEED_NORMAL,
               m_VideoPlayerAudio->GetLevel(), m_processInfo->GetLevelVQ());
-    SetTempo(1.0f);
+    SetTempo(1.0f, m_processInfo->IsTempoCorrection());
   }
 }
 
@@ -3523,8 +3524,8 @@ void CVideoPlayer::HandleMessages()
         m_State.timestamp = m_clock.GetAbsoluteClock();
       }
 
-      const SpeedChangeNotifications notifications =
-          GetSpeedChangeNotifications(m_playSpeed, m_playSpeedIsTempo, speed, msg->IsTempo());
+      const SpeedChangeNotifications notifications = GetSpeedChangeNotifications(
+          m_playSpeed, m_playSpeedIsTempo, speed, msg->IsTempo(), msg->IsCorrection());
 
       if (notifications.resumed)
         m_callback.OnPlayBackResumed();
@@ -3533,8 +3534,10 @@ void CVideoPlayer::HandleMessages()
       {
         // a tempo plays at normal speed: the announcement reads the tempo itself
         m_callback.OnPlayBackSpeedChanged(msg->IsTempo() ? 1 : speed / DVD_PLAYSPEED_NORMAL);
-        m_processInfo->SeekFinished(0);
       }
+
+      if (notifications.shownAsSeek)
+        m_processInfo->SeekFinished(0);
 
       if (m_pInputStream->IsStreamType(DVDSTREAM_TYPE_PVRMANAGER) && speed != m_playSpeed)
       {
@@ -3575,7 +3578,8 @@ void CVideoPlayer::HandleMessages()
       {
         // a tempo plays at normal speed, so it ends any trickplay
         m_processInfo->SetSpeed(1.0f);
-        m_processInfo->SetTempo(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL);
+        m_processInfo->SetTempo(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL,
+                                msg->IsCorrection());
       }
       else
         m_processInfo->SetSpeed(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL);
@@ -3730,7 +3734,7 @@ void CVideoPlayer::SetCaching(ECacheState state)
 }
 
 CVideoPlayer::SpeedChangeNotifications CVideoPlayer::GetSpeedChangeNotifications(
-    int previousSpeed, bool previousIsTempo, int newSpeed, bool isTempo)
+    int previousSpeed, bool previousIsTempo, int newSpeed, bool isTempo, bool isCorrection)
 {
   SpeedChangeNotifications notifications;
 
@@ -3746,6 +3750,8 @@ CVideoPlayer::SpeedChangeNotifications CVideoPlayer::GetSpeedChangeNotifications
   if (newSpeed != DVD_PLAYSPEED_PAUSE && (newSpeed != previousSpeed || modeChanged) &&
       !unpausedToNormal)
     notifications.speedChanged = true;
+
+  notifications.shownAsSeek = notifications.speedChanged && !isCorrection;
 
   return notifications;
 }
@@ -4276,7 +4282,7 @@ void CVideoPlayer::SetSpeed(float speed)
       float currentTempo = m_processInfo->GetNewTempo();
       if (currentTempo != 1.0f)
       {
-        SetTempo(currentTempo);
+        SetTempo(currentTempo, m_processInfo->IsTempoCorrection());
         return;
       }
     }
@@ -4290,17 +4296,17 @@ int CVideoPlayer::TempoToSpeed(float tempo)
   return static_cast<int>(std::lround(tempo * DVD_PLAYSPEED_NORMAL));
 }
 
-void CVideoPlayer::SetTempo(float tempo)
+void CVideoPlayer::SetTempo(float tempo, bool correction)
 {
   // three decimals, and the tempo read back is the one the player will take
   const int speed = TempoToSpeed(tempo);
   tempo = static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL;
   if (m_processInfo->IsTempoAllowed(tempo))
   {
-    CDVDMsgPlayerSetSpeed::SpeedParams params = { speed, true };
+    CDVDMsgPlayerSetSpeed::SpeedParams params = {speed, true, correction};
     m_messenger.Put(std::make_shared<CDVDMsgPlayerSetSpeed>(params));
 
-    m_processInfo->SetNewTempo(tempo);
+    m_processInfo->SetNewTempo(tempo, correction);
   }
 }
 

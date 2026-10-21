@@ -716,6 +716,12 @@
           }
         ],
         "required": true
+      },
+      {
+        "name": "correction",
+        "type": "boolean",
+        "default": false,
+        "description": "Whether the tempo corrects the position, as a sync client's does: the GUI shows no seek bar for it and normal speed through it. Only with a number"
       }
     ],
     "returns": {

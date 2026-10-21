@@ -68,9 +68,14 @@ public:
   bool InvokeEvaluateIsStreaming() const { return EvaluateIsStreaming(); }
 
   static CVideoPlayer::SpeedChangeNotifications InvokeGetSpeedChangeNotifications(
-      int previousSpeed, int newSpeed, bool isTempo, bool previousIsTempo = false)
+      int previousSpeed,
+      int newSpeed,
+      bool isTempo,
+      bool previousIsTempo = false,
+      bool isCorrection = false)
   {
-    return GetSpeedChangeNotifications(previousSpeed, previousIsTempo, newSpeed, isTempo);
+    return GetSpeedChangeNotifications(previousSpeed, previousIsTempo, newSpeed, isTempo,
+                                       isCorrection);
   }
 
   static int InvokeTempoToSpeed(float tempo) { return TempoToSpeed(tempo); }
@@ -722,6 +727,31 @@ TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_SpeedChangeWhilePlaying)
       2 * DVD_PLAYSPEED_NORMAL, 4 * DVD_PLAYSPEED_NORMAL, false);
   EXPECT_FALSE(notifications.resumed);
   EXPECT_TRUE(notifications.speedChanged);
+  EXPECT_TRUE(notifications.shownAsSeek);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_TempoIsShown)
+{
+  const auto notifications =
+      CTestVideoPlayer::InvokeGetSpeedChangeNotifications(DVD_PLAYSPEED_NORMAL, 1080, true);
+  EXPECT_TRUE(notifications.speedChanged);
+  EXPECT_TRUE(notifications.shownAsSeek);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_CorrectionIsAnnouncedAndNotShown)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      DVD_PLAYSPEED_NORMAL, 1080, true, false, true);
+  EXPECT_TRUE(notifications.speedChanged);
+  EXPECT_FALSE(notifications.shownAsSeek);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_CorrectionEndsWithoutBeingShown)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      1080, DVD_PLAYSPEED_NORMAL, true, true, true);
+  EXPECT_TRUE(notifications.speedChanged);
+  EXPECT_FALSE(notifications.shownAsSeek);
 }
 
 TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_ReturnToNormalFromFF)
