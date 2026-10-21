@@ -4237,13 +4237,20 @@ void CVideoPlayer::SetSpeed(float speed)
   }
 }
 
+int CVideoPlayer::TempoToSpeed(float tempo)
+{
+  // rounded: a float is not the decimal it stands for, and truncated, 1.017 (1.01699996)
+  // played at 1.016
+  return static_cast<int>(std::lround(tempo * DVD_PLAYSPEED_NORMAL));
+}
+
 void CVideoPlayer::SetTempo(float tempo)
 {
-  // three decimals: the speed's own floor is 1/DVD_PLAYSPEED_NORMAL
-  tempo = floor(tempo * 1000.0f + 0.5f) / 1000.0f;
+  // three decimals, and the tempo read back is the one the player will take
+  const int speed = TempoToSpeed(tempo);
+  tempo = static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL;
   if (m_processInfo->IsTempoAllowed(tempo))
   {
-    int speed = tempo * DVD_PLAYSPEED_NORMAL;
     CDVDMsgPlayerSetSpeed::SpeedParams params = { speed, true };
     m_messenger.Put(std::make_shared<CDVDMsgPlayerSetSpeed>(params));
 
