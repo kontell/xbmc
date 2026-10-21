@@ -72,14 +72,14 @@ public:
   bool IsProcessDone() const { return m_processDone; }
 
   /*!
-   * \brief True unless this thread is idle and safe to retire.
+   * \brief True while this thread must keep the reusable slot.
    *
-   * A claimed thread is spoken for; a parked one with neither a script running
-   * nor one queued is idle. The remaining case is a thread published as the
-   * reusable one before its loop has started, which must not be retired out
-   * from under the script it is about to run.
+   * A claim reserves the thread whatever it is doing, and a thread handed a
+   * script it has not started yet would drop that script if released. A
+   * running script is not lost: after Release() the thread finishes it and
+   * exits, so a newer reusable run can take the slot.
    */
-  bool IsBusy() const
+  bool IsSpokenFor() const
   {
     if (IsClaimed())
       return true;
@@ -92,11 +92,8 @@ public:
     if (!CThread::IsRunning())
       return true;
 
-    // The loop is running: busy while a script is executing or queued. m_executing
-    // spans the whole Execute() call, including the window before the invoker's
-    // first setState() where its own state still reads idle.
     std::unique_lock<std::mutex> lck(m_mutex);
-    return m_executing || m_restart;
+    return m_restart;
   }
 
   virtual void Release();
@@ -118,14 +115,11 @@ private:
 
   //! Guards m_script, m_args, m_restart and m_reusable. Taken while m_critSection is held
   //! (CScriptInvocationManager -> Reuseable()/Release()); never the other way
-  //! round, which is why Process() drops it across Execute().
+  //! round.
   mutable std::mutex m_mutex;
   std::condition_variable m_condition;
   bool m_restart = false;
   bool m_reusable = false;
-  //! True while the Process() loop is inside Execute(), set under m_mutex before
-  //! the lock is dropped for the run and cleared when it is retaken.
-  bool m_executing = false;
   std::atomic<bool> m_claimed{false};
   std::atomic<bool> m_processDone{false};
 };

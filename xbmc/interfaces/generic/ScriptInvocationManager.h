@@ -242,19 +242,24 @@ private:
   using LanguageInvocationHandlerMap = std::map<std::string, ILanguageInvocationHandler*>;
 
   LanguageInvokerThread getInvokerThread(int scriptId) const;
-  void ReleaseLastInvokerIfIdle();
+  //! A new invoker from the handler registered for the script's extension.
+  //! Caller must hold m_critSection.
+  std::shared_ptr<ILanguageInvoker> CreateLanguageInvoker(const std::string& script) const;
   //! Drop a reservation taken by ReserveReusableInvoker: release the claim on
   //! the reusable slot if it still holds the reserved handle. Called by
   //! CReusableInvokerClaim::Release().
   void ReleaseReservedInvoker(int pluginHandle);
-  //! True if the last reusable thread is claimed, has a script queued, or is
-  //! running one. Caller must hold m_critSection.
+  //! True if the last reusable thread is spoken for and keeps the slot (see
+  //! CLanguageInvokerThread::IsSpokenFor()). Caller must hold m_critSection.
   bool LastInvokerOccupied() const;
 
   LanguageInvocationHandlerMap m_invocationHandlers;
   LanguageInvokerThreadMap m_scripts;
   std::shared_ptr<CLanguageInvokerThread> m_lastInvokerThread;
   int m_lastPluginHandle = -1;
+  //! Handles with an outstanding ReserveReusableInvoker claim. An interpreter
+  //! published for one of them is born claimed.
+  std::set<int> m_reservedPluginHandles;
 
   std::map<std::string, int> m_scriptPaths;
   int m_nextId = 0;

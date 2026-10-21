@@ -647,11 +647,25 @@ void CPythonInvoker::onExecutionDone()
 
 void CPythonInvoker::onExecutionFailed()
 {
-  PyEval_SaveThread();
-
   setState(InvokerStateFailed);
   CLog::Log(LOGERROR, "CPythonInvoker({}, {}): abnormally terminating python thread", GetId(),
             m_sourceFile);
+
+  // An exception can leave execute() before it takes the GIL. The interpreter
+  // is then torn down as on a normal exit; with the GIL still held, the GIL is
+  // only released and the interpreter abandoned.
+#if PY_VERSION_HEX >= 0x030d0000
+  const bool gilHeld = PyThreadState_GetUnchecked() != nullptr;
+#else
+  const bool gilHeld = _PyThreadState_UncheckedGet() != nullptr;
+#endif
+  if (!gilHeld)
+  {
+    onExecutionDone();
+    return;
+  }
+
+  PyEval_SaveThread();
 
   std::unique_lock lock(m_critical);
   m_threadState = NULL;
