@@ -117,9 +117,10 @@ public:
   float GetNewSpeed();
   void SetFrameAdvance(bool fa);
   bool IsFrameAdvance();
-  void SetTempo(float tempo);
-  void SetNewTempo(float tempo);
+  void SetTempo(float tempo, bool correction);
+  void SetNewTempo(float tempo, bool correction);
   float GetNewTempo();
+  bool IsTempoCorrection();
   bool IsTempoAllowed(float tempo);
   void SetLevelVQ(int level);
   int GetLevelVQ();
@@ -196,6 +197,7 @@ protected:
   std::atomic_bool m_renderVideoLayer;
   float m_tempo;
   float m_newTempo;
+  bool m_tempoIsCorrection = false;
   float m_speed;
   float m_newSpeed;
   bool m_frameAdvance;

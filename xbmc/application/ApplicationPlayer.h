@@ -44,13 +44,15 @@ public:
   float GetPlayTempo() const;
   //! The tempo as the decimal it was set as, to the thousandth, for clients that compare it
   double GetPlayTempoDecimal() const;
+  // The tempo the GUI shows: the playback's, or normal speed while it is a correction
+  float GetShownTempo() const;
   bool HasPlayer() const;
   bool OpenFile(const CFileItem& item, const CPlayerOptions& options,
                 const CPlayerCoreFactory &factory,
                 const std::string &playerName, IPlayerCallback& callback);
   void OpenNext(const CPlayerCoreFactory &factory);
   void SetPlaySpeed(float speed);
-  void SetTempo(float tempo);
+  void SetTempo(float tempo, bool correction = false);
   void FrameAdvance(int frames);
 
   void FrameMove();
