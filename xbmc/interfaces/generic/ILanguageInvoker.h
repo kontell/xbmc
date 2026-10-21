@@ -71,8 +71,8 @@ protected:
 
 private:
   int m_id = -1;
-  // Read from the manager thread (Reuseable(), GetState()) while the invoker
-  // thread advances it through setState(): atomic so those reads are defined.
+  // Advanced from more than one thread (the invoker's, and the caller's in
+  // stop()) and read from others: atomic, and setState() never moves it back.
   std::atomic<InvokerState> m_state{InvokerStateUninitialized};
   ILanguageInvocationHandler *m_invocationHandler;
 };

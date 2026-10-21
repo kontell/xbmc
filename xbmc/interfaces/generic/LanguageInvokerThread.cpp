@@ -50,6 +50,7 @@ bool CLanguageInvokerThread::Claim()
 
 void CLanguageInvokerThread::ReleaseClaim()
 {
+  // No wait predicate reads m_claimed, so dropping it needs no notify.
   m_claimed = false;
 }
 
@@ -127,7 +128,6 @@ void CLanguageInvokerThread::Process()
   while (keepGoing)
   {
     m_restart = false;
-    m_executing = true;
     const std::string script = m_script;
     const std::vector<std::string> args = m_args;
     // Execute() talks to the GUI and to other invokers. Holding m_mutex
@@ -135,9 +135,22 @@ void CLanguageInvokerThread::Process()
     // waits for this lock, the app thread waits for that job, and this
     // script waits for the GUI.
     lckdl.unlock();
-    m_invoker->Execute(script, args);
+    try
+    {
+      m_invoker->Execute(script, args);
+    }
+    catch (...)
+    {
+      // CThread runs OnExit() after this only for an UncheckedException, so
+      // whatever was thrown, refuse further scripts and clean up here. A later
+      // OnExit() then finds nothing left to tear down.
+      lckdl.lock();
+      m_processDone = true;
+      lckdl.unlock();
+      OnException();
+      throw;
+    }
     lckdl.lock();
-    m_executing = false;
 
     // The state here is this run's own outcome. A concurrent claimer can only
     // Reset() (to Uninitialized) a thread it has claimed, so a terminal failure
@@ -160,16 +173,6 @@ void CLanguageInvokerThread::Process()
 
 void CLanguageInvokerThread::OnExit()
 {
-  // OnExit() always runs, including when Process() left by exception, so this
-  // is where the thread is guaranteed to be marked finished. Without it a
-  // Process() that threw would keep IsProcessDone() false with IsRunning() also
-  // false, which IsBusy() reports as busy for the rest of the session.
-  {
-    std::unique_lock<std::mutex> lck(m_mutex);
-    m_processDone = true;
-    m_condition.notify_one();
-  }
-
   if (m_invoker == NULL)
     return;
 
