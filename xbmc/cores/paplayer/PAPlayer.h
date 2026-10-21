@@ -46,7 +46,7 @@ public:
   void SetVolume(float volume) override;
   void SetDynamicRangeCompression(long drc) override;
   void SetSpeed(float speed = 0) override;
-  void SetTempo(float tempo) override;
+  void SetTempo(float tempo, bool correction) override;
   bool SupportsTempo() const override;
   int GetCacheLevel() const override;
   void SetTotalTime(int64_t time) override;
@@ -133,6 +133,7 @@ private:
   bool m_signalStarted = true;
   std::atomic_int m_playbackSpeed;           /* the playback speed (1 = normal) */
   std::atomic<float> m_tempo{1.0f}; /* the playback tempo (1.0 = normal) */
+  std::atomic_bool m_tempoIsCorrection{false}; /* the GUI shows normal speed through the tempo */
   bool m_isPlaying = false;
   bool m_isPaused = false;
   bool m_isFinished = false; /* if there are no more songs in the queue */
