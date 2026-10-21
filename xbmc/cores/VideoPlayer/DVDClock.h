@@ -10,6 +10,7 @@
 
 #include "threads/CriticalSection.h"
 
+#include <deque>
 #include <memory>
 #include <stdint.h>
 
@@ -36,7 +37,9 @@ public:
   void SetSpeed(int iSpeed);
   /*!
    * \brief Change speed at a later absolute time, for output that is heard later than it is
-   * asked for. A speed change before then, a pause or a reset takes the place of it.
+   * asked for. Changes still to come are taken in turn, each when it is due; one due no later
+   * than a change still to come takes its place, and a speed set now, a pause or a reset
+   * takes the place of them all.
    */
   void SetSpeedAt(int iSpeed, double absolute);
   void SetSpeedAdjust(double adjust);
@@ -66,7 +69,7 @@ protected:
   double SystemToAbsolute(int64_t system) const;
   int64_t AbsoluteToSystem(double absolute) const;
   double SystemToPlaying(int64_t system);
-  //! Take a speed change set with SetSpeedAt() whose time has come. Hold m_critSection.
+  //! Take the speed changes set with SetSpeedAt() whose time has come. Hold m_critSection.
   void CommitDueSpeed(int64_t system);
 
   mutable CCriticalSection m_critSection;
@@ -91,9 +94,12 @@ protected:
 
   double m_maxspeedadjust;
 
-  bool m_speedPending = false;
-  int m_pendingSpeed = 0;
-  int64_t m_pendingSystem = 0;
-  int64_t m_pendingUsed = 0;
+  struct PendingSpeed
+  {
+    int speed;
+    int64_t system; //!< when it is due
+    int64_t used; //!< m_systemUsed at that speed
+  };
+  std::deque<PendingSpeed> m_pendingSpeeds; //!< in the order they are due
   CCriticalSection m_speedsection;
 };
