@@ -9,7 +9,10 @@
 #include "LanguageInvokerThread.h"
 
 #include "ScriptInvocationManager.h"
+#include "commons/Exception.h"
+#include "utils/log.h"
 
+#include <exception>
 #include <utility>
 
 CLanguageInvokerThread::CLanguageInvokerThread(std::shared_ptr<ILanguageInvoker> invoker,
@@ -135,22 +138,36 @@ void CLanguageInvokerThread::Process()
     // waits for this lock, the app thread waits for that job, and this
     // script waits for the GUI.
     lckdl.unlock();
+    bool threw = false;
     try
     {
       m_invoker->Execute(script, args);
     }
+    catch (const XbmcCommons::Exception& e)
+    {
+      e.LogThrowMessage("Execute");
+      threw = true;
+    }
+    catch (const std::exception& e)
+    {
+      CLog::Log(LOGERROR, "{} - exception out of {}: {}", __FUNCTION__, script, e.what());
+      threw = true;
+    }
     catch (...)
     {
-      // CThread runs OnExit() after this only for an UncheckedException, so
-      // whatever was thrown, refuse further scripts and clean up here. A later
-      // OnExit() then finds nothing left to tear down.
-      lckdl.lock();
-      m_processDone = true;
-      lckdl.unlock();
-      OnException();
-      throw;
+      CLog::Log(LOGERROR, "{} - exception out of {}", __FUNCTION__, script);
+      threw = true;
     }
     lckdl.lock();
+    if (threw)
+    {
+      // Retire the thread without unwinding further, so OnExit() runs as on
+      // every other exit; the invoker only has to leave its state fit for it.
+      m_processDone = true;
+      lckdl.unlock();
+      m_invoker->onExecutionFailed();
+      return;
+    }
 
     // The state here is this run's own outcome. A concurrent claimer can only
     // Reset() (to Uninitialized) a thread it has claimed, so a terminal failure
@@ -177,14 +194,5 @@ void CLanguageInvokerThread::OnExit()
     return;
 
   m_invoker->onExecutionDone();
-  m_invocationManager->OnExecutionDone(GetId());
-}
-
-void CLanguageInvokerThread::OnException()
-{
-  if (m_invoker == NULL)
-    return;
-
-  m_invoker->onExecutionFailed();
   m_invocationManager->OnExecutionDone(GetId());
 }

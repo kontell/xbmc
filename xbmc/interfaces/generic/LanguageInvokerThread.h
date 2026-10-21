@@ -105,7 +105,6 @@ protected:
   void OnStartup() override;
   void Process() override;
   void OnExit() override;
-  void OnException() override;
 
 private:
   std::shared_ptr<ILanguageInvoker> m_invoker;
