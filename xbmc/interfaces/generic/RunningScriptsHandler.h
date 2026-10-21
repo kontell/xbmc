@@ -35,30 +35,32 @@ protected:
     if (script == nullptr || addon == nullptr)
       return false;
 
-    // Hold the reusable slot for as long as this handle is live. Destroying the
-    // claim - here or on any early return - is what hands it back, so no exit
-    // path can leave the slot marked in use.
-    auto& manager = CScriptInvocationManager::GetInstance();
-    CReusableInvokerClaim claim = manager.ClaimReusableInvoker(addon->LibPath());
+    // Hold the reusable interpreter for as long as this handle is live: a parked
+    // one claimed here, or the one this run publishes, which ExecuteAsync
+    // attaches to the claim. Destroying the claim - here or on any early return
+    // - is what hands it back, so a concurrent listing cannot claim the
+    // interpreter and reuse this handle before RemoveScriptHandle() below.
+    CReusableInvokerClaim claim =
+        CScriptInvocationManager::GetInstance().ClaimReusableInvoker(addon->LibPath());
 
     // reuse the claimed script handle or get a new one if necessary
     HandleType handle;
-    if (claim.IsValid())
+    if (claim.IsValid() && claim.GetPluginHandle() >= 0)
     {
       handle = claim.GetPluginHandle();
       ReuseScriptHandle(handle, script);
     }
     else
     {
+      // An interpreter left by a handle-less run carries no handle for this
+      // listing's callbacks: let it go and run on a fresh one, which takes the
+      // slot.
+      claim.Release();
       handle = GetNewScriptHandle(script);
-      // A fresh reusable interpreter is published for this handle while the run
-      // executes; reserve the slot so a concurrent listing cannot claim that
-      // interpreter and reuse this handle before RemoveScriptHandle() below.
-      claim = manager.ReserveReusableInvoker(handle);
     }
 
     // run the script
-    auto result = CScriptRunner::RunScript(addon, url, handle, resume);
+    auto result = CScriptRunner::RunScript(addon, url, handle, resume, &claim);
 
     // remove the script handle if necessary
     RemoveScriptHandle(handle);

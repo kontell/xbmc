@@ -22,17 +22,16 @@ class CLanguageInvokerThread;
 class CScriptInvocationManager;
 
 /*!
- * \brief RAII lease on the reusable language invoker slot and its plugin handle.
+ * \brief RAII lease on the reusable language invoker slot.
  *
  * A claim keeps CScriptInvocationManager from handing the reusable invoker to
- * another script or releasing it as idle. It takes one of two forms:
- *  - a reuse claim, which carries a parked interpreter and the plugin handle it
- *    was created for, handed out by ClaimReusableInvoker; and
- *  - a reservation, which carries no interpreter yet but holds the slot for the
- *    handle a fresh run is about to publish, handed out by ReserveReusableInvoker.
- * Either way, dropping the claim - on scope exit, an early return, or an
- * exception - is what puts the slot back in circulation, so a caller cannot
- * leak the leased state by forgetting to clean up.
+ * another script. ClaimReusableInvoker fills it with a parked interpreter and
+ * the plugin handle that interpreter was created for. A claim that holds
+ * nothing is attached by ExecuteAsync to the interpreter the caller's run
+ * publishes, so the run that creates a reusable interpreter holds it the same
+ * way a run that reuses one does. Dropping the claim - on scope exit, an early
+ * return, or an exception - is what puts the interpreter back in circulation,
+ * so a caller cannot leak the leased state by forgetting to clean up.
  */
 class CReusableInvokerClaim
 {
@@ -46,10 +45,10 @@ public:
   CReusableInvokerClaim(const CReusableInvokerClaim&) = delete;
   CReusableInvokerClaim& operator=(const CReusableInvokerClaim&) = delete;
 
-  //! \brief True if a parked interpreter was claimed for reuse.
+  //! \brief True while the claim holds an interpreter.
   bool IsValid() const { return m_thread != nullptr; }
 
-  //! \brief The claimed plugin handle, or -1 if nothing was claimed.
+  //! \brief The plugin handle the held interpreter serves, or -1.
   int GetPluginHandle() const { return m_pluginHandle; }
 
   //! \brief Drop the claim. Safe to call on an empty claim and more than once.
@@ -57,21 +56,13 @@ public:
 
 private:
   friend class CScriptInvocationManager;
-  //! Reuse form: carries the parked interpreter and its handle.
   CReusableInvokerClaim(std::shared_ptr<CLanguageInvokerThread> thread, int pluginHandle)
     : m_thread(std::move(thread)),
       m_pluginHandle(pluginHandle)
   {
   }
-  //! Reservation form: holds the slot for a handle a fresh run will publish.
-  CReusableInvokerClaim(CScriptInvocationManager* manager, int pluginHandle)
-    : m_manager(manager),
-      m_pluginHandle(pluginHandle)
-  {
-  }
 
   std::shared_ptr<CLanguageInvokerThread> m_thread;
-  CScriptInvocationManager* m_manager{nullptr};
   int m_pluginHandle{-1};
 };
 
@@ -92,41 +83,26 @@ public:
    * \brief Returns the invoker to run the given script with.
    *
    * \param script Path to the script to be executed
-   * \param pluginHandle The plugin handle the script will run with, or -1 if it
-   *        is not a plugin invocation. A handle matching an outstanding claim
-   *        (see ClaimReusableInvoker) resolves to that claim's invoker.
-   * \return The invoker to use, or a new one if nothing reusable is available
+   * \param claim (Optional) The caller's claim on the reusable invoker. One that
+   *        holds an interpreter resolves to that interpreter's invoker.
+   * \return The invoker to use, or a new one if nothing was claimed
    */
-  std::shared_ptr<ILanguageInvoker> GetLanguageInvoker(const std::string& script,
-                                                       int pluginHandle = -1);
+  std::shared_ptr<ILanguageInvoker> GetLanguageInvoker(
+      const std::string& script, const CReusableInvokerClaim* claim = nullptr);
 
   /*!
    * \brief Claim the reusable invoker for the given script, if there is one.
    *
    * A valid claim gives the caller exclusive use of a parked interpreter and the
-   * plugin handle it was created for. Hold it for as long as the script runs;
-   * destroying it hands the invoker back. An invalid claim means the caller has
-   * to allocate its own handle and will get a fresh invoker.
+   * plugin handle it was created for. Hold it for as long as the script runs and
+   * pass it to ExecuteAsync; destroying it hands the invoker back. An empty claim
+   * means nothing was parked; passed to ExecuteAsync, it is attached to the
+   * interpreter that run publishes, if it publishes one.
    *
    * \param script Path to the script about to be executed
-   * \return The claim, which is invalid if nothing reusable was available
+   * \return The claim, empty if nothing reusable was available
    */
   CReusableInvokerClaim ClaimReusableInvoker(const std::string& script);
-
-  /*!
-   * \brief Reserve the reusable slot for a handle a fresh run is about to publish.
-   *
-   * Used when ClaimReusableInvoker found nothing to reuse and the caller has
-   * allocated a new plugin handle. The returned claim holds no interpreter yet;
-   * when a reusable run publishes an invoker for this handle it is born claimed,
-   * and destroying this claim - after the caller has removed the handle - is
-   * what releases it. This keeps a concurrent listing from reusing the handle
-   * before the run that created it has finished with it.
-   *
-   * \param pluginHandle The handle the caller is about to run with
-   * \return The reservation claim
-   */
-  CReusableInvokerClaim ReserveReusableInvoker(int pluginHandle);
 
   /*!
    * \brief Executes the given script asynchronously in a separate thread.
@@ -134,13 +110,20 @@ public:
    * \param script Path to the script to be executed
    * \param addon (Optional) Addon to which the script belongs
    * \param arguments (Optional) List of arguments passed to the script
+   * \param reuseable (Optional) Whether the script's interpreter may be parked
+   *        for reuse afterwards
+   * \param pluginHandle (Optional) The plugin handle the script runs with
+   * \param claim (Optional) The caller's claim on the reusable invoker, see
+   *        ClaimReusableInvoker. Without one the call takes its own, held for
+   *        the hand-off.
    * \return -1 if an error occurred, otherwise the ID of the script
    */
   int ExecuteAsync(const std::string& script,
                    const ADDON::AddonPtr& addon = ADDON::AddonPtr(),
                    const std::vector<std::string>& arguments = std::vector<std::string>(),
                    bool reuseable = false,
-                   int pluginHandle = -1);
+                   int pluginHandle = -1,
+                   CReusableInvokerClaim* claim = nullptr);
   /*!
   * \brief Executes the given script asynchronously in a separate thread.
   *
@@ -148,6 +131,11 @@ public:
   * \param languageInvoker Language invoker to be used to execute the script
   * \param addon (Optional) Addon to which the script belongs
   * \param arguments (Optional) List of arguments passed to the script
+  * \param reuseable (Optional) Whether the script's interpreter may be parked
+  *        for reuse afterwards
+  * \param pluginHandle (Optional) The plugin handle the script runs with
+  * \param claim (Optional) The claim languageInvoker was resolved from, if any.
+  *        An empty claim is attached to the interpreter published for this run.
   * \return -1 if an error occurred, otherwise the ID of the script
   */
   int ExecuteAsync(const std::string& script,
@@ -155,7 +143,8 @@ public:
                    const ADDON::AddonPtr& addon = ADDON::AddonPtr(),
                    const std::vector<std::string>& arguments = std::vector<std::string>(),
                    bool reuseable = false,
-                   int pluginHandle = -1);
+                   int pluginHandle = -1,
+                   CReusableInvokerClaim* claim = nullptr);
 
   /*!
   * \brief Executes the given script synchronously.
@@ -193,6 +182,7 @@ public:
   * \param arguments (Optional) List of arguments passed to the script
   * \param timeout (Optional) Timeout (in milliseconds) for the script's execution
   * \param waitShutdown (Optional) Whether to wait when having to forcefully stop the script's execution or not.
+  * \param claim (Optional) The claim languageInvoker was resolved from, if any
   * \return -1 if an error occurred, 0 if the script terminated or ETIMEDOUT if the given timeout expired
   */
   int ExecuteSync(const std::string& script,
@@ -200,7 +190,8 @@ public:
                   const ADDON::AddonPtr& addon = ADDON::AddonPtr(),
                   const std::vector<std::string>& arguments = std::vector<std::string>(),
                   uint32_t timeoutMs = 0,
-                  bool waitShutdown = false);
+                  bool waitShutdown = false,
+                  CReusableInvokerClaim* claim = nullptr);
   bool Stop(int scriptId, bool wait = false);
   bool Stop(const std::string &scriptPath, bool wait = false);
 
@@ -222,7 +213,6 @@ public:
 
 protected:
   friend class CLanguageInvokerThread;
-  friend class CReusableInvokerClaim;
 
   void OnExecutionDone(int scriptId);
 
@@ -245,10 +235,6 @@ private:
   //! A new invoker from the handler registered for the script's extension.
   //! Caller must hold m_critSection.
   std::shared_ptr<ILanguageInvoker> CreateLanguageInvoker(const std::string& script) const;
-  //! Drop a reservation taken by ReserveReusableInvoker: release the claim on
-  //! the reusable slot if it still holds the reserved handle. Called by
-  //! CReusableInvokerClaim::Release().
-  void ReleaseReservedInvoker(int pluginHandle);
   //! True if the last reusable thread is spoken for and keeps the slot (see
   //! CLanguageInvokerThread::IsSpokenFor()). Caller must hold m_critSection.
   bool LastInvokerOccupied() const;
@@ -257,9 +243,6 @@ private:
   LanguageInvokerThreadMap m_scripts;
   std::shared_ptr<CLanguageInvokerThread> m_lastInvokerThread;
   int m_lastPluginHandle = -1;
-  //! Handles with an outstanding ReserveReusableInvoker claim. An interpreter
-  //! published for one of them is born claimed.
-  std::set<int> m_reservedPluginHandles;
 
   std::map<std::string, int> m_scriptPaths;
   int m_nextId = 0;
