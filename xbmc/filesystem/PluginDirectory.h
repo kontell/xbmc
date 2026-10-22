@@ -23,6 +23,14 @@ enum class SortMethod;
 namespace XFILE
 {
 
+//! What a plugin answered about an item of its library
+enum class PluginItemExists
+{
+  YES,
+  NO,
+  UNKNOWN, //!< the plugin could not be asked, or did not answer
+};
+
 class CPluginDirectory : public IDirectory, public CRunningScriptsHandler<CPluginDirectory>
 {
 public:
@@ -55,9 +63,10 @@ public:
   Applies only to plugins that support media library scanning.
   \param content content type - movies, tvshows, musicvideos.
   \param strPath full plugin url.
-  \return true if the plugin supports scanning and specified url exists, false otherwise.
+  \return UNKNOWN if the plugin is not enabled, does not support scanning at the url, or ends
+  without answering.
   */
-  static bool CheckExists(const std::string& content, const std::string& strPath);
+  static PluginItemExists CheckExists(const std::string& content, const std::string& strPath);
 
   // callbacks from python
   static bool AddItem(int handle, const CFileItem *item, int totalItems);
@@ -87,6 +96,7 @@ private:
 
   std::atomic<bool> m_cancelled;
   bool m_success = false; // set by script in EndOfDirectory
+  bool m_answered = false; // set by script in EndOfDirectory or SetResolvedUrl
   int m_totalItems = 0; // set by script in AddDirectoryItem
 };
 }
