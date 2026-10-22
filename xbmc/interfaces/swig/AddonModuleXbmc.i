@@ -77,6 +77,8 @@ namespace XBMCAddon { namespace xbmc {
 %template() XBMCAddon::Tuple<float, int>;
 %template() XBMCAddon::Tuple<int, std::string, std::string>;
 %template() std::vector<XBMCAddon::Tuple<int, std::string, std::string> >;
+%template() XBMCAddon::Tuple<double, double, std::string>;
+%template() std::vector<XBMCAddon::Tuple<double, double, std::string> >;
 %template() XBMCAddon::Alternative<std::string, XBMCAddon::xbmc::PlayList const*>;
 %template() std::map<std::string, std::string, std::less<> >;
 %template() std::map<std::string, XBMCAddon::Tuple<float, int> >;
