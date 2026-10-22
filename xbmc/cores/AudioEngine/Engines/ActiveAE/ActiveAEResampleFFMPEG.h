@@ -47,6 +47,7 @@ public:
 protected:
   bool m_loaded;
   bool m_doesResample;
+  double m_compensationLeft = 0.0; //!< the part of a sample the last compensation left out
   uint64_t m_src_chan_layout, m_dst_chan_layout;
   int m_src_rate, m_dst_rate;
   int m_src_channels, m_dst_channels;
