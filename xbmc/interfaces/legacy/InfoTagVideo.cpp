@@ -606,6 +606,18 @@ namespace XBMCAddon
       setVideoAssetTitleRaw(infoTag, videoAssetTitle);
     }
 
+    void InfoTagVideo::setHasVideoVersions(bool hasVideoVersions)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      setHasVideoVersionsRaw(infoTag, hasVideoVersions);
+    }
+
+    void InfoTagVideo::setIsDefaultVideoVersion(bool isDefaultVideoVersion)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      setIsDefaultVideoVersionRaw(infoTag, isDefaultVideoVersion);
+    }
+
     void InfoTagVideo::setProductionCode(const String& productionCode)
     {
       XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
@@ -983,6 +995,17 @@ namespace XBMCAddon
     void InfoTagVideo::setVideoAssetTitleRaw(CVideoInfoTag* infoTag, const String& videoAssetTitle)
     {
       infoTag->GetAssetInfo().SetTitle(videoAssetTitle);
+    }
+
+    void InfoTagVideo::setHasVideoVersionsRaw(CVideoInfoTag* infoTag, bool hasVideoVersions)
+    {
+      infoTag->SetHasVideoVersions(hasVideoVersions);
+    }
+
+    void InfoTagVideo::setIsDefaultVideoVersionRaw(CVideoInfoTag* infoTag,
+                                                   bool isDefaultVideoVersion)
+    {
+      infoTag->SetIsDefaultVideoVersion(isDefaultVideoVersion);
     }
 
     void InfoTagVideo::setProductionCodeRaw(CVideoInfoTag* infoTag, const String& productionCode)
