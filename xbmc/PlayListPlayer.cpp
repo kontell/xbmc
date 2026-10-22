@@ -857,6 +857,14 @@ void CPlayListPlayer::Remove(Id playlistId, int iPosition)
   CServiceBroker::GetGUI()->GetWindowManager().SendMessage(msg);
 }
 
+void CPlayListPlayer::LoadHistory(const std::string& folder)
+{
+  m_history->ReInit(folder);
+  // the file can hold more than the profile keeps now
+  m_history->Trim(CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+      CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE));
+}
+
 void CPlayListPlayer::Clear()
 {
   RecordMusicPlaylist();

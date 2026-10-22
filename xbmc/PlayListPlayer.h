@@ -175,6 +175,9 @@ public:
   /*! \brief The music playlists that were replaced, interrupted or stopped. */
   CPlayListHistory& GetHistory() { return *m_history; }
 
+  /*! \brief Load the history kept in a profile folder, as many playlists as the profile keeps. */
+  void LoadHistory(const std::string& folder);
+
   /*! \brief Save the music playlist to the history if it is being played.
    Called where this player is about to forget it, and by the application before
    it closes the player, whose time is gone once it has.
