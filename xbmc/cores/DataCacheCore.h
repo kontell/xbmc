@@ -170,9 +170,18 @@ public:
   */
   int64_t GetSeekOffSet() const;
 
-  void SetSpeed(float tempo, float speed);
+  /*!
+   * @brief Sets the playback's tempo and speed
+   * @param tempoIsCorrection true while the tempo corrects the position, as a sync client's
+   * does, and is not one the viewer chose
+   */
+  void SetSpeed(float tempo, float speed, bool tempoIsCorrection = false);
   float GetSpeed();
   float GetTempo();
+  /*!
+   * @brief The tempo the GUI shows: the playback's, or normal speed while it is a correction
+   */
+  float GetShownTempo();
   void SetFrameAdvance(bool fa);
   bool IsFrameAdvance();
   bool IsPlayerStateChanged();
@@ -375,6 +384,7 @@ protected:
     bool m_renderGuiLayer{false};
     bool m_renderVideoLayer{false};
     float m_tempo{1.0f};
+    bool m_tempoIsCorrection{false};
     float m_speed{1.0f};
     bool m_frameAdvance{false};
     /*! Time point of the last seek operation */

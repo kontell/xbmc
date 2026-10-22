@@ -224,7 +224,7 @@ bool CPlayerGUIInfo::GetLabel(std::string& value,
     {
       float speed = m_appPlayer->GetPlaySpeed();
       if (speed == 1.0f)
-        speed = m_appPlayer->GetPlayTempo();
+        speed = m_appPlayer->GetShownTempo();
       value = StringUtils::Format("{:.2f}", speed);
       return true;
     }
@@ -248,7 +248,8 @@ bool CPlayerGUIInfo::GetLabel(std::string& value,
       CDateTime time(CDateTime::GetCurrentDateTime());
       int playTimeRemaining = GetPlayTimeRemaining();
       float speed = m_appPlayer->GetPlaySpeed();
-      float tempo = m_appPlayer->GetPlayTempo();
+      // a correction is over in seconds: the finish time keeps to normal speed through it
+      float tempo = m_appPlayer->GetShownTempo();
       if (speed == 1.0f)
         playTimeRemaining /= tempo;
       time += CDateTimeSpan(0, 0, 0, playTimeRemaining);
@@ -557,7 +558,7 @@ bool CPlayerGUIInfo::GetBool(bool& value,
       value = m_appPlayer->SupportsTempo();
       return true;
     case PLAYER_IS_TEMPO:
-      value = (m_appPlayer->GetPlayTempo() != 1.0f && m_appPlayer->GetPlaySpeed() == 1.0f);
+      value = (m_appPlayer->GetShownTempo() != 1.0f && m_appPlayer->GetPlaySpeed() == 1.0f);
       return true;
     case PLAYER_CACHING:
       value = m_appPlayer->IsCaching();

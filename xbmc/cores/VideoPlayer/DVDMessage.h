@@ -244,6 +244,8 @@ public:
   {
     int m_speed;
     bool m_isTempo;
+    // a tempo that corrects the position, which the GUI does not show
+    bool m_isCorrection{false};
   };
 
   explicit CDVDMsgPlayerSetSpeed(SpeedParams params)
@@ -254,6 +256,7 @@ public:
 
   int GetSpeed() const { return m_params.m_speed; }
   bool IsTempo() const { return m_params.m_isTempo; }
+  bool IsCorrection() const { return m_params.m_isCorrection; }
 
 private:
 
