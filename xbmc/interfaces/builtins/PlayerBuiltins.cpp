@@ -20,15 +20,18 @@
 #include "application/Application.h"
 #include "application/ApplicationPlayer.h"
 #include "application/ApplicationPowerHandling.h"
+#include "dialogs/GUIDialogSelect.h"
 #include "guilib/GUIAudioManager.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
+#include "messaging/helpers/DialogOKHelper.h"
 #include "music/MusicFileItemClassify.h"
 #include "music/MusicUtils.h"
 #include "playlists/PlayList.h"
 #include "playlists/PlayListFileItemClassify.h"
+#include "playlists/PlayListHistory.h"
 #include "pvr/PVRManager.h"
 #include "pvr/channels/PVRChannel.h"
 #include "pvr/guilib/PVRGUIActionsChannels.h"
@@ -37,10 +40,12 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "storage/MediaManager.h"
+#include "utils/ArtTypes.h"
 #include "utils/ItemProperties.h"
 #include "utils/PlayerUtils.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
+#include "utils/Variant.h"
 #include "utils/log.h"
 #include "video/PlayerController.h"
 #include "video/VideoFileItemClassify.h"
@@ -63,6 +68,59 @@ static int ClearPlaylist(const std::vector<std::string>& params)
 {
   CServiceBroker::GetPlaylistPlayer().Clear();
 
+  return 0;
+}
+
+/*! \brief Put a music playlist from the history back and play it from where it was left.
+ *  \param params The parameters.
+ *  \details params[0] = "latest" to restore the newest playlist without asking (optional).
+ */
+static int RestorePlaylist(const std::vector<std::string>& params)
+{
+  PLAYLIST::CPlayListPlayer& playlistPlayer = CServiceBroker::GetPlaylistPlayer();
+  // A copy: the history can grow while the dialog is open.
+  const std::vector<PLAYLIST::CPlayListHistoryEntry> entries =
+      playlistPlayer.GetHistory().Entries();
+  const bool latest = !params.empty() && StringUtils::EqualsNoCase(params[0], "latest");
+  if (entries.empty())
+  {
+    // The dialog form says why nothing is listed; 'latest', which runs at startup, stays silent.
+    if (!latest)
+      MESSAGING::HELPERS::ShowOKDialogText(CVariant{40807}, CVariant{40808});
+    return 0;
+  }
+
+  size_t index = 0;
+  if (!latest)
+  {
+    CGUIDialogSelect* dialog =
+        CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(
+            WINDOW_DIALOG_SELECT);
+    if (!dialog)
+      return 0;
+
+    CFileItemList items;
+    for (const PLAYLIST::CPlayListHistoryEntry& entry : entries)
+    {
+      auto item = std::make_shared<CFileItem>(entry.Title());
+      item->SetLabel2(entry.Detail());
+      const std::string thumb = entry.Thumb();
+      if (!thumb.empty())
+        item->SetArt(ART::TYPE::THUMB, thumb);
+      items.Add(std::move(item));
+    }
+
+    dialog->Reset();
+    dialog->SetHeading(CVariant{40807});
+    dialog->SetUseDetails(true);
+    dialog->SetItems(items);
+    dialog->Open();
+    if (dialog->GetSelectedItem() < 0)
+      return 0;
+    index = static_cast<size_t>(dialog->GetSelectedItem());
+  }
+
+  playlistPlayer.RestorePlaylist(entries[index], false, false);
   return 0;
 }
 
@@ -860,6 +918,14 @@ static int SubtitleShiftDown(const std::vector<std::string>& params)
 ///     @param[in]                       (ignored)
 ///   }
 ///   \table_row2_l{
+///     <b>`Playlist.Restore([latest])`</b>
+///     ,
+///     Put a music playlist that was replaced\, interrupted or stopped back and play it from
+///     where it was left. Asks which one\, unless 'latest' is given.
+///     @param[in] latest                Restore the newest playlist without asking\, or do
+///                                      nothing when there is none (optional).
+///   }
+///   \table_row2_l{
 ///     <b>`Playlist.PlayOffset(positionType[\,position])`</b>
 ///     ,
 ///     Start playing from a particular offset in the playlist
@@ -939,6 +1005,7 @@ CBuiltins::CommandMap CPlayerBuiltins::GetOperations() const
            {"playplaylist",        {"Plays a playlist on the Blu-ray in the disc drive.", 0, PlayPlaylist}},
            {"playlist.clear",      {"Clear the current playlist", 0, ClearPlaylist}},
            {"playlist.playoffset", {"Start playing from a particular offset in the playlist", 1, PlayOffset}},
+           {"playlist.restore",    {"Restore a music playlist that was replaced, interrupted or stopped", 0, RestorePlaylist}},
            {"playercontrol",       {"Control the music or video player", 1, PlayerControl}},
            {"playmedia",           {"Play the specified media file (or playlist)", 1, PlayMedia, PlayMediaEx}},
            {"queuemedia",          {"Queue the specified media in video or music playlist", 1, QueueMedia, QueueMediaEx}},
