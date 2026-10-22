@@ -263,8 +263,16 @@ float CEngineStats::GetCacheTime(CActiveAEStream *stream)
   return delay;
 }
 
-float CEngineStats::GetCacheTotal()
+float CEngineStats::GetCacheTotal(CActiveAEStream* stream)
 {
+  std::unique_lock lock(m_lock);
+  // A stream's input buffers hold MAX_CACHE_LEVEL of its own time, which is all a paused stream
+  // takes, and which plays in less at a ratio below 1.
+  for (const auto& str : m_streamStats)
+  {
+    if (str.m_streamId == stream->m_id)
+      return MAX_CACHE_LEVEL * static_cast<float>(std::min(1.0, str.m_resampleRatio));
+  }
   return MAX_CACHE_LEVEL;
 }
 
@@ -821,6 +829,9 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
             }
             par->stream->m_processingBuffers->SetRR(par->parameter.double_par,
                                                      m_settings.atempoThreshold);
+            // The stats read the stream's cache at its ratio, and a paused stream's would keep
+            // the old one until it plays.
+            m_stats.UpdateStream(par->stream);
           }
           // Remembered, so that it survives a flush and a re-configuration of the
           // buffers, and so that SyncStream() can hold it while the servo is off.
