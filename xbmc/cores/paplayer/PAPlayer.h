@@ -16,6 +16,7 @@
 #include "threads/Thread.h"
 
 #include <atomic>
+#include <chrono>
 #include <list>
 #include <mutex>
 #include <vector>
@@ -83,6 +84,14 @@ protected:
   float GetPercentage();
 
 private:
+  // What the engine has mixed of a stream is heard at the tempo it was mixed at
+  struct MixedTempo
+  {
+    double ratio = 1.0; // the resample ratio the engine was last seen mixing at
+    double tempoBefore = 1.0; // the tempo it mixed at before that ratio
+    std::chrono::steady_clock::time_point since; // when it took that ratio
+  };
+
   struct StreamInfo
   {
     std::unique_ptr<CFileItem> m_fileItem;
@@ -114,6 +123,7 @@ private:
     StreamInfo* m_slavedTo = nullptr; /* the stream that owns it while slaved, and resumes it */
     bool m_waitOnDrain;                  /* wait for stream being drained in AE */
     float m_tempo = 1.0f; /* the tempo it plays at: a stream kept for a cross-fade keeps its own */
+    MixedTempo m_mixed;
   };
 
   typedef std::list<StreamInfo*> StreamList;
@@ -162,9 +172,11 @@ private:
   /*!
    * \brief Seconds of content queued in si's IAEStream and not heard yet.
    *
-   * IAEStream::GetDelay() is in output seconds; at a tempo they hold tempo times as much.
+   * IAEStream::GetDelay() is in output seconds, which at a tempo hold tempo times as much: the
+   * stream's own cache at the ratio the engine now applies to it, and what the engine has already
+   * mixed at the ratio it was mixed at.
    */
-  double QueuedSeconds(const StreamInfo& si) const;
+  double QueuedSeconds(StreamInfo& si) const;
 
   /*!
    * \brief Have si's IAEStream play at the tempo in force. A bitstream is left as it is.
