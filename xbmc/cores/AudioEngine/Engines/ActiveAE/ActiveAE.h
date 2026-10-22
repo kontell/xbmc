@@ -196,7 +196,7 @@ public:
   void GetDelay(AEDelayStatus& status, CActiveAEStream *stream);
   void GetSyncInfo(CAESyncInfo& info, CActiveAEStream *stream);
   float GetCacheTime(CActiveAEStream *stream);
-  float GetCacheTotal();
+  float GetCacheTotal(CActiveAEStream* stream);
   float GetMaxDelay() const;
   float GetWaterLevel();
   int GetBufferedSamples();
@@ -223,6 +223,7 @@ protected:
   {
     unsigned int m_streamId;
     double m_bufferedTime;
+    double m_rateTime;
     double m_resampleRatio;
     double m_syncError;
     unsigned int m_errorTime;
@@ -296,7 +297,7 @@ protected:
   void GetDelay(AEDelayStatus& status, CActiveAEStream *stream) { m_stats.GetDelay(status, stream); }
   void GetSyncInfo(CAESyncInfo& info, CActiveAEStream *stream) { m_stats.GetSyncInfo(info, stream); }
   float GetCacheTime(CActiveAEStream *stream) { return m_stats.GetCacheTime(stream); }
-  float GetCacheTotal() { return m_stats.GetCacheTotal(); }
+  float GetCacheTotal(CActiveAEStream* stream) { return m_stats.GetCacheTotal(stream); }
   float GetMaxDelay() { return m_stats.GetMaxDelay(); }
   void FlushStream(CActiveAEStream *stream);
   void PauseStream(CActiveAEStream *stream, bool pause);

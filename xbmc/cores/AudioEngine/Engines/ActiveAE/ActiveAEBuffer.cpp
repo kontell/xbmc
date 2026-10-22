@@ -13,6 +13,7 @@
 #include "cores/AudioEngine/AEResampleFactory.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
 
+#include <algorithm>
 #include <memory>
 
 using namespace ActiveAE;
@@ -665,15 +666,25 @@ void CActiveAEBufferPoolAtempo::Flush()
 
 float CActiveAEBufferPoolAtempo::GetDelay()
 {
-  float delay = 0;
-
-  if (m_procSample)
-    delay += (float)m_procSample->pkt->nb_samples / m_procSample->pkt->config.sample_rate;
+  // in the time of the input
+  float delay = GetRateDelay() * m_tempo;
 
   for (auto &buf : m_inputSamples)
   {
     delay += (float)buf->pkt->nb_samples / buf->pkt->config.sample_rate;
   }
+
+  return delay;
+}
+
+float CActiveAEBufferPoolAtempo::GetRateDelay()
+{
+  // In output seconds, what has taken the tempo: the output, and what the filter holds, which it
+  // plays out at that tempo before it takes another.
+  float delay = 0;
+
+  if (m_procSample)
+    delay += (float)m_procSample->pkt->nb_samples / m_procSample->pkt->config.sample_rate;
 
   for (auto &buf : m_outputSamples)
   {
@@ -683,7 +694,7 @@ float CActiveAEBufferPoolAtempo::GetDelay()
   if (m_pTempoFilter->IsActive())
   {
     int samples = m_pTempoFilter->GetBufferedSamples();
-    delay += (float)samples / m_format.m_sampleRate;
+    delay += (float)samples / m_format.m_sampleRate / m_tempo;
   }
 
   return delay;
@@ -691,10 +702,8 @@ float CActiveAEBufferPoolAtempo::GetDelay()
 
 void CActiveAEBufferPoolAtempo::SetTempo(float tempo)
 {
-  if (tempo > 2.0f)
-    tempo = 2.0;
-  else if (tempo < 0.5f)
-    tempo = 0.5;
+  // the range FFmpeg's atempo filter accepts
+  tempo = std::clamp(tempo, 0.5f, 100.0f);
 
   if (tempo != m_tempo)
     m_changeFilter = true;
