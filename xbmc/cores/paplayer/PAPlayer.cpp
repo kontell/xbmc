@@ -1048,12 +1048,28 @@ void PAPlayer::SetStreamTempo(StreamInfo* si) const
     si->m_stream->SetResampleRatio(1.0 / static_cast<double>(si->m_tempo));
 }
 
-double PAPlayer::QueuedSeconds(const StreamInfo& si) const
+double PAPlayer::QueuedSeconds(StreamInfo& si) const
 {
   if (!si.m_stream)
     return 0.0;
 
-  return si.m_stream->GetDelay() * static_cast<double>(si.m_tempo);
+  const CAESyncInfo info{si.m_stream->GetSyncInfo()};
+  const double cache{si.m_stream->GetCacheTime()};
+  const auto now{std::chrono::steady_clock::now()};
+  if (info.rr > 0.0 && info.rr != si.m_mixed.ratio)
+  {
+    si.m_mixed.tempoBefore = 1.0 / si.m_mixed.ratio;
+    si.m_mixed.ratio = info.rr;
+    si.m_mixed.since = now;
+  }
+
+  // The engine mixes as fast as it plays, so what it has mixed since it took the ratio is the
+  // newest of what it holds
+  const double mixed{std::max(0.0, info.delay - cache)};
+  const double mixedAtRatio{
+      std::min(mixed, std::chrono::duration<double>(now - si.m_mixed.since).count())};
+  return (cache + mixedAtRatio) / si.m_mixed.ratio +
+         (mixed - mixedAtRatio) * si.m_mixed.tempoBefore;
 }
 
 void PAPlayer::SetSpeed(float speed)
@@ -1361,6 +1377,7 @@ inline PAPlayer::RecreateResult PAPlayer::RecreateStream(StreamInfo* si,
     CLog::Log(LOGDEBUG, "PAPlayer::RecreateStream - Failed to get IAEStream");
     return RecreateResult::FAILED;
   }
+  si->m_mixed = {};
 
   // A stream that is already playing has finished fading in
   si->m_stream->SetVolume(wasStarted ? 1.0f : si->m_volume);
