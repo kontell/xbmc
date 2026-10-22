@@ -29,6 +29,7 @@
 #include "video/VideoFileItemClassify.h"
 #include "windowing/WinSystem.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <mutex>
 #include <stdexcept>
@@ -1045,6 +1046,12 @@ float CApplicationPlayer::GetPlayTempo() const
   }
   else
     return 0;
+}
+
+double CApplicationPlayer::GetPlayTempoDecimal() const
+{
+  // a float is not the decimal it stands for: 1.03 is 1.0299999713897705
+  return std::round(static_cast<double>(GetPlayTempo()) * 1000.0) / 1000.0;
 }
 
 bool CApplicationPlayer::SupportsTempo() const

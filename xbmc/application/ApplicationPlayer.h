@@ -42,6 +42,8 @@ public:
   std::string GetCurrentPlayer() const;
   float GetPlaySpeed() const;
   float GetPlayTempo() const;
+  //! The tempo as the decimal it was set as, to the thousandth, for clients that compare it
+  double GetPlayTempoDecimal() const;
   bool HasPlayer() const;
   bool OpenFile(const CFileItem& item, const CPlayerOptions& options,
                 const CPlayerCoreFactory &factory,
