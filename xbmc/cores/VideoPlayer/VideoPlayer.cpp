@@ -3112,6 +3112,9 @@ void CVideoPlayer::HandleMessages()
 
       m_SelectionStreams.Clear(StreamType::NONE, STREAM_SOURCE_NONE);
 
+      // a speed asked of the file being closed does not carry over: the next starts at normal speed
+      m_messenger.Flush(CDVDMsg::PLAYER_SETSPEED);
+
       Prepare();
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_SEEK) &&
@@ -4219,7 +4222,7 @@ void CVideoPlayer::SetSpeed(float speed)
 
   float currentSpeed = m_processInfo->GetNewSpeed();
   m_processInfo->SetNewSpeed(speed);
-  if (iSpeed != currentSpeed)
+  if (speed != currentSpeed)
   {
     if (iSpeed == DVD_PLAYSPEED_NORMAL)
       m_callback.OnPlayBackResumed();
