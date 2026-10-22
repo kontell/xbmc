@@ -70,7 +70,7 @@ bool is_network_filesystem(const std::string& path)
   if (statfs(CSpecialProtocol::TranslatePath(path).c_str(), &fsInfo) != 0)
     return false;
 
-  // The magic numbers of linux/magic.h, written out because older headers lack some
+  // The kernel's and Lustre's magic numbers, written out because older headers lack some
   switch (static_cast<uint32_t>(fsInfo.f_type))
   {
     case 0x6969u: // NFS
@@ -78,8 +78,13 @@ bool is_network_filesystem(const std::string& path)
     case 0xFF534D42u: // CIFS
     case 0xFE534D42u: // SMB2
     case 0x01021997u: // 9P
-    case 0x5346414Fu: // AFS
+    case 0x5346414Fu: // OpenAFS
+    case 0x6B414653u: // kAFS
     case 0x73757245u: // Coda
+    case 0x00C36400u: // Ceph
+    case 0x01161970u: // GFS2
+    case 0x7461636Fu: // OCFS2
+    case 0x0BD00BD0u: // Lustre
       return true;
     default:
       return false;
