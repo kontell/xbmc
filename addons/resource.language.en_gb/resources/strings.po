@@ -26272,3 +26272,15 @@ msgstr ""
 msgctxt "#40821"
 msgid "Restore the last music playlist"
 msgstr ""
+
+#. Setting "musicplayer.restoreplaylistaftervideo"
+#: system/settings/settings.xml
+msgctxt "#40822"
+msgid "Restore after a video"
+msgstr ""
+
+#. Description of setting with label #40822 "Restore after a video"
+#: system/settings/settings.xml
+msgctxt "#40823"
+msgid "When a video takes over from a music playlist, put the playlist back once the video is stopped or ends."
+msgstr ""

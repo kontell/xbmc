@@ -315,6 +315,8 @@ public:
       "musicplayer.crossfadealbumtracks";
   static constexpr auto SETTING_MUSICPLAYER_VISUALISATION = "musicplayer.visualisation";
   static constexpr auto SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE = "musicplayer.playlisthistorysize";
+  static constexpr auto SETTING_MUSICPLAYER_RESTOREPLAYLISTAFTERVIDEO =
+      "musicplayer.restoreplaylistaftervideo";
   static constexpr auto SETTING_MUSICPLAYER_RESTOREPLAYLISTPAUSED =
       "musicplayer.restoreplaylistpaused";
   static constexpr auto SETTING_MUSICPLAYER_RESTOREPLAYLISTFROMSTART =

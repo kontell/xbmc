@@ -1647,6 +1647,7 @@ bool CApplication::Stop(int exitCode)
   bool success = true;
 
   CLog::Log(LOGINFO, "Stopping player");
+  CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
   CServiceBroker::GetPlaylistPlayer().RecordMusicPlaylist();
   const auto appPlayer = GetComponent<CApplicationPlayer>();
   appPlayer->ClosePlayer();
@@ -2023,6 +2024,7 @@ void CApplication::PlaybackCleanup()
   {
     stackHelper->Clear();
     appPlayer->ResetPlayer();
+    CServiceBroker::GetPlaylistPlayer().RestoreReplacedPlaylist();
   }
 
   if (CServiceBroker::GetAppParams()->IsTestMode())

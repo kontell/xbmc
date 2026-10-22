@@ -178,8 +178,19 @@ public:
    Called where this player is about to forget it, and by the application before
    it closes the player, whose time is gone once it has.
    \param playedThrough Whether the last item finished rather than being stopped.
+   \return Whether the history holds the playlist.
    */
-  void RecordMusicPlaylist(bool playedThrough = false);
+  bool RecordMusicPlaylist(bool playedThrough = false);
+
+  /*! \brief Put back the music playlist that a video took over, when the settings ask for it.
+   Called by the application once nothing is playing.
+   */
+  void RestoreReplacedPlaylist();
+
+  /*! \brief Restore nothing when playback ends, as when it is stopped for quitting, sleeping or
+   logging off.
+   */
+  void ForgetReplacedPlaylist();
 
   /*! \brief Replace the music playlist with one from the history and play it
    from where it was left.
@@ -208,6 +219,11 @@ protected:
                                const std::string& strProperty,
                                const CVariant& value);
 
+  /*! \brief Record the music playlist where something else is about to replace it, and keep it
+   for RestoreReplacedPlaylist() if it was still playing.
+   */
+  void RecordReplacedMusicPlaylist();
+
   bool m_bPlayedFirstFile;
   bool m_bPlaybackStarted;
   int m_iFailedSongs;
@@ -217,6 +233,7 @@ protected:
   bool m_musicPlaylistLive{false};
   bool m_pauseWhenStarted{false};
   std::unique_ptr<CPlayListHistory> m_history;
+  std::unique_ptr<CPlayListHistoryEntry> m_replacedPlaylist;
   CPlayList* m_PlaylistMusic;
   CPlayList* m_PlaylistVideo;
   CPlayList* m_PlaylistEmpty;
