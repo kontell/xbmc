@@ -44,6 +44,24 @@ TEST(TestDataCacheCore, PlayTimeMovesOnAtTheTempo)
   EXPECT_LE(time, 11200);
 }
 
+TEST(TestDataCacheCore, PlayTimeMovesOnAtTheTrickplaySpeedWithATempoKept)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(1.5f, 2.0f);
+  const auto stored = std::chrono::steady_clock::now();
+  cache.SetPlayTimes(0, 10000, 0, 60000);
+
+  std::this_thread::sleep_for(150ms);
+
+  const int64_t moved = cache.GetPlayTime() - 10000;
+  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - stored)
+                           .count();
+  // at the speed, not at the speed times the tempo
+  EXPECT_GE(moved, 290);
+  EXPECT_LE(moved, 2 * elapsed + 2);
+}
+
 TEST(TestDataCacheCore, PlayTimeHoldsWhilePaused)
 {
   CDataCacheCore cache;

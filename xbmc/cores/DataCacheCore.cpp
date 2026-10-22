@@ -17,6 +17,16 @@
 #include <mutex>
 #include <utility>
 
+namespace
+{
+// The rate the play time moves at, by the player's rule: a tempo plays at normal speed, and
+// trickplay runs at its speed alone while a tempo is kept for the return to normal speed
+double PlayRate(float tempo, float speed)
+{
+  return static_cast<double>(speed == 1.0f ? tempo : speed);
+}
+} // namespace
+
 CDataCacheCore::CDataCacheCore()
   : m_playerVideoInfo{}, m_playerAudioInfo{}, m_contentInfo{}, m_stateInfo{}
 {
@@ -489,7 +499,7 @@ void CDataCacheCore::SetSpeed(float tempo, float speed)
 
   // Bank the time played at the old rate, so the new rate moves the play time on from now
   // rather than from the last store
-  if (tempo * speed != m_stateInfo.m_tempo * m_stateInfo.m_speed &&
+  if (PlayRate(tempo, speed) != PlayRate(m_stateInfo.m_tempo, m_stateInfo.m_speed) &&
       m_timeInfo.m_timeStamp != std::chrono::steady_clock::time_point{})
   {
     m_timeInfo.m_time = CurrentPlayTime();
@@ -595,8 +605,7 @@ int64_t CDataCacheCore::CurrentPlayTime() const
   if (m_timeInfo.m_timeStamp == std::chrono::steady_clock::time_point{})
     return m_timeInfo.m_time;
 
-  const double rate =
-      static_cast<double>(m_stateInfo.m_speed) * static_cast<double>(m_stateInfo.m_tempo);
+  const double rate = PlayRate(m_stateInfo.m_tempo, m_stateInfo.m_speed);
   if (rate == 0.0)
     return m_timeInfo.m_time;
 
