@@ -84,11 +84,12 @@ protected:
   float GetPercentage();
 
 private:
-  // What the engine has mixed of a stream is heard at the tempo it was mixed at
+  // What the engine has made of a stream is heard at the tempo it was made at
   struct MixedTempo
   {
-    double ratio = 1.0; // the resample ratio the engine was last seen mixing at
-    double tempoBefore = 1.0; // the tempo it mixed at before that ratio
+    double ratio = 1.0; // the resample ratio the engine was last seen at
+    double tempoBefore = 1.0; // the tempo it played at before that ratio
+    double heldBefore = 0.0; // seconds it had made at the one before when it took that ratio
     std::chrono::steady_clock::time_point since; // when it took that ratio
   };
 
@@ -172,9 +173,8 @@ private:
   /*!
    * \brief Seconds of content queued in si's IAEStream and not heard yet.
    *
-   * IAEStream::GetDelay() is in output seconds, which at a tempo hold tempo times as much: the
-   * stream's own cache at the ratio the engine now applies to it, and what the engine has already
-   * mixed at the ratio it was mixed at.
+   * IAEStream::GetDelay() is in output seconds, which at a tempo hold tempo times as much: what
+   * the engine had made when it took its ratio at the tempo before, and the rest at the new one.
    */
   double QueuedSeconds(StreamInfo& si) const;
 
