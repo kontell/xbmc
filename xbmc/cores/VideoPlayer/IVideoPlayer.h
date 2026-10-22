@@ -124,8 +124,9 @@ public:
   virtual int GetAudioChannels() = 0;
   virtual double GetCurrentPts() = 0;
   //! How long until audio added now is heard, in DVD time, when a change of speed reaches the
-  //! audio as a resample rate; 0 when the clock is to change speed at once.
-  virtual double GetRateChangeDelay() { return 0.0; }
+  //! audio as a resample rate; 0 when the clock is to change speed at once. toTempo: the speed
+  //! after the change is a tempo.
+  virtual double GetRateChangeDelay(bool toTempo) { return 0.0; }
   bool IsStalled() const override = 0;
   virtual bool IsPassthrough() const = 0;
   virtual float GetDynamicRangeAmplification() const = 0;
