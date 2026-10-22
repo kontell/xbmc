@@ -153,8 +153,11 @@ void CApplicationSettingsHandling::OnSettingChanged(const std::shared_ptr<const 
   }
   else if (settingId == CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE)
   {
-    CServiceBroker::GetPlaylistPlayer().GetHistory().Trim(
-        std::static_pointer_cast<const CSettingInt>(setting)->GetValue());
+    const int keep{std::static_pointer_cast<const CSettingInt>(setting)->GetValue()};
+    CServiceBroker::GetPlaylistPlayer().GetHistory().Trim(keep);
+    // Off empties the history, and the playlist a video took over goes with it
+    if (keep == 0)
+      CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
   }
 }
 
