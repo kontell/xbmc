@@ -257,6 +257,9 @@ void CProfileManager::Clear()
 
 void CProfileManager::PrepareLoadProfile(unsigned int profileIndex)
 {
+  // A playlist waiting for a video to end is the old profile's
+  CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
+
   CContextMenuManager &contextMenuManager = CServiceBroker::GetContextMenuManager();
   ADDON::CServiceAddonManager &serviceAddons = CServiceBroker::GetServiceAddons();
   PVR::CPVRManager &pvrManager = CServiceBroker::GetPVRManager();
