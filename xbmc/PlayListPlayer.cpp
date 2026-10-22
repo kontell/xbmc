@@ -53,6 +53,8 @@
 #include "video/VideoDatabase.h"
 #include "video/VideoFileItemClassify.h"
 
+#include <mutex>
+
 using namespace KODI::MESSAGING;
 using namespace KODI::VIDEO;
 
@@ -910,12 +912,19 @@ void CPlayListPlayer::RecordReplacedMusicPlaylist()
   const auto appPlayer = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
   // Still playing, so whatever starts next is taking over from it.
   if (RecordMusicPlaylist() && appPlayer->IsPlaying())
+  {
+    std::unique_lock lock(m_replacedPlaylistSection);
     m_replacedPlaylist = std::make_unique<CPlayListHistoryEntry>(m_history->Entries().front());
+  }
 }
 
 void CPlayListPlayer::RestoreReplacedPlaylist()
 {
-  const std::unique_ptr<CPlayListHistoryEntry> entry = std::move(m_replacedPlaylist);
+  std::unique_ptr<CPlayListHistoryEntry> entry;
+  {
+    std::unique_lock lock(m_replacedPlaylistSection);
+    entry = std::move(m_replacedPlaylist);
+  }
   if (!entry)
     return;
 
@@ -930,6 +939,7 @@ void CPlayListPlayer::RestoreReplacedPlaylist()
 
 void CPlayListPlayer::ForgetReplacedPlaylist()
 {
+  std::unique_lock lock(m_replacedPlaylistSection);
   m_replacedPlaylist.reset();
 }
 
