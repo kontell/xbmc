@@ -92,6 +92,7 @@
 #ifdef HAS_PYTHON
 #include "interfaces/python/XBPython.h"
 #endif
+#include "application/ApplicationEnums.h"
 #include "messaging/ApplicationMessenger.h"
 #include "messaging/ThreadMessage.h"
 #include "messaging/helpers/DialogHelper.h"
@@ -801,6 +802,11 @@ bool CApplication::Initialize()
   {
     UpdateLibraries();
     SetLoggingIn(false);
+
+    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+            CSettings::SETTING_LOOKANDFEEL_STARTUPACTION) == STARTUP_ACTION_RESTORE_PLAYLIST)
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr,
+                                                 "Playlist.Restore(latest)");
   }
 
   m_slowTimer.StartZero();
@@ -1641,6 +1647,7 @@ bool CApplication::Stop(int exitCode)
   bool success = true;
 
   CLog::Log(LOGINFO, "Stopping player");
+  CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
   CServiceBroker::GetPlaylistPlayer().RecordMusicPlaylist();
   const auto appPlayer = GetComponent<CApplicationPlayer>();
   appPlayer->ClosePlayer();
@@ -2015,6 +2022,7 @@ void CApplication::PlaybackCleanup()
   {
     stackHelper->Clear();
     appPlayer->ResetPlayer();
+    CServiceBroker::GetPlaylistPlayer().RestoreReplacedPlaylist();
   }
 
   if (CServiceBroker::GetAppParams()->IsTestMode())
