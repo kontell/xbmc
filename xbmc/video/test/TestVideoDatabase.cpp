@@ -1049,13 +1049,18 @@ protected:
         m_db.PrepareSQL("SELECT COUNT(*) FROM files WHERE idFile=%i", idFile));
   }
 
-  // A plugin's movie with an extra, as a scan of the movie's folder files them: the movie by a URL
-  // with options, under its folder, and the extra by one without, under the add-on's root
-  void AddPluginMovieWithExtra(std::string& film, int& idMovie, std::string& extra, int& idExtra)
+  // A plugin's movie with an extra, as a scan of the movie's folder files them. A URL with options
+  // is filed under its folder and one without under the add-on's root: the extra's always, and
+  // the movie's when it is named like a file.
+  void AddPluginMovieWithExtra(std::string& film,
+                               int& idMovie,
+                               std::string& extra,
+                               int& idExtra,
+                               const std::string& name = "?id=1")
   {
     const std::string folder{std::string{PLUGIN_ROOT} + "movies/1/"};
     SetContent(folder, "movies");
-    film = folder + "?id=1";
+    film = folder + name;
     idMovie = AddMovie(film);
     ASSERT_GT(idMovie, 0);
     extra = folder + "extras/Trailer.mkv";
@@ -1744,6 +1749,38 @@ TEST_F(TestVideoDatabaseClean, CleaningAPluginMovieFolderRemovesItsExtraThatHasG
   ASSERT_TRUE(m_db.SetPathHash(folder, "hash"));
 
   Clean(folder);
+
+  EXPECT_EQ(idMovie, m_db.GetMovieId(film));
+  EXPECT_EQ(0, CountFile(idExtra));
+  EXPECT_EQ("", PathHash(folder));
+}
+
+TEST_F(TestVideoDatabaseClean, AsksTheAddonAboutAnExtraOfAMovieFiledUnderItsRoot)
+{
+  std::string film;
+  std::string extra;
+  int idMovie{-1};
+  int idExtra{-1};
+  ASSERT_NO_FATAL_FAILURE(AddPluginMovieWithExtra(film, idMovie, extra, idExtra, "Film.mkv"));
+  m_db.m_pluginAnswers.emplace(extra, XFILE::PluginItemExists::YES);
+
+  Clean();
+
+  EXPECT_EQ(1, CountFile(idExtra));
+}
+
+TEST_F(TestVideoDatabaseClean, ClearsTheHashOfTheFolderOfAPluginMovieFiledUnderItsRoot)
+{
+  std::string film;
+  std::string extra;
+  int idMovie{-1};
+  int idExtra{-1};
+  ASSERT_NO_FATAL_FAILURE(AddPluginMovieWithExtra(film, idMovie, extra, idExtra, "Film.mkv"));
+  m_db.m_pluginAnswers.emplace(extra, XFILE::PluginItemExists::NO);
+  const std::string folder{std::string{PLUGIN_ROOT} + "movies/1/"};
+  ASSERT_TRUE(m_db.SetPathHash(folder, "hash"));
+
+  Clean();
 
   EXPECT_EQ(idMovie, m_db.GetMovieId(film));
   EXPECT_EQ(0, CountFile(idExtra));

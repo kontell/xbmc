@@ -152,6 +152,15 @@ std::string GetSourcePathOfFile(const CMediaSource& source, const std::string& f
   return {};
 }
 
+// The folder of a file in the library. A plugin URL is filed under itself without its options, or
+// under the add-on's root when it has none, so its folder is taken from the URL.
+std::string GetFolderOfFile(const std::string& path, const std::string& fileName)
+{
+  if (URIUtils::IsPlugin(path))
+    return URIUtils::GetDirectory(CURL(fileName).GetWithoutOptions());
+  return path;
+}
+
 // Whether a scan caches art of this type, being on the art list
 bool IsCachedByScan(MEDIA::TYPE mediaType, const std::string& artType)
 {
@@ -10346,11 +10355,11 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
           CMediaSourceSettings::GetInstance().GetSources(MediaSection::VIDEO));
       CServiceBroker::GetMediaManager().GetRemovableDrives(videoSources);
 
-      // Versions and extras, which can be added from outside the video sources, with the path
+      // Versions and extras, which can be added from outside the video sources, with the folder
       // of their movie
       std::unordered_map<int, std::string> assetFiles;
       m_pDS->query(
-          "SELECT videoversion.idFile, path.strPath FROM videoversion "
+          "SELECT videoversion.idFile, path.strPath, files.strFileName FROM videoversion "
           "JOIN movie ON movie.idMovie = videoversion.idMedia "
           "AND videoversion.media_type = 'movie' "
           "JOIN files ON files.idFile = movie.idFile "
@@ -10358,7 +10367,9 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
           "WHERE NOT EXISTS (SELECT 1 FROM movie WHERE movie.idFile = videoversion.idFile)");
       while (!m_pDS->eof())
       {
-        assetFiles.try_emplace(m_pDS->fv(0).get_asInt(), m_pDS->fv(1).get_asString());
+        assetFiles.try_emplace(m_pDS->fv(0).get_asInt(),
+                               GetFolderOfFile(m_pDS->fv(1).get_asString(),
+                                               m_pDS->fv(2).get_asString()));
         m_pDS->next();
       }
       m_pDS->close();
@@ -10604,7 +10615,7 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
         // The scanner finds a movie's versions and extras when it scans the movie's folder, and
         // skips a folder whose hash matches. Clear it for a movie that loses one, wherever the
         // file was filed, or the asset is not found again when it comes back.
-        m_pDS->query("SELECT DISTINCT path.strPath FROM videoversion "
+        m_pDS->query("SELECT DISTINCT path.strPath, files.strFileName FROM videoversion "
                      "JOIN movie ON movie.idMovie = videoversion.idMedia "
                      "AND videoversion.media_type = 'movie' "
                      "JOIN files ON files.idFile = movie.idFile "
@@ -10613,7 +10624,8 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
                      filesToDelete);
         while (!m_pDS->eof())
         {
-          pathsToInvalidate.emplace_back(m_pDS->fv(0).get_asString());
+          pathsToInvalidate.emplace_back(
+              GetFolderOfFile(m_pDS->fv(0).get_asString(), m_pDS->fv(1).get_asString()));
           m_pDS->next();
         }
         m_pDS->close();
