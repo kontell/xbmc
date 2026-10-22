@@ -453,6 +453,40 @@ namespace XBMCAddon
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
       /// \ingroup python_InfoTagMusic
+      /// @brief \python_func{ getResumeTime() }
+      /// Gets the resume time of the music item.
+      ///
+      /// @return [double] Resume time
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      getResumeTime();
+#else
+      double getResumeTime();
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagMusic
+      /// @brief \python_func{ getResumeTimeTotal() }
+      /// Gets the total duration stored with the resume time of the music item.
+      ///
+      /// @return [double] Total duration stored with the resume time
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      getResumeTimeTotal();
+#else
+      double getResumeTimeTotal();
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagMusic
       /// @brief \python_func{ getComment() }
       /// Returns comment as string from music info tag.
       ///
@@ -913,6 +947,25 @@ namespace XBMCAddon
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
       /// \ingroup python_InfoTagMusic
+      /// @brief \python_func{ setResumePoint(time, [totaltime]) }
+      /// Set the resume point of the music item. Skins show it as the item's progress
+      /// (`ListItem.PercentPlayed`, `ListItem.IsResumable`), as they do a video's.
+      ///
+      /// @param time               float - Resume point in seconds.
+      /// @param totaltime          float - Total duration in seconds.
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      setResumePoint(...);
+#else
+      void setResumePoint(double time, double totaltime = 0.0);
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagMusic
       /// @brief \python_func{ setMusicBrainzTrackID(musicBrainzTrackID) }
       /// Set the MusicBrainz track ID of the song.
       ///
@@ -1050,6 +1103,9 @@ namespace XBMCAddon
       static void setUserRatingRaw(MUSIC_INFO::CMusicInfoTag* infoTag, int userrating);
       static void setLyricsRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& lyrics);
       static void setLastPlayedRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& lastPlayed);
+      static void setResumePointRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
+                                    double time,
+                                    double totalTime = 0.0);
       static void setMusicBrainzTrackIDRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
                                            const String& musicBrainzTrackID);
       static void setMusicBrainzArtistIDRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
