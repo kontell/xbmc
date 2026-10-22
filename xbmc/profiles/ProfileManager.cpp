@@ -460,6 +460,7 @@ void CProfileManager::LogOff()
 {
   CNetworkBase &networkManager = CServiceBroker::GetNetwork();
 
+  CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
   g_application.StopPlaying();
 
   if (CMusicLibraryQueue::GetInstance().IsScanningLibrary())
