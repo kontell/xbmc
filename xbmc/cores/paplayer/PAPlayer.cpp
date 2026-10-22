@@ -1054,22 +1054,19 @@ double PAPlayer::QueuedSeconds(StreamInfo& si) const
     return 0.0;
 
   const CAESyncInfo info{si.m_stream->GetSyncInfo()};
-  const double cache{si.m_stream->GetCacheTime()};
   const auto now{std::chrono::steady_clock::now()};
   if (info.rr > 0.0 && info.rr != si.m_mixed.ratio)
   {
     si.m_mixed.tempoBefore = 1.0 / si.m_mixed.ratio;
+    si.m_mixed.heldBefore = info.rateDelay;
     si.m_mixed.ratio = info.rr;
     si.m_mixed.since = now;
   }
 
-  // The engine mixes as fast as it plays, so what it has mixed since it took the ratio is the
-  // newest of what it holds
-  const double mixed{std::max(0.0, info.delay - cache)};
-  const double mixedAtRatio{
-      std::min(mixed, std::chrono::duration<double>(now - si.m_mixed.since).count())};
-  return (cache + mixedAtRatio) / si.m_mixed.ratio +
-         (mixed - mixedAtRatio) * si.m_mixed.tempoBefore;
+  // What the engine had made when it took the ratio plays first, and as fast as it plays
+  const double elapsed{std::chrono::duration<double>(now - si.m_mixed.since).count()};
+  const double before{std::clamp(si.m_mixed.heldBefore - elapsed, 0.0, info.delay)};
+  return (info.delay - before) / si.m_mixed.ratio + before * si.m_mixed.tempoBefore;
 }
 
 void PAPlayer::SetSpeed(float speed)
