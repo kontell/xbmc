@@ -470,6 +470,14 @@
           </constraints>
           <control type="spinner" format="string" />
         </setting>
+        <setting id="musicplayer.restoreplaylistaftervideo" type="boolean" parent="musicplayer.playlisthistorysize" label="40822" help="40823">
+          <level>1</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="enable" setting="musicplayer.playlisthistorysize" operator="!is">0</dependency>
+          </dependencies>
+          <control type="toggle" />
+        </setting>
         <setting id="musicplayer.restoreplaylistpaused" type="boolean" parent="musicplayer.playlisthistorysize" label="40817" help="40818">
           <level>1</level>
           <default>false</default>
