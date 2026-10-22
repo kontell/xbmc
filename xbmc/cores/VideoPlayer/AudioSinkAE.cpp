@@ -352,7 +352,7 @@ double CAudioSinkAE::GetPlayRate()
 double CAudioSinkAE::GetRateChangeDelay()
 {
   std::unique_lock lock(m_critSection);
-  if (!m_pAudioStream || m_bPassthrough)
+  if (!m_pAudioStream)
     return 0.0;
 
   return m_pAudioStream->GetDelay() * DVD_TIME_BASE;

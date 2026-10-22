@@ -68,8 +68,8 @@ public:
   double GetPlayRate();
 
   /*!
-   * \brief How long until audio added now is heard, in DVD time, for a new ratio to reach it;
-   * 0.0 for a bitstream, which no ratio reaches.
+   * \brief How long until audio added now is heard, in DVD time, for a new ratio to reach it.
+   * A bitstream is no different: what it has queued plays out before a tempo's decoded audio.
    */
   double GetRateChangeDelay();
 

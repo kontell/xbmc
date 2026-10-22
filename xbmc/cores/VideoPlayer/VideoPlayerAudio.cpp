@@ -142,6 +142,9 @@ void CVideoPlayerAudio::OpenStream(CDVDStreamInfo& hints, std::unique_ptr<CDVDAu
   if (m_synctype == SYNC_DISCON)
     CLog::LogF(LOGINFO, "Allowing max Out-Of-Sync Value of {} ms", m_disconAdjustTimeMs);
 
+  // the sink makes the stream at the ratio last asked for, which may be the last file's
+  UpdateResampleRatio();
+
   m_prevskipped = false;
 
   m_maxspeedadjust = 5.0;

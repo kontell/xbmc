@@ -3554,13 +3554,15 @@ void CVideoPlayer::HandleMessages()
       const double rateDelay = playingBefore && playingAfter && speed != m_playSpeed
                                    ? m_VideoPlayerAudio->GetRateChangeDelay()
                                    : 0.0;
+      // the speed the clock already runs at, or has queued, leaves it alone
+      const bool repeated = speed == m_playSpeed && m_streamPlayerSpeed == speed;
 
       m_playSpeed = speed;
 
       m_caching = CACHESTATE_DONE;
       if (rateDelay > 0.0)
         m_clock.SetSpeedAt(speed, m_clock.GetAbsoluteClock() + rateDelay);
-      else
+      else if (!repeated)
         m_clock.SetSpeed(speed);
       m_VideoPlayerAudio->SetSpeed(speed);
       m_VideoPlayerVideo->SetSpeed(speed);
@@ -4239,8 +4241,7 @@ void CVideoPlayer::SetSpeed(float speed)
 
 int CVideoPlayer::TempoToSpeed(float tempo)
 {
-  // rounded: a float is not the decimal it stands for, and truncated, 1.017 (1.01699996)
-  // played at 1.016
+  // rounded: a float is not the decimal it stands for
   return static_cast<int>(std::lround(tempo * DVD_PLAYSPEED_NORMAL));
 }
 
