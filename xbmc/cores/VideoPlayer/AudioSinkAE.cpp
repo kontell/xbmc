@@ -355,7 +355,7 @@ double CAudioSinkAE::GetRateChangeDelay()
   if (!m_pAudioStream)
     return 0.0;
 
-  return m_pAudioStream->GetDelay() * DVD_TIME_BASE;
+  return m_pAudioStream->GetSyncInfo().rateDelay * DVD_TIME_BASE;
 }
 
 double CAudioSinkAE::GetClock()
