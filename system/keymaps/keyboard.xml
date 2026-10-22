@@ -555,6 +555,8 @@
       <up>SkipNext</up>
       <down>SkipPrevious</down>
       <up mod="longpress">AudioNextLanguage</up>
+      <left mod="alt">PlayerControl(tempodown)</left>
+      <right mod="alt">PlayerControl(tempoup)</right>
       <o>PlayerProcessInfo</o>
       <l>LockPreset</l>
       <escape>FullScreen</escape>
