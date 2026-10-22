@@ -913,6 +913,24 @@ namespace XBMCAddon
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
       /// \ingroup python_InfoTagMusic
+      /// @brief \python_func{ setDateAdded(dateAdded) }
+      /// Set the date added of the music item. The library takes it for a song whose file has no
+      /// date of its own, such as a plugin's.
+      ///
+      /// @param dateAdded          string - Date added (YYYY-MM-DD HH:MM:SS).
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      setDateAdded(...);
+#else
+      void setDateAdded(const String& dateAdded);
+#endif
+
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagMusic
       /// @brief \python_func{ setMusicBrainzTrackID(musicBrainzTrackID) }
       /// Set the MusicBrainz track ID of the song.
       ///
@@ -1050,6 +1068,7 @@ namespace XBMCAddon
       static void setUserRatingRaw(MUSIC_INFO::CMusicInfoTag* infoTag, int userrating);
       static void setLyricsRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& lyrics);
       static void setLastPlayedRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& lastPlayed);
+      static void setDateAddedRaw(MUSIC_INFO::CMusicInfoTag* infoTag, const String& dateAdded);
       static void setMusicBrainzTrackIDRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
                                            const String& musicBrainzTrackID);
       static void setMusicBrainzArtistIDRaw(MUSIC_INFO::CMusicInfoTag* infoTag,
