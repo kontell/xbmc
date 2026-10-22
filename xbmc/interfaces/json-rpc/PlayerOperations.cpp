@@ -559,7 +559,7 @@ JSONRPC_STATUS CPlayerOperations::SetTempo(const std::string& method,
       else
         return InvalidParams;
 
-      result["tempo"] = appPlayer->GetPlayTempo();
+      result["tempo"] = appPlayer->GetPlayTempoDecimal();
       return OK;
     }
 
@@ -1724,7 +1724,7 @@ JSONRPC_STATUS CPlayerOperations::GetPropertyValue(PlayerType player, const std:
       {
         const auto& components = CServiceBroker::GetAppComponents();
         const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-        result = appPlayer->GetPlayTempo();
+        result = appPlayer->GetPlayTempoDecimal();
         break;
       }
       case Picture:
