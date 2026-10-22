@@ -21,9 +21,9 @@ namespace XBMCAddon
      *  handling callbacks in the appropriate thread.
      */
     PythonCallbackHandler::PythonCallbackHandler()
+      : RetardedAsyncCallbackHandler(PyThreadState_Get()), objectThreadState(PyThreadState_Get())
     {
       XBMC_TRACE;
-      objectThreadState = PyThreadState_Get();
     }
 
     /**
