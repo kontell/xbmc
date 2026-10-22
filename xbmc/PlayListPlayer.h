@@ -11,6 +11,7 @@
 #include "guilib/IMsgTargetCallback.h"
 #include "messaging/IMessageTarget.h"
 #include "playlists/PlayListTypes.h"
+#include "threads/CriticalSection.h"
 
 #include <chrono>
 #include <map>
@@ -187,8 +188,8 @@ public:
    */
   void RestoreReplacedPlaylist();
 
-  /*! \brief Restore nothing when playback ends, as when it is stopped for quitting, sleeping or
-   logging off.
+  /*! \brief Restore nothing when playback ends, as when it is stopped for quitting, sleeping,
+   logging off, or the TV being switched off or to another source. Can be called from any thread.
    */
   void ForgetReplacedPlaylist();
 
@@ -234,6 +235,7 @@ protected:
   bool m_pauseWhenStarted{false};
   std::unique_ptr<CPlayListHistory> m_history;
   std::unique_ptr<CPlayListHistoryEntry> m_replacedPlaylist;
+  CCriticalSection m_replacedPlaylistSection;
   CPlayList* m_PlaylistMusic;
   CPlayList* m_PlaylistVideo;
   CPlayList* m_PlaylistEmpty;
