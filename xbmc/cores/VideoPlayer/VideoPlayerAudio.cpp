@@ -134,6 +134,8 @@ void CVideoPlayerAudio::OpenStream(CDVDStreamInfo& hints, std::unique_ptr<CDVDAu
   m_stalled = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
 
   m_prevsynctype = -1;
+  m_displayClock = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+      CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
   m_synctype = ResampleToClock() ? SYNC_RESAMPLE : SYNC_DISCON;
 
   if (m_synctype == SYNC_DISCON)
@@ -394,10 +396,10 @@ void CVideoPlayerAudio::Process()
       // back with its flag
       if (speed != DVD_PLAYSPEED_PAUSE)
         m_speedIsTempo = isTempo;
-      // a realtime stream changes clock at the start and the end of a tempo, which the sink
-      // takes up with the next frame
+      // A realtime stream changes clock at the start and the end of a tempo. The engine holds
+      // back a ratio while it resamples to the clock, so it is told the mode first.
       m_synctype = ResampleToClock() ? SYNC_RESAMPLE : SYNC_DISCON;
-      UpdateResampleRatio();
+      SetSyncType(audioframe.passthrough);
 
       // A tempo plays the audio at a rate, which a bitstream cannot: decode it instead, and
       // bitstream again once the tempo is 1.0.
@@ -659,8 +661,7 @@ bool CVideoPlayerAudio::ResampleToClock() const
   // instead and asks the stream for the rate, as any other stream does: resampled to the clock,
   // the sync servo would move the ratio at every correction, and beyond the atempo threshold
   // every move has the engine drain and re-make its atempo filter.
-  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
-          CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK))
+  if (m_displayClock)
     return true;
 
   return m_processInfo.IsRealtimeStream() &&
