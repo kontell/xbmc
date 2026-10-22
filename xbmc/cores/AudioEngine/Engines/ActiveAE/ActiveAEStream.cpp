@@ -379,7 +379,7 @@ double CActiveAEStream::GetCacheTime()
 
 double CActiveAEStream::GetCacheTotal()
 {
-  return static_cast<double>(m_activeAE->GetCacheTotal());
+  return static_cast<double>(m_activeAE->GetCacheTotal(this));
 }
 
 double CActiveAEStream::GetMaxDelay()
