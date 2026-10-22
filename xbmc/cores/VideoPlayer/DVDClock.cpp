@@ -70,6 +70,8 @@ double CDVDClock::GetClock(double& absolute, bool interpolated /*= true*/)
 {
   int64_t current = m_videoRefClock->GetTime(interpolated);
 
+  // SystemToPlaying() reads the speed changes the other threads queue under m_critSection
+  std::unique_lock clockLock(m_critSection);
   std::unique_lock lock(m_systemsection);
   absolute = SystemToAbsolute(current);
 
