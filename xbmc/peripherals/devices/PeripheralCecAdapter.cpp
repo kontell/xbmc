@@ -8,6 +8,7 @@
 
 #include "PeripheralCecAdapter.h"
 
+#include "PlayListPlayer.h"
 #include "ServiceBroker.h"
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationEnums.h"
@@ -760,7 +761,10 @@ void CPeripheralCecAdapter::OnTvStandby(void)
       const auto& components = CServiceBroker::GetAppComponents();
       const auto appPlayer = components.GetComponent<CApplicationPlayer>();
       if (appPlayer->IsPlaying())
+      {
+        CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
         CServiceBroker::GetAppMessenger()->PostMsg(TMSG_MEDIA_STOP);
+      }
       break;
     }
     case LOCALISED_ID_IGNORE:
@@ -1375,7 +1379,10 @@ void CPeripheralCecAdapter::CecSourceActivated(void* cbParam,
       if (pSlideShow)
         pSlideShow->OnAction(CAction(ACTION_STOP));
       else
+      {
+        CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
         CServiceBroker::GetAppMessenger()->SendMsg(TMSG_MEDIA_STOP);
+      }
     }
   }
 }
