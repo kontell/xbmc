@@ -32,6 +32,9 @@ class CAESyncInfo
 {
 public:
   double delay;
+  // Of delay, what the engine has already made at a resample ratio: a ratio asked for now is
+  // heard after it.
+  double rateDelay;
   double error;
   double rr;
   unsigned int errortime;

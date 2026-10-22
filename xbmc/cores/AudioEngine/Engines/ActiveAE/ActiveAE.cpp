@@ -132,6 +132,7 @@ void CEngineStats::AddStream(unsigned int streamid)
   StreamStats stream;
   stream.m_streamId = streamid;
   stream.m_bufferedTime = 0;
+  stream.m_rateTime = 0;
   stream.m_resampleRatio = 1.0;
   stream.m_syncError = 0;
   stream.m_syncState = CAESyncInfo::AESyncState::SYNC_OFF;
@@ -164,10 +165,12 @@ void CEngineStats::UpdateStream(CActiveAEStream *stream)
       {
         str.m_resampleRatio = stream->m_processingBuffers->GetRR();
         delay += stream->m_processingBuffers->GetDelay();
+        str.m_rateTime = static_cast<double>(stream->m_processingBuffers->GetRateDelay());
       }
       else
       {
         str.m_resampleRatio = 1.0;
+        str.m_rateTime = 0;
       }
 
       std::unique_lock lock(stream->m_statsLock);
@@ -229,6 +232,7 @@ void CEngineStats::GetSyncInfo(CAESyncInfo& info, CActiveAEStream *stream)
     if (str.m_streamId == stream->m_id)
     {
       std::unique_lock lock(stream->m_statsLock);
+      info.rateDelay = status.GetDelay() + str.m_rateTime;
       float buffertime = static_cast<float>(str.m_bufferedTime) + stream->m_bufferedTime;
       status.delay += static_cast<double>(buffertime) * str.m_resampleRatio;
       info.delay = status.GetDelay();
@@ -805,13 +809,13 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
             if (par->stream->m_pClock &&
                 par->parameter.double_par != par->stream->m_requestedResampleRatio)
             {
-              // What the sink and the stream's buffers hold was made at the old ratio, and
-              // RunStages() would read it at the new one: sync waits until it has played.
+              // What the sink holds and the stream's stages have made was made at the old ratio,
+              // and RunStages() would read it at the new one: sync waits until it has played.
               AEDelayStatus status;
               m_stats.GetDelay(status);
               const double held =
                   status.GetDelay() +
-                  static_cast<double>(par->stream->m_processingBuffers->GetDelay());
+                  static_cast<double>(par->stream->m_processingBuffers->GetRateDelay());
               par->stream->m_ratioSettle.Set(
                   std::chrono::milliseconds(std::lround(held * 1000.0)));
             }
