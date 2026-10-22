@@ -61,9 +61,12 @@ public:
   std::string GetPlayerInfo() override;
   int GetAudioChannels() override;
 
-  double GetRateChangeDelay() override
+  double GetRateChangeDelay(bool toTempo) override
   {
-    return m_rateFollowsSpeed ? m_audioSink.GetRateChangeDelay() : 0.0;
+    // a tempo has the audio follow the speed, a realtime stream's too, unless the display is the
+    // clock
+    const bool follows = m_rateFollowsSpeed || (toTempo && !m_displayClock);
+    return follows ? m_audioSink.GetRateChangeDelay() : 0.0;
   }
 
   double GetCurrentPts() override
@@ -126,6 +129,8 @@ protected:
   int m_synctype;
   //! Whether a speed reaches the stream as a resample ratio (not with the display clock)
   std::atomic<bool> m_rateFollowsSpeed{false};
+  //! "Sync playback to display", as it was when the stream was opened
+  std::atomic<bool> m_displayClock{false};
   int m_prevsynctype;
 
   bool   m_prevskipped;
