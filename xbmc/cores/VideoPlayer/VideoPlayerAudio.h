@@ -95,7 +95,10 @@ protected:
   void UpdateResampleRatio();
   //! Normal speed or a tempo: the audio is output and the clock follows it. Pause and
   //! trickplay are not.
-  bool IsPlayingSpeed() const { return m_speed == DVD_PLAYSPEED_NORMAL || m_speedIsTempo; }
+  bool IsPlayingSpeed() const
+  {
+    return m_speed == DVD_PLAYSPEED_NORMAL || (m_speedIsTempo && m_speed != DVD_PLAYSPEED_PAUSE);
+  }
 
   CDVDMessageQueue m_messageQueue;
   CDVDMessageQueue& m_messageParent;
@@ -111,7 +114,7 @@ protected:
   BitstreamStats m_audioStats;
 
   int m_speed;
-  bool m_speedIsTempo = false; // m_speed is a tempo, not trickplay
+  bool m_speedIsTempo = false; // the speed is a tempo, not trickplay; kept through a pause
   bool m_stalled;
   bool m_paused;
   IDVDStreamPlayer::ESyncState m_syncState;
