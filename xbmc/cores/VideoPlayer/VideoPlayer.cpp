@@ -3565,7 +3565,8 @@ void CVideoPlayer::HandleMessages()
                                    ? m_VideoPlayerAudio->GetRateChangeDelay()
                                    : 0.0;
       // the speed the clock already runs at, or has queued, leaves it alone
-      const bool repeated = speed == m_playSpeed && m_streamPlayerSpeed == speed;
+      const bool repeated = speed == m_playSpeed && isTempoSpeed == m_playSpeedIsTempo &&
+                            m_streamPlayerSpeed == speed;
 
       if (speed == DVD_PLAYSPEED_PAUSE && !resuming)
         m_speedBeforePause = wasFFRW ? DVD_PLAYSPEED_PAUSE : m_playSpeed;

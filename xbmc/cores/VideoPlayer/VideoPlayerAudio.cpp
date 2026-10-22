@@ -394,7 +394,10 @@ void CVideoPlayerAudio::Process()
         m_audioSink.Pause();
       }
       m_speed = speed;
-      m_speedIsTempo = isTempo;
+      // A pause is not a change of rate: the stream keeps the tempo's, which the resume brings
+      // back with its flag
+      if (speed != DVD_PLAYSPEED_PAUSE)
+        m_speedIsTempo = isTempo;
       UpdateResampleRatio();
 
       // A tempo plays the audio at a rate, which a bitstream cannot: decode it instead, and
@@ -672,6 +675,9 @@ void CVideoPlayerAudio::UpdateResampleRatio()
   // a tempo included. With the audio as the clock nothing would move it, so the rate
   // is asked of the stream: 1/tempo output samples per input sample.
   m_rateFollowsSpeed = m_synctype == SYNC_DISCON;
+
+  if (m_speed == DVD_PLAYSPEED_PAUSE && m_speedIsTempo)
+    return;
 
   double ratio = 1.0;
   if (m_synctype == SYNC_DISCON && m_speedIsTempo && m_speed != DVD_PLAYSPEED_NORMAL)
