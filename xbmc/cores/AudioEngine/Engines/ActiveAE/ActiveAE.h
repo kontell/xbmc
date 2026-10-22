@@ -223,6 +223,7 @@ protected:
   {
     unsigned int m_streamId;
     double m_bufferedTime;
+    double m_rateTime;
     double m_resampleRatio;
     double m_syncError;
     unsigned int m_errorTime;

@@ -115,7 +115,10 @@ public:
                           AEQuality quality,
                           float sublevel);
   bool HasInputLevel(int level);
+  // in the stream's own time
   float GetDelay();
+  // in output seconds, what has taken the ratio and is not yet mixed
+  float GetRateDelay();
   void Flush();
   void SetDrain(bool drain);
   bool IsDrained();
