@@ -15,28 +15,36 @@
 #include "PartyModeManager.h"
 #include "ServiceBroker.h"
 #include "URL.h"
+#include "Util.h"
 #include "application/Application.h"
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
 #include "application/ApplicationPowerHandling.h"
+#include "cores/DataCacheCore.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "filesystem/PluginDirectory.h"
 #include "filesystem/VideoDatabaseFile.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/TextureManager.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
 #include "interfaces/AnnouncementManager.h"
 #include "messaging/ApplicationMessenger.h"
 #include "messaging/helpers/DialogOKHelper.h"
 #include "music/MusicFileItemClassify.h"
+#include "music/MusicThumbLoader.h"
 #include "music/tags/MusicInfoTag.h"
 #include "playlists/PlayList.h"
 #include "playlists/PlayListFileItemClassify.h"
+#include "playlists/PlayListHistory.h"
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/ArtTypes.h"
+#include "utils/DefaultArt.h"
+#include "utils/ItemProperties.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
@@ -60,10 +68,12 @@ CPlayListPlayer::CPlayListPlayer(void)
   m_bPlaybackStarted = false;
   m_iFailedSongs = 0;
   m_failedSongsStart = std::chrono::steady_clock::now();
+  m_history = std::make_unique<CPlayListHistory>();
 }
 
 CPlayListPlayer::~CPlayListPlayer(void)
 {
+  m_musicPlaylistLive = false;
   Clear();
   delete m_PlaylistMusic;
   delete m_PlaylistVideo;
@@ -118,6 +128,14 @@ bool CPlayListPlayer::OnMessage(CGUIMessage &message)
   case GUI_MSG_PLAYBACK_STARTED:
     {
       m_bPlaybackStarted = true;
+      if (m_pauseWhenStarted)
+      {
+        m_pauseWhenStarted = false;
+        const auto appPlayer =
+            CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
+        if (appPlayer->IsPlaying() && !appPlayer->IsPaused())
+          appPlayer->Pause();
+      }
     }
     break;
   }
@@ -211,6 +229,7 @@ bool CPlayListPlayer::PlayNext(int offset, bool bAutoPlay)
     CGUIMessage msg(GUI_MSG_PLAYLISTPLAYER_STOPPED, 0, 0, static_cast<int>(m_iCurrentPlayList),
                     m_iCurrentSong);
     CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg);
+    RecordMusicPlaylist(bAutoPlay);
     Reset();
     m_iCurrentPlayList = Id::TYPE_NONE;
     return false;
@@ -430,6 +449,8 @@ bool CPlayListPlayer::Play(int iSong,
   m_iFailedSongs = 0;
   m_failedSongsStart = std::chrono::steady_clock::now();
   m_bPlayedFirstFile = true;
+  if (m_iCurrentPlayList == Id::TYPE_MUSIC && !g_partyModeManager.IsEnabled())
+    m_musicPlaylistLive = true;
   return true;
 }
 
@@ -454,6 +475,9 @@ void CPlayListPlayer::SetCurrentPlaylist(Id playlistId)
   if (playlistId == m_iCurrentPlayList)
     return;
 
+  if (m_iCurrentPlayList == Id::TYPE_MUSIC)
+    RecordMusicPlaylist();
+
   // changing the current playlist while party mode is on
   // disables party mode
   if (g_partyModeManager.IsEnabled())
@@ -465,6 +489,9 @@ void CPlayListPlayer::SetCurrentPlaylist(Id playlistId)
 
 void CPlayListPlayer::ClearPlaylist(Id playlistId)
 {
+  if (playlistId == Id::TYPE_MUSIC)
+    RecordMusicPlaylist();
+
   // clear our applications playlist file
   g_application.m_strPlayListFile.clear();
 
@@ -528,6 +555,9 @@ int CPlayListPlayer::RemoveDVDItems()
 
 void CPlayListPlayer::Reset()
 {
+  if (m_iCurrentPlayList == Id::TYPE_MUSIC)
+    RecordMusicPlaylist();
+
   m_iCurrentSong = -1;
   m_bPlayedFirstFile = false;
   m_bPlaybackStarted = false;
@@ -813,12 +843,102 @@ void CPlayListPlayer::Remove(Id playlistId, int iPosition)
 
 void CPlayListPlayer::Clear()
 {
+  RecordMusicPlaylist();
+
   if (m_PlaylistMusic)
     m_PlaylistMusic->Clear();
   if (m_PlaylistVideo)
     m_PlaylistVideo->Clear();
   if (m_PlaylistEmpty)
     m_PlaylistEmpty->Clear();
+}
+
+void CPlayListPlayer::RecordMusicPlaylist(bool playedThrough)
+{
+  if (!m_musicPlaylistLive)
+    return;
+  m_musicPlaylistLive = false;
+  if (g_partyModeManager.IsEnabled())
+    return;
+
+  const CPlayList& playlist = GetPlaylist(Id::TYPE_MUSIC);
+  if (playlist.size() == 0)
+    return;
+
+  const double seconds = CServiceBroker::GetDataCacheCore().GetPlayTime() / 1000.0;
+  CPlayListHistoryEntry entry =
+      CPlayListHistoryEntry::FromPlayList(playlist, m_iCurrentSong, seconds, playedThrough);
+  if (entry.tracks.empty())
+    return;
+
+  // A queued item carries only the art its list loaded; the row shows the library's.
+  CFileItem current(*playlist[entry.Current()]);
+  CMusicThumbLoader loader;
+  loader.OnLoaderStart();
+  loader.LoadItem(&current);
+  loader.OnLoaderFinish();
+  CPlayListHistoryTrack& track = entry.tracks[entry.Current()];
+  if (current.HasArt(ART::TYPE::THUMB))
+    track.thumb = current.GetArt(ART::TYPE::THUMB);
+  if (current.HasArt(ART::TYPE::FANART))
+    track.fanart = current.GetArt(ART::TYPE::FANART);
+
+  m_history->Add(std::move(entry));
+}
+
+bool CPlayListPlayer::RestorePlaylist(const CPlayListHistoryEntry& entry,
+                                      bool startPaused,
+                                      bool fromTrackStart)
+{
+  CFileItemList items;
+  entry.GetItems(items);
+  if (items.IsEmpty())
+    return false;
+
+  const auto [position, seconds] = entry.Start(fromTrackStart);
+  const CFileItemPtr resumed = seconds > 0.0 ? items.Get(position) : nullptr;
+  const int64_t trackStart = resumed ? resumed->GetStartOffset() : 0;
+  if (resumed)
+  {
+    const int64_t offset = trackStart + CUtil::ConvertSecsToMilliSecs(seconds);
+    // PAPlayer times a cue sheet track from its own start only while the start offset is where
+    // the track starts; a bookmark into the file resumes it, as it does an audiobook chapter.
+    if (resumed->GetEndOffset() > 0 ||
+        resumed->GetProperty(ITEM::PROPERTY::ITEM_START).asInteger() > 0)
+      resumed->SetProperty(ITEM::PROPERTY::AUDIOBOOK_BOOKMARK, offset);
+    else
+      resumed->SetStartOffset(offset);
+  }
+
+  // Clearing records the playlist being replaced, so it comes before SetShuffle() reorders it.
+  ClearPlaylist(Id::TYPE_MUSIC);
+  Reset();
+  // Add() reshuffles a shuffled list, which would lose the saved order.
+  SetShuffle(Id::TYPE_MUSIC, false);
+  Add(Id::TYPE_MUSIC, items);
+  SetCurrentPlaylist(Id::TYPE_MUSIC);
+
+  const bool hasIcon = CServiceBroker::GetGUI()->GetTextureManager().HasTexture(
+      ART::DEFAULT::MUSIC_PLAYLIST_HISTORY);
+  CGUIDialogKaiToast::QueueNotification(
+      hasIcon ? ART::DEFAULT::MUSIC_PLAYLIST_HISTORY : ART::DEFAULT::ICON_INFO,
+      CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(40813), entry.Title());
+
+  m_pauseWhenStarted = startPaused;
+  const bool started = Play(position, "");
+  // The player has its own copy of the item now. The saved second is for this start only: played
+  // again, the track starts from its beginning.
+  if (resumed)
+  {
+    resumed->SetStartOffset(trackStart);
+    resumed->ClearProperty(ITEM::PROPERTY::AUDIOBOOK_BOOKMARK);
+  }
+  if (!started)
+  {
+    m_pauseWhenStarted = false;
+    return false;
+  }
+  return true;
 }
 
 void CPlayListPlayer::Swap(Id playlistId, int indexItem1, int indexItem2)

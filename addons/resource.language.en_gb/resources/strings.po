@@ -25951,3 +25951,45 @@ msgstr ""
 msgctxt "#40806"
 msgid "Adjust and display the volume level while audio is passed through. The level is not applied to the bitstream, but every change is announced, so an add-on or automation can apply it to an external audio processor."
 msgstr ""
+
+#. Heading of the dialog listing the music playlists that were replaced, interrupted or stopped; also the label of a button that opens it
+#: xbmc/interfaces/builtins/PlayerBuiltins.cpp
+msgctxt "#40807"
+msgid "Restore playlist"
+msgstr ""
+
+#. Shown when no music playlist has been saved to the history yet
+#: xbmc/interfaces/builtins/PlayerBuiltins.cpp
+msgctxt "#40808"
+msgid "No playlist has been set aside yet. A playlist is saved whenever it is replaced, interrupted, stopped or played through."
+msgstr ""
+
+#. First detail line of a playlist history row: the track that was playing, the number of tracks and how many were still to play
+#: xbmc/playlists/PlayListHistory.cpp
+msgctxt "#40809"
+msgid "Track {0:d} of {1:d} · {2:d} unplayed"
+msgstr ""
+
+#. First detail line of a playlist history row for a playlist that played to its end
+#: xbmc/playlists/PlayListHistory.cpp
+msgctxt "#40810"
+msgid "Played through"
+msgstr ""
+
+#. Second detail line of a playlist history row: when it was saved and how far into the track playback was
+#: xbmc/playlists/PlayListHistory.cpp
+msgctxt "#40811"
+msgid "{0} · stopped at {1}"
+msgstr ""
+
+#. Title of a playlist history row for a mixed playlist: the track that was playing and how many other tracks there are
+#: xbmc/playlists/PlayListHistory.cpp
+msgctxt "#40812"
+msgid "{0} + {1:d} more"
+msgstr ""
+
+#. Heading of the notification shown while a playlist from the history is put back
+#: xbmc/PlayListPlayer.cpp
+msgctxt "#40813"
+msgid "Restoring playlist"
+msgstr ""
