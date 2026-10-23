@@ -4293,7 +4293,7 @@ bool CVideoDatabase::DeleteMovie(int idMovie,
     }
 
     //! @todo move this below CommitTransaction() once UPnP doesn't rely on this anymore
-    AnnounceRemove(MEDIA::TYPE::MOVIE, idMovie);
+    AnnounceRemove(MEDIA::TYPE::MOVIE, idMovie, m_removingContent);
 
     if (!inTransaction)
       CommitTransaction();
@@ -4321,14 +4321,17 @@ void CVideoDatabase::DeleteTvShow(int idTvShow, bool bKeepId /* = false */)
   if (idTvShow < 0)
     return;
 
+  if (nullptr == m_pDB)
+    return;
+  if (nullptr == m_pDS)
+    return;
+
+  const bool inTransaction{m_pDB->in_transaction()};
+
   try
   {
-    if (nullptr == m_pDB)
-      return;
-    if (nullptr == m_pDS)
-      return;
-
-    BeginTransaction();
+    if (!inTransaction)
+      BeginTransaction();
 
     std::set<int> paths;
     GetPathsForTvShow(idTvShow, paths);
@@ -4362,14 +4365,17 @@ void CVideoDatabase::DeleteTvShow(int idTvShow, bool bKeepId /* = false */)
 
     //! @todo move this below CommitTransaction() once UPnP doesn't rely on this anymore
     if (!bKeepId)
-      AnnounceRemove(MEDIA::TYPE::TV_SHOW, idTvShow);
+      AnnounceRemove(MEDIA::TYPE::TV_SHOW, idTvShow, m_removingContent);
 
-    CommitTransaction();
-
+    if (!inTransaction)
+      CommitTransaction();
   }
   catch (...)
   {
     CLog::LogF(LOGERROR, "({}) failed", idTvShow);
+    // In a transaction opened elsewhere, the failure is for its owner to roll back
+    if (inTransaction)
+      throw;
     RollbackTransaction();
   }
 }
@@ -4421,7 +4427,7 @@ void CVideoDatabase::DeleteEpisode(int idEpisode, bool bKeepId /* = false */)
 
     //! @todo move this below CommitTransaction() once UPnP doesn't rely on this anymore
     if (!bKeepId)
-      AnnounceRemove(MEDIA::TYPE::EPISODE, idEpisode);
+      AnnounceRemove(MEDIA::TYPE::EPISODE, idEpisode, m_removingContent);
 
     int idFile = GetDbId(PrepareSQL("SELECT idFile FROM episode WHERE idEpisode=%i", idEpisode));
     DeleteStreamDetails(idFile);
@@ -4453,14 +4459,17 @@ void CVideoDatabase::DeleteMusicVideo(int idMVideo, bool bKeepId /* = false */)
   if (idMVideo < 0)
     return;
 
+  if (nullptr == m_pDB)
+    return;
+  if (nullptr == m_pDS)
+    return;
+
+  const bool inTransaction{m_pDB->in_transaction()};
+
   try
   {
-    if (nullptr == m_pDB)
-      return;
-    if (nullptr == m_pDS)
-      return;
-
-    BeginTransaction();
+    if (!inTransaction)
+      BeginTransaction();
 
     int idFile = GetDbId(PrepareSQL("SELECT idFile FROM musicvideo WHERE idMVideo=%i", idMVideo));
     DeleteStreamDetails(idFile);
@@ -4479,14 +4488,17 @@ void CVideoDatabase::DeleteMusicVideo(int idMVideo, bool bKeepId /* = false */)
 
     //! @todo move this below CommitTransaction() once UPnP doesn't rely on this anymore
     if (!bKeepId)
-      AnnounceRemove(MEDIA::TYPE::MUSIC_VIDEO, idMVideo);
+      AnnounceRemove(MEDIA::TYPE::MUSIC_VIDEO, idMVideo, m_removingContent);
 
-    CommitTransaction();
-
+    if (!inTransaction)
+      CommitTransaction();
   }
   catch (...)
   {
     CLog::LogF(LOGERROR, "failed");
+    // In a transaction opened elsewhere, the failure is for its owner to roll back
+    if (inTransaction)
+      throw;
     RollbackTransaction();
   }
 }
@@ -6185,22 +6197,17 @@ void CVideoDatabase::SetStackTimes(const std::string& filePath,
 void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
                                           CGUIDialogProgress* progress /* = nullptr */)
 {
-  if(URIUtils::IsMultiPath(strPath))
-  {
-    std::vector<std::string> paths;
-    CMultiPathDirectory::GetPaths(strPath, paths);
+  if (nullptr == m_pDB)
+    return;
+  if (nullptr == m_pDS)
+    return;
 
-    for (const auto& path : paths)
-      RemoveContentForPath(path, progress);
-  }
+  // One transaction, its removals announced as part of it and followed by one refresh, so
+  // that a list showing the library reloads once rather than for every item
+  const bool inTransaction{m_pDB->in_transaction()};
 
   try
   {
-    if (nullptr == m_pDB)
-      return;
-    if (nullptr == m_pDS)
-      return;
-
     if (progress)
     {
       progress->SetHeading(CVariant{700});
@@ -6211,8 +6218,22 @@ void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
       progress->Open();
       progress->ShowProgressBar(true);
     }
-    std::vector<std::pair<int, std::string> > paths;
-    GetSubPaths(strPath, paths, false);
+    // A multipath source goes with the paths it is made of, in the same transaction
+    std::vector<std::string> roots;
+    FlattenMultiPath(strPath, roots);
+    if (URIUtils::IsMultiPath(strPath))
+      roots.emplace_back(strPath);
+
+    std::vector<std::pair<int, std::string>> paths;
+    for (const auto& root : roots)
+      GetSubPaths(root, paths, false);
+
+    if (!inTransaction)
+      BeginTransaction();
+    m_removingContent = true;
+    bool removed{false};
+    std::set<int> sets;
+
     int iCurr = 0;
     for (const auto& [pathId, path] : paths)
     {
@@ -6227,7 +6248,10 @@ void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
 
       const auto tvshowId = GetTvShowId(path);
       if (tvshowId > 0)
+      {
         DeleteTvShow(tvshowId);
+        removed = true;
+      }
       else
       {
         std::string strSQL = PrepareSQL("select files.strFilename from files join movie on "
@@ -6249,12 +6273,23 @@ void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
           ConstructPath(strMoviePath, path, strFileName);
           const auto movieId = GetMovieId(strMoviePath);
           if (movieId > 0)
-            DeleteMovie(movieId);
+          {
+            const int idSet{
+                GetDbId(PrepareSQL("SELECT idSet FROM movie WHERE idMovie=%i", movieId))};
+            if (idSet > 0)
+              sets.insert(idSet);
+            if (!DeleteMovie(movieId))
+              throw DbErrors("Unable to remove movie %i", movieId);
+            removed = true;
+          }
           else
           {
             const auto musicvideoId = GetMusicVideoId(strMoviePath);
             if (musicvideoId > 0)
+            {
               DeleteMusicVideo(musicvideoId);
+              removed = true;
+            }
           }
           m_pDS2->next();
           if (m_pDS2->eof() && !bMvidsChecked)
@@ -6273,10 +6308,27 @@ void CVideoDatabase::RemoveContentForPath(const std::string& strPath,
                        pathId));
       }
     }
+
+    // A set is only listed through its movies, so one that this removal emptied would stay unseen
+    for (const int idSet : sets)
+    {
+      if (GetSingleValueInt(PrepareSQL("SELECT COUNT(*) FROM movie WHERE idSet=%i", idSet)) == 0)
+        DeleteSet(idSet);
+    }
+
+    m_removingContent = false;
+    if (!inTransaction)
+      CommitTransaction();
+
+    if (removed)
+      CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::VideoLibrary, "OnRefresh");
   }
   catch (...)
   {
     CLog::LogF(LOGERROR, "({}) failed", strPath);
+    m_removingContent = false;
+    if (!inTransaction)
+      RollbackTransaction();
   }
   if (progress)
     progress->Close();

@@ -1374,4 +1374,7 @@ private:
   static void AnnounceRemove(KODI::MEDIA::TYPE content, int id, bool scanning = false);
 
   static CDateTime GetDateAdded(const std::string& filename, CDateTime dateAdded = CDateTime());
+
+  //! Set while RemoveContentForPath() removes items, which it announces as one transaction
+  bool m_removingContent{false};
 };
