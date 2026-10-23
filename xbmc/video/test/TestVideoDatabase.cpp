@@ -1000,6 +1000,13 @@ protected:
         .GetSources(KODI::MEDIA::MediaSection::VIDEO)
         .push_back(source);
 
+    SetContent(path, content);
+  }
+
+  // Content set on a path without adding it as a source, as Set content on an add-on's folder
+  // does
+  void SetContent(const std::string& path, const std::string& content)
+  {
     ASSERT_TRUE(m_db.ExecuteQuery(m_db.PrepareSQL(
         "UPDATE path SET strContent='%s', strScraper='metadata.local' WHERE idPath=%i",
         content.c_str(), m_db.AddPath(path))));
@@ -1648,4 +1655,32 @@ TEST_F(TestVideoDatabaseClean, KeepsTheContentOfAPluginFolderItsAddonCouldNotAns
   EXPECT_EQ(1, m_db.GetSingleValueInt(m_db.PrepareSQL(
                    "SELECT COUNT(*) FROM path WHERE strPath='%s' AND strContent='tvshows'",
                    shows.c_str())));
+}
+
+TEST_F(TestVideoDatabaseClean, RemovesAPluginItemItsAddonSaysHasGoneWithoutASource)
+{
+  const std::string movies{std::string{PLUGIN_ROOT} + "movies/"};
+  SetContent(movies, "movies");
+  const std::string film{movies + "?id=1"};
+  ASSERT_GT(AddMovie(film), 0);
+  m_db.m_pluginAnswers.emplace(film, XFILE::PluginItemExists::NO);
+
+  Clean();
+
+  EXPECT_EQ(-1, m_db.GetMovieId(film));
+}
+
+TEST_F(TestVideoDatabaseClean, RemovesAPathStylePluginItemItsAddonSaysHasGone)
+{
+  // The parent Kodi takes for a plugin path is the add-on's root, which a source on the content
+  // root does not match
+  const std::string movies{std::string{PLUGIN_ROOT} + "lib/movies/"};
+  AddSource(movies, "movies");
+  const std::string film{movies + "1"};
+  ASSERT_GT(AddMovie(film), 0);
+  m_db.m_pluginAnswers.emplace(film, XFILE::PluginItemExists::NO);
+
+  Clean();
+
+  EXPECT_EQ(-1, m_db.GetMovieId(film));
 }
