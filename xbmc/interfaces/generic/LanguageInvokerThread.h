@@ -29,17 +29,14 @@ public:
   virtual InvokerState GetState() const;
 
   std::shared_ptr<ILanguageInvoker> GetInvoker() const { return m_invoker; }
+
   bool Reuseable(const std::string& script) const
   {
-    // Cheap, independently-synchronised checks first, so the common "not
-    // reusable" answer does not contend with a running script for m_mutex.
-    if (m_bStop || IsClaimed() || IsProcessDone() || GetState() != InvokerStateScriptDone)
-      return false;
-
-    // m_script and m_reusable are guarded by m_mutex; the manager thread must
-    // not read them unlocked.
+    // Parked is reached only after a run the thread is allowed to reuse ended
+    // cleanly, so it already means "an idle interpreter is waiting". A claim is
+    // the reservation; a would-be new claimer may only take an unclaimed one.
     std::unique_lock<std::mutex> lck(m_mutex);
-    return m_reusable && m_script == script;
+    return m_phase == Phase::Parked && !m_claimed && !m_bStop && m_script == script;
   }
 
   /*!
@@ -63,37 +60,25 @@ public:
   //! "the invoker reached InvokerStateStopping", which is a different question.
   bool IsStopRequested() const { return m_bStop; }
 
-  /*!
-   * \brief True once the Process() loop has left and will accept no more work.
-   *
-   * CThread::IsRunning() stays true until OnExit() (and Py_EndInterpreter) have
-   * finished, so it cannot answer this on its own.
-   */
-  bool IsProcessDone() const { return m_processDone; }
+  //! \brief True once the Process() loop has left and will accept no more work.
+  bool IsProcessDone() const
+  {
+    std::unique_lock<std::mutex> lck(m_mutex);
+    return m_phase == Phase::Done;
+  }
 
   /*!
    * \brief True while this thread must keep the reusable slot.
    *
    * A claim reserves the thread whatever it is doing, and a thread handed a
-   * script it has not started yet would drop that script if released. A
-   * running script is not lost: after Release() the thread finishes it and
-   * exits, so a newer reusable run can take the slot.
+   * script it has not started yet (Starting, Queued) would drop that script if
+   * released. A running script is not lost: after Release() the thread finishes
+   * it and exits, so a newer reusable run can take the slot.
    */
   bool IsSpokenFor() const
   {
-    if (IsClaimed())
-      return true;
-
-    // The loop has left for good; the slot has to be given up or it is pinned.
-    if (IsProcessDone())
-      return false;
-
-    // Published as the reusable thread, but the loop has not started yet.
-    if (!CThread::IsRunning())
-      return true;
-
     std::unique_lock<std::mutex> lck(m_mutex);
-    return m_restart;
+    return m_claimed || m_phase == Phase::Starting || m_phase == Phase::Queued;
   }
 
   virtual void Release();
@@ -107,18 +92,30 @@ protected:
   void OnExit() override;
 
 private:
+  //! \brief The thread's lifecycle, guarded by m_mutex.
+  enum class Phase
+  {
+    Starting,  //!< created and published, the loop has not taken a script yet
+    Queued,    //!< execute() has handed the running loop a new script to take
+    Running,   //!< the loop is inside the invoker's Execute()
+    Parked,    //!< a reusable run finished; idle and available for reuse
+    Done,      //!< the loop has left and accepts no more work
+  };
+
   std::shared_ptr<ILanguageInvoker> m_invoker;
   CScriptInvocationManager *m_invocationManager;
   std::string m_script;
   std::vector<std::string> m_args;
 
-  //! Guards m_script, m_args, m_restart and m_reusable. Taken while m_critSection is held
+  //! Guards m_script, m_args and m_phase. Taken while m_critSection is held
   //! (CScriptInvocationManager -> Reuseable()/Release()); never the other way
-  //! round.
+  //! round. CThread::m_bStop is atomic; it is written under this lock only to
+  //! pair with m_condition.
   mutable std::mutex m_mutex;
   std::condition_variable m_condition;
-  bool m_restart = false;
-  bool m_reusable = false;
+  Phase m_phase = Phase::Starting;
+  //! Whether this thread may be parked for reuse at all; a one-shot or service
+  //! invoker is created with this false and always retires after its run.
+  const bool m_mayReuse;
   std::atomic<bool> m_claimed{false};
-  std::atomic<bool> m_processDone{false};
 };
