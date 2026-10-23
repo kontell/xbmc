@@ -25,6 +25,28 @@
 #include <utility>
 #include <vector>
 
+CReusableInvokerClaim& CReusableInvokerClaim::operator=(CReusableInvokerClaim&& other) noexcept
+{
+  if (this != &other)
+  {
+    Release();
+    m_thread = std::move(other.m_thread);
+    m_pluginHandle = other.m_pluginHandle;
+    other.m_thread = nullptr;
+    other.m_pluginHandle = -1;
+  }
+  return *this;
+}
+
+void CReusableInvokerClaim::Release()
+{
+  if (m_thread)
+    m_thread->ReleaseClaim();
+
+  m_thread = nullptr;
+  m_pluginHandle = -1;
+}
+
 CScriptInvocationManager::~CScriptInvocationManager()
 {
   Uninitialize();
@@ -65,6 +87,7 @@ void CScriptInvocationManager::Uninitialize()
 
   // it is safe to release early, thread must be in m_scripts too
   m_lastInvokerThread = nullptr;
+  m_lastPluginHandle = -1;
 
   // make sure all scripts are done
   std::vector<LanguageInvokerThread> tempList;
@@ -157,38 +180,37 @@ bool CScriptInvocationManager::HasLanguageInvoker(const std::string &script) con
   return it != m_invocationHandlers.end() && it->second != nullptr;
 }
 
-int CScriptInvocationManager::GetReusablePluginHandle(const std::string& script)
+CReusableInvokerClaim CScriptInvocationManager::ClaimReusableInvoker(const std::string& script)
 {
   std::unique_lock lock(m_critSection);
 
-  if (m_lastInvokerThread)
+  if (m_lastInvokerThread && m_lastInvokerThread->Reuseable(script) &&
+      m_lastInvokerThread->Claim())
   {
-    if (m_lastInvokerThread->Reuseable(script))
-      return m_lastPluginHandle;
-    m_lastInvokerThread->Release();
-    m_lastInvokerThread = nullptr;
+    m_lastInvokerThread->GetInvoker()->Reset();
+    CLog::Log(LOGDEBUG, "{} - claimed reusable invoker (plugin handle {}) on LanguageInvokerThread {}",
+              __FUNCTION__, m_lastPluginHandle, m_lastInvokerThread->GetId());
+    return {m_lastInvokerThread, m_lastPluginHandle};
   }
-  return -1;
+  return {};
 }
 
 std::shared_ptr<ILanguageInvoker> CScriptInvocationManager::GetLanguageInvoker(
-    const std::string& script)
+    const std::string& script, const CReusableInvokerClaim* claim /* = nullptr */)
 {
+  // The claim was granted for this script and keeps the interpreter from being
+  // handed to anyone else; a stop that lands between here and the hand-off is
+  // caught when the thread refuses the script.
+  if (claim != nullptr && claim->m_thread)
+    return claim->m_thread->GetInvoker();
+
   std::unique_lock lock(m_critSection);
+  return CreateLanguageInvoker(script);
+}
 
-  if (m_lastInvokerThread)
-  {
-    if (m_lastInvokerThread->Reuseable(script))
-    {
-      CLog::Log(LOGDEBUG, "{} - Reusing LanguageInvokerThread {} for script {}", __FUNCTION__,
-                m_lastInvokerThread->GetId(), script);
-      m_lastInvokerThread->GetInvoker()->Reset();
-      return m_lastInvokerThread->GetInvoker();
-    }
-    m_lastInvokerThread->Release();
-    m_lastInvokerThread = nullptr;
-  }
-
+std::shared_ptr<ILanguageInvoker> CScriptInvocationManager::CreateLanguageInvoker(
+    const std::string& script) const
+{
   std::string extension = URIUtils::GetExtension(script);
   StringUtils::ToLower(extension);
 
@@ -204,7 +226,8 @@ int CScriptInvocationManager::ExecuteAsync(
     const ADDON::AddonPtr& addon /* = ADDON::AddonPtr() */,
     const std::vector<std::string>& arguments /* = std::vector<std::string>() */,
     bool reuseable /* = false */,
-    int pluginHandle /* = -1 */)
+    int pluginHandle /* = -1 */,
+    CReusableInvokerClaim* claim /* = nullptr */)
 {
   if (script.empty())
     return -1;
@@ -215,8 +238,17 @@ int CScriptInvocationManager::ExecuteAsync(
     return -1;
   }
 
-  auto invoker = GetLanguageInvoker(script);
-  return ExecuteAsync(script, invoker, addon, arguments, reuseable, pluginHandle);
+  // A caller with no claim of its own (a handle-less run, a one-shot) still
+  // reuses a parked interpreter of its script; its lease lasts for the hand-off.
+  CReusableInvokerClaim ownClaim;
+  if (claim == nullptr)
+  {
+    ownClaim = ClaimReusableInvoker(script);
+    claim = &ownClaim;
+  }
+
+  auto invoker = GetLanguageInvoker(script, claim);
+  return ExecuteAsync(script, invoker, addon, arguments, reuseable, pluginHandle, claim);
 }
 
 int CScriptInvocationManager::ExecuteAsync(
@@ -225,7 +257,8 @@ int CScriptInvocationManager::ExecuteAsync(
     const ADDON::AddonPtr& addon /* = ADDON::AddonPtr() */,
     const std::vector<std::string>& arguments /* = std::vector<std::string>() */,
     bool reuseable /* = false */,
-    int pluginHandle /* = -1 */)
+    int pluginHandle /* = -1 */,
+    CReusableInvokerClaim* claim /* = nullptr */)
 {
   if (script.empty() || languageInvoker == nullptr)
     return -1;
@@ -238,38 +271,83 @@ int CScriptInvocationManager::ExecuteAsync(
 
   std::unique_lock lock(m_critSection);
 
-  if (m_lastInvokerThread && m_lastInvokerThread->GetInvoker() == languageInvoker)
+  auto invoker = languageInvoker;
+  if (claim != nullptr && claim->m_thread && claim->m_thread->GetInvoker() == invoker)
   {
+    auto invokerThread = claim->m_thread;
     if (addon != nullptr)
-      m_lastInvokerThread->SetAddon(addon);
+      invokerThread->SetAddon(addon);
 
-    // After we leave the lock, m_lastInvokerThread can be released -> copy!
-    auto invokerThread = m_lastInvokerThread;
     lock.unlock();
-    invokerThread->Execute(script, arguments);
+    // The claim keeps the thread spoken for across the hand-off.
+    if (invokerThread->Execute(script, arguments))
+      return invokerThread->GetId();
 
-    return invokerThread->GetId();
+    // The thread was stopped after it was claimed. Let go of it, so the new
+    // interpreter can take the slot under the same claim.
+    CLog::Log(LOGDEBUG, "{} - LanguageInvokerThread {} refused {}, it is stopping; using a new one",
+              __FUNCTION__, invokerThread->GetId(), script);
+    lock.lock();
+    invoker = CreateLanguageInvoker(script);
+    if (invoker == nullptr)
+      return -1;
+    claim->Release();
   }
 
-  m_lastInvokerThread = std::make_shared<CLanguageInvokerThread>(languageInvoker, this, reuseable);
-  if (m_lastInvokerThread == nullptr)
-    return -1;
+  const bool lastOccupied = LastInvokerOccupied();
+  auto invokerThread =
+      std::make_shared<CLanguageInvokerThread>(invoker, this, reuseable && !lastOccupied);
 
   if (addon != nullptr)
-    m_lastInvokerThread->SetAddon(addon);
+    invokerThread->SetAddon(addon);
 
-  m_lastInvokerThread->SetId(m_nextId++);
-  m_lastPluginHandle = pluginHandle;
+  const int scriptId = m_nextId++;
+  invokerThread->SetId(scriptId);
 
-  LanguageInvokerThread thread = {m_lastInvokerThread, script, false};
-  m_scripts.insert(std::make_pair(m_lastInvokerThread->GetId(), thread));
-  m_scriptPaths.insert(std::make_pair(script, m_lastInvokerThread->GetId()));
-  // After we leave the lock, m_lastInvokerThread can be released -> copy!
-  auto invokerThread = m_lastInvokerThread;
+  LanguageInvokerThread thread = {invokerThread, script, false};
+  m_scripts.insert(std::make_pair(scriptId, thread));
+  m_scriptPaths.insert(std::make_pair(script, scriptId));
+
+  // Take the slot unless the last thread is spoken for; one that is still
+  // running finishes its script after Release() and then exits. Only park a
+  // thread there that may be reused (a service add-on, say, runs until shutdown
+  // and would otherwise pin the slot for the session).
+  if (!lastOccupied && reuseable)
+  {
+    if (m_lastInvokerThread)
+      m_lastInvokerThread->Release();
+    m_lastInvokerThread = invokerThread;
+    m_lastPluginHandle = pluginHandle;
+    // The caller's claim covers the new interpreter from here. A plugin handle
+    // lives in s_scriptHandles until its waiter removes it, and the listing
+    // holds its claim until then, so a concurrent listing cannot claim this
+    // interpreter and reuse the same handle before the run that created it is
+    // done, which would let that run's RemoveScriptHandle erase the other's.
+    if (claim != nullptr)
+    {
+      invokerThread->Claim();
+      *claim = CReusableInvokerClaim{invokerThread, pluginHandle};
+    }
+  }
+
   lock.unlock();
-  invokerThread->Execute(script, arguments);
+  if (invokerThread->Execute(script, arguments))
+    return scriptId;
 
-  return invokerThread->GetId();
+  // Never started, so OnExit() will not mark it done.
+  lock.lock();
+  if (claim != nullptr && claim->m_thread == invokerThread)
+    claim->Release();
+  m_scripts.erase(scriptId);
+  if (const auto it = m_scriptPaths.find(script);
+      it != m_scriptPaths.end() && it->second == scriptId)
+    m_scriptPaths.erase(it);
+  if (m_lastInvokerThread == invokerThread)
+  {
+    m_lastInvokerThread = nullptr;
+    m_lastPluginHandle = -1;
+  }
+  return -1;
 }
 
 int CScriptInvocationManager::ExecuteSync(
@@ -288,8 +366,9 @@ int CScriptInvocationManager::ExecuteSync(
     return -1;
   }
 
-  auto invoker = GetLanguageInvoker(script);
-  return ExecuteSync(script, invoker, addon, arguments, timeoutMs, waitShutdown);
+  CReusableInvokerClaim claim = ClaimReusableInvoker(script);
+  auto invoker = GetLanguageInvoker(script, &claim);
+  return ExecuteSync(script, invoker, addon, arguments, timeoutMs, waitShutdown, &claim);
 }
 
 int CScriptInvocationManager::ExecuteSync(
@@ -298,9 +377,10 @@ int CScriptInvocationManager::ExecuteSync(
     const ADDON::AddonPtr& addon /* = ADDON::AddonPtr() */,
     const std::vector<std::string>& arguments /* = std::vector<std::string>() */,
     uint32_t timeoutMs /* = 0 */,
-    bool waitShutdown /* = false */)
+    bool waitShutdown /* = false */,
+    CReusableInvokerClaim* claim /* = nullptr */)
 {
-  int scriptId = ExecuteAsync(script, languageInvoker, addon, arguments);
+  int scriptId = ExecuteAsync(script, languageInvoker, addon, arguments, false, -1, claim);
   if (scriptId < 0)
     return -1;
 
@@ -391,6 +471,11 @@ void CScriptInvocationManager::OnExecutionDone(int scriptId)
   const auto script = m_scripts.find(scriptId);
   if (script != m_scripts.end())
     script->second.done = true;
+}
+
+bool CScriptInvocationManager::LastInvokerOccupied() const
+{
+  return m_lastInvokerThread && m_lastInvokerThread->IsSpokenFor();
 }
 
 CScriptInvocationManager::LanguageInvokerThread CScriptInvocationManager::getInvokerThread(int scriptId) const
