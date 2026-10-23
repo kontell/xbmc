@@ -77,9 +77,10 @@ bool CGUIDialogBusy::Wait(IRunnable *runnable, unsigned int displaytime, bool al
 
 bool CGUIDialogBusy::WaitOnEvent(CEvent& event,
                                  unsigned int displaytime /* = 100 */,
-                                 bool allowCancel /* = true */)
+                                 bool allowCancel /* = true */,
+                                 std::chrono::milliseconds quietTime /* = {} */)
 {
-  return DoWaitOnEvent(event, displaytime, allowCancel, {}) == WaitResult::COMPLETED;
+  return DoWaitOnEvent(event, displaytime, allowCancel, {}, quietTime) == WaitResult::COMPLETED;
 }
 
 CGUIDialogBusy::WaitResult CGUIDialogBusy::WaitOnEventFor(CEvent& event,
@@ -94,11 +95,30 @@ CGUIDialogBusy::WaitResult CGUIDialogBusy::DoWaitOnEvent(
     CEvent& event,
     unsigned int displaytime,
     bool allowCancel,
-    std::optional<std::chrono::milliseconds> timeout)
+    std::optional<std::chrono::milliseconds> timeout,
+    std::chrono::milliseconds quietTime /* = {} */)
 {
   XbmcThreads::EndTime<> deadline;
   if (timeout)
     deadline.Set(*timeout);
+
+  // While the caller can afford the wait, the GUI runs on as it is: the render loop is pumped
+  // as it is under the dialog, with no dialog up and input going where it always goes. A wait
+  // that outlasts that time is shown at once; the time before the dialog is for a wait that
+  // may be over before it is worth showing, and this one is not.
+  if (quietTime > 0ms)
+  {
+    auto* dialog = static_cast<CGUIDialogBusy*>(
+        CServiceBroker::GetGUI()->GetWindowManager().GetWindow(WINDOW_DIALOG_BUSY));
+    XbmcThreads::EndTime<> quiet(quietTime);
+    while (dialog && !quiet.IsTimePast() && !(timeout && deadline.IsTimePast()))
+    {
+      if (event.Wait(1ms))
+        return WaitResult::COMPLETED;
+      dialog->ProcessRenderLoop(false);
+    }
+    displaytime = 0;
+  }
 
   const auto initialWait{timeout ? std::min(std::chrono::milliseconds(displaytime), *timeout)
                                  : std::chrono::milliseconds(displaytime)};

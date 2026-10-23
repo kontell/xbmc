@@ -36,9 +36,10 @@ CScriptRunner::CScriptRunner() : m_scriptDone(true)
 bool CScriptRunner::RunScript(const ADDON::AddonPtr& addon,
                               const CURL& url,
                               int handle,
-                              bool resume)
+                              bool resume,
+                              std::chrono::milliseconds quietTime /* = {} */)
 {
-  return RunScriptInternal(addon, url, handle, resume, true);
+  return RunScriptInternal(addon, url, handle, resume, true, quietTime);
 }
 
 void CScriptRunner::SetDone()
@@ -82,8 +83,12 @@ int CScriptRunner::ExecuteScript(const ADDON::AddonPtr& addon, CURL url, int han
   return scriptId;
 }
 
-bool CScriptRunner::RunScriptInternal(
-    const ADDON::AddonPtr& addon, const CURL& url, int handle, bool resume, bool wait /* = true */)
+bool CScriptRunner::RunScriptInternal(const ADDON::AddonPtr& addon,
+                                      const CURL& url,
+                                      int handle,
+                                      bool resume,
+                                      bool wait /* = true */,
+                                      std::chrono::milliseconds quietTime /* = {} */)
 {
   if (addon == nullptr)
     return false;
@@ -103,12 +108,13 @@ bool CScriptRunner::RunScriptInternal(
     return true;
 
   // wait for our script to finish
-  return WaitOnScriptResult(scriptId, addon->LibPath(), addon->Name());
+  return WaitOnScriptResult(scriptId, addon->LibPath(), addon->Name(), quietTime);
 }
 
 bool CScriptRunner::WaitOnScriptResult(int scriptId,
                                        const std::string& path,
-                                       const std::string& name)
+                                       const std::string& name,
+                                       std::chrono::milliseconds quietTime)
 {
   bool cancelled = false;
 
@@ -130,7 +136,7 @@ bool CScriptRunner::WaitOnScriptResult(int scriptId,
         if (!progress->WaitOnEvent(m_scriptDone))
           cancelled = true;
       }
-      else if (!CGUIDialogBusy::WaitOnEvent(m_scriptDone, 200))
+      else if (!CGUIDialogBusy::WaitOnEvent(m_scriptDone, 200, true, quietTime))
         cancelled = true;
 
       scriptObs.Abort();

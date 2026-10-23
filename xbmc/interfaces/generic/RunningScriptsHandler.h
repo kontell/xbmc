@@ -13,6 +13,7 @@
 #include "threads/CriticalSection.h"
 #include "threads/Event.h"
 
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -30,7 +31,11 @@ protected:
   using CScriptRunner::GetAddon;
   using CScriptRunner::SetDone;
 
-  bool RunScript(TScript* script, const ADDON::AddonPtr& addon, const CURL& url, bool resume)
+  bool RunScript(TScript* script,
+                 const ADDON::AddonPtr& addon,
+                 const CURL& url,
+                 bool resume,
+                 std::chrono::milliseconds quietTime = {})
   {
     if (script == nullptr || addon == nullptr)
       return false;
@@ -43,7 +48,7 @@ protected:
       ReuseScriptHandle(handle, script);
 
     // run the script
-    auto result = CScriptRunner::RunScript(addon, url, handle, resume);
+    auto result = CScriptRunner::RunScript(addon, url, handle, resume, quietTime);
 
     // remove the script handle if necessary
     RemoveScriptHandle(handle);
