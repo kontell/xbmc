@@ -12,6 +12,7 @@
 #include "interfaces/generic/RunningScriptsHandler.h"
 
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -42,7 +43,21 @@ public:
   \return false if the plugin path cannot be resolved, true otherwise.
   */
   static bool GetResolvedPluginResult(CFileItem& resultItem);
-  static bool GetPluginResult(const std::string& strPath, CFileItem &resultItem, bool resume);
+
+  /*! \brief Resolve a playable plugin path by running the plugin, and put what it answers
+  (the path, the mime type and the info it set) on the item.
+  \param strPath the plugin path to resolve.
+  \param resultItem the item to resolve it into.
+  \param resume whether the plugin is told that playback resumes.
+  \param quietTime how long the caller can wait before the GUI shows that it is waiting:
+  the GUI runs on as it is for that long, and the busy dialog follows as usual. On the GUI
+  thread only; a wait on another thread shows nothing anyway.
+  \return false if the plugin failed or was cancelled, true otherwise.
+  */
+  static bool GetPluginResult(const std::string& strPath,
+                              CFileItem& resultItem,
+                              bool resume,
+                              std::chrono::milliseconds quietTime = {});
 
   /*! \brief Check whether a plugin supports media library scanning.
   \param content content type - movies, tvshows, musicvideos.
@@ -80,7 +95,7 @@ protected:
   bool IsCancelled() const override { return m_cancelled; }
 
 private:
-  bool StartScript(const CURL& url, bool resume);
+  bool StartScript(const CURL& url, bool resume, std::chrono::milliseconds quietTime = {});
 
   std::unique_ptr<CFileItemList> m_listItems;
   std::unique_ptr<CFileItem> m_fileResult;

@@ -12,6 +12,7 @@
 #include "addons/IAddon.h"
 #include "threads/Event.h"
 
+#include <chrono>
 #include <string>
 
 class CScriptRunner
@@ -25,7 +26,18 @@ protected:
 
   ADDON::AddonPtr GetAddon() const;
 
-  bool RunScript(const ADDON::AddonPtr& addon, const CURL& url, int handle, bool resume);
+  /*!
+   * \brief Run the add-on script for the given URL and wait for its result.
+   *
+   * \param quietTime How long the caller can wait before the GUI shows that it is waiting.
+   *        On the GUI thread the wait is under the busy dialog; for this long first the GUI
+   *        runs on as it is, with no dialog. Nothing on another thread.
+   */
+  bool RunScript(const ADDON::AddonPtr& addon,
+                 const CURL& url,
+                 int handle,
+                 bool resume,
+                 std::chrono::milliseconds quietTime = {});
 
   void SetDone();
 
@@ -33,9 +45,16 @@ protected:
   static int ExecuteScript(const ADDON::AddonPtr& addon, CURL url, int handle, bool resume);
 
 private:
-  bool RunScriptInternal(
-      const ADDON::AddonPtr& addon, const CURL& url, int handle, bool resume, bool wait = true);
-  bool WaitOnScriptResult(int scriptId, const std::string& path, const std::string& name);
+  bool RunScriptInternal(const ADDON::AddonPtr& addon,
+                         const CURL& url,
+                         int handle,
+                         bool resume,
+                         bool wait = true,
+                         std::chrono::milliseconds quietTime = {});
+  bool WaitOnScriptResult(int scriptId,
+                          const std::string& path,
+                          const std::string& name,
+                          std::chrono::milliseconds quietTime);
 
   ADDON::AddonPtr m_addon;
 
