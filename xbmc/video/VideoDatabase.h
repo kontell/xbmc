@@ -57,6 +57,11 @@ namespace KODI::VIDEO
   struct SScanSettings;
 }
 
+namespace XFILE
+{
+enum class PluginItemExists;
+}
+
 enum VideoDbDetails
 {
   VideoDbDetailsNone     = 0x00,
@@ -1115,6 +1120,10 @@ public:
   std::string GetRemovableBlurayPath(std::string originalPath);
 
 protected:
+  //! Asks the plugin whether an item of its library exists
+  virtual XFILE::PluginItemExists CheckPluginItemExists(const std::string& content,
+                                                        const std::string& path) const;
+
   int AddNewMovie(CVideoInfoTag& details);
   int AddNewMusicVideo(CVideoInfoTag& details);
 
@@ -1355,8 +1364,12 @@ private:
    */
   std::string GetSafeFile(const std::string &dir, const std::string &name) const;
 
-  std::vector<int> CleanMediaType(KODI::MEDIA::TYPE mediaType, const std::string &cleanableFileIDs,
-                                  std::map<int, bool> &pathsDeleteDecisions, std::string &deletedFileIDs, bool silent);
+  std::vector<int> CleanMediaType(KODI::MEDIA::TYPE mediaType,
+                                  const std::string& cleanableFileIDs,
+                                  const std::set<int>& decidedFileIDs,
+                                  std::map<int, bool>& pathsDeleteDecisions,
+                                  std::string& deletedFileIDs,
+                                  bool silent);
 
   static void AnnounceRemove(KODI::MEDIA::TYPE content, int id, bool scanning = false);
 
