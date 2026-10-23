@@ -41,6 +41,7 @@
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
+#include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/ArtTypes.h"
 #include "utils/DefaultArt.h"
@@ -51,6 +52,8 @@
 #include "utils/log.h"
 #include "video/VideoDatabase.h"
 #include "video/VideoFileItemClassify.h"
+
+#include <mutex>
 
 using namespace KODI::MESSAGING;
 using namespace KODI::VIDEO;
@@ -136,6 +139,15 @@ bool CPlayListPlayer::OnMessage(CGUIMessage &message)
         if (appPlayer->IsPlaying() && !appPlayer->IsPaused())
           appPlayer->Pause();
       }
+    }
+    break;
+  case GUI_MSG_PLAYBACK_AVSTARTED:
+    {
+      // Audio taking over keeps the music playlist from coming back. A stop can come before this
+      // message, and the player then no longer tells what it played.
+      const auto appPlayer = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
+      if (appPlayer->IsPlaying() && !appPlayer->IsPlayingVideo())
+        ForgetReplacedPlaylist();
     }
     break;
   }
@@ -449,8 +461,12 @@ bool CPlayListPlayer::Play(int iSong,
   m_iFailedSongs = 0;
   m_failedSongsStart = std::chrono::steady_clock::now();
   m_bPlayedFirstFile = true;
-  if (m_iCurrentPlayList == Id::TYPE_MUSIC && !g_partyModeManager.IsEnabled())
-    m_musicPlaylistLive = true;
+  if (m_iCurrentPlayList == Id::TYPE_MUSIC)
+  {
+    ForgetReplacedPlaylist();
+    if (!g_partyModeManager.IsEnabled())
+      m_musicPlaylistLive = true;
+  }
   return true;
 }
 
@@ -476,7 +492,7 @@ void CPlayListPlayer::SetCurrentPlaylist(Id playlistId)
     return;
 
   if (m_iCurrentPlayList == Id::TYPE_MUSIC)
-    RecordMusicPlaylist();
+    RecordReplacedMusicPlaylist();
 
   // changing the current playlist while party mode is on
   // disables party mode
@@ -556,7 +572,7 @@ int CPlayListPlayer::RemoveDVDItems()
 void CPlayListPlayer::Reset()
 {
   if (m_iCurrentPlayList == Id::TYPE_MUSIC)
-    RecordMusicPlaylist();
+    RecordReplacedMusicPlaylist();
 
   m_iCurrentSong = -1;
   m_bPlayedFirstFile = false;
@@ -841,6 +857,14 @@ void CPlayListPlayer::Remove(Id playlistId, int iPosition)
   CServiceBroker::GetGUI()->GetWindowManager().SendMessage(msg);
 }
 
+void CPlayListPlayer::LoadHistory(const std::string& folder)
+{
+  m_history->ReInit(folder);
+  // the file can hold more than the profile keeps now
+  m_history->Trim(CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+      CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE));
+}
+
 void CPlayListPlayer::Clear()
 {
   RecordMusicPlaylist();
@@ -853,23 +877,27 @@ void CPlayListPlayer::Clear()
     m_PlaylistEmpty->Clear();
 }
 
-void CPlayListPlayer::RecordMusicPlaylist(bool playedThrough)
+bool CPlayListPlayer::RecordMusicPlaylist(bool playedThrough)
 {
   if (!m_musicPlaylistLive)
-    return;
+    return false;
   m_musicPlaylistLive = false;
   if (g_partyModeManager.IsEnabled())
-    return;
+    return false;
+  const int keep = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+      CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE);
+  if (keep <= 0)
+    return false;
 
   const CPlayList& playlist = GetPlaylist(Id::TYPE_MUSIC);
   if (playlist.size() == 0)
-    return;
+    return false;
 
   const double seconds = CServiceBroker::GetDataCacheCore().GetPlayTime() / 1000.0;
   CPlayListHistoryEntry entry =
       CPlayListHistoryEntry::FromPlayList(playlist, m_iCurrentSong, seconds, playedThrough);
   if (entry.tracks.empty())
-    return;
+    return false;
 
   // A queued item carries only the art its list loaded; the row shows the library's.
   CFileItem current(*playlist[entry.Current()]);
@@ -883,7 +911,44 @@ void CPlayListPlayer::RecordMusicPlaylist(bool playedThrough)
   if (current.HasArt(ART::TYPE::FANART))
     track.fanart = current.GetArt(ART::TYPE::FANART);
 
-  m_history->Add(std::move(entry));
+  m_history->Add(std::move(entry), keep);
+  return true;
+}
+
+void CPlayListPlayer::RecordReplacedMusicPlaylist()
+{
+  const auto appPlayer = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
+  // Still playing, so whatever starts next is taking over from it.
+  if (RecordMusicPlaylist() && appPlayer->IsPlaying())
+  {
+    std::unique_lock lock(m_replacedPlaylistSection);
+    m_replacedPlaylist = std::make_unique<CPlayListHistoryEntry>(m_history->Entries().front());
+  }
+}
+
+void CPlayListPlayer::RestoreReplacedPlaylist()
+{
+  std::unique_ptr<CPlayListHistoryEntry> entry;
+  {
+    std::unique_lock lock(m_replacedPlaylistSection);
+    entry = std::move(m_replacedPlaylist);
+  }
+  if (!entry)
+    return;
+
+  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  if (!settings->GetBool(CSettings::SETTING_MUSICPLAYER_RESTOREPLAYLISTAFTERVIDEO) ||
+      settings->GetInt(CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE) <= 0)
+    return;
+
+  RestorePlaylist(*entry, settings->GetBool(CSettings::SETTING_MUSICPLAYER_RESTOREPLAYLISTPAUSED),
+                  settings->GetBool(CSettings::SETTING_MUSICPLAYER_RESTOREPLAYLISTFROMSTART));
+}
+
+void CPlayListPlayer::ForgetReplacedPlaylist()
+{
+  std::unique_lock lock(m_replacedPlaylistSection);
+  m_replacedPlaylist.reset();
 }
 
 bool CPlayListPlayer::RestorePlaylist(const CPlayListHistoryEntry& entry,
