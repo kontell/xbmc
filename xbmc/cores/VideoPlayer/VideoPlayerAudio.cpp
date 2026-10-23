@@ -82,9 +82,7 @@ CVideoPlayerAudio::~CVideoPlayerAudio()
 bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
 {
   CLog::Log(LOGINFO, "Finding audio codec for: {}", hints.codec);
-  bool allowpassthrough = !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
-  if (m_processInfo.IsRealtimeStream())
-    allowpassthrough = false;
+  bool allowpassthrough = AllowPassthrough();
 
   CAEStreamInfo::DataType streamType =
       m_audioSink.GetPassthroughStreamType(hints.codec, hints.samplerate, hints.profile);
@@ -143,6 +141,9 @@ void CVideoPlayerAudio::OpenStream(CDVDStreamInfo& hints, std::unique_ptr<CDVDAu
 
   if (m_synctype == SYNC_DISCON)
     CLog::LogF(LOGINFO, "Allowing max Out-Of-Sync Value of {} ms", m_disconAdjustTimeMs);
+
+  // the sink makes the stream at the ratio last asked for, which may be the last file's
+  UpdateResampleRatio();
 
   m_prevskipped = false;
 
@@ -207,7 +208,13 @@ void CVideoPlayerAudio::UpdatePlayerInfo()
 
   // print a/v discontinuity adjustments counter when audio is not resampled (passthrough mode)
   if (m_synctype == SYNC_DISCON)
+  {
     s << ", a/v corrections (" << m_disconAdjustTimeMs << "ms): " << m_disconAdjustCounter;
+    // and the rate the stream was asked to play at, if any (a tempo)
+    const double rr = m_audioSink.GetResampleRatio();
+    if (rr != 0.0 && rr != 1.0)
+      s << ", rr:" << std::fixed << std::setprecision(5) << 1.0 / rr;
+  }
 
   //print the inverse of the resample ratio, since that makes more sense
   //if the resample ratio is 0.5, then we're playing twice as fast
@@ -322,7 +329,8 @@ void CVideoPlayerAudio::Process()
                 "CVideoPlayerAudio - CDVDMsg::GENERAL_RESYNC({:f}), level: {}, cache: {:f}", pts,
                 m_messageQueue.GetLevel(), m_audioSink.GetDelay());
 
-      double delay = m_audioSink.GetDelay();
+      // in the stream's own time, which a tempo stretches
+      double delay = m_audioSink.GetDelay() * m_audioSink.GetPlayRate();
       if (pts > m_audioClock - delay + 0.5 * DVD_TIME_BASE)
       {
         m_audioSink.Flush();
@@ -384,6 +392,15 @@ void CVideoPlayerAudio::Process()
         m_audioSink.Pause();
       }
       m_speed = (int)speed;
+      UpdateResampleRatio();
+
+      // A tempo plays the audio at a rate, which a bitstream cannot: decode it instead.
+      // Passthrough is allowed again once the tempo is 1.0, at the next stream change.
+      if (m_pAudioCodec && m_pAudioCodec->NeedPassthrough() && !AllowPassthrough() &&
+          SwitchCodecIfNeeded())
+      {
+        audioframe.nb_frames = 0;
+      }
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_STREAMCHANGE))
     {
@@ -575,8 +592,10 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
       m_stalled = false;
       SStartMsg msg;
       msg.player = VideoPlayer_AUDIO;
-      msg.cachetotal = m_audioSink.GetMaxDelay() * DVD_TIME_BASE;
-      msg.cachetime = m_audioSink.GetDelay();
+      // in the stream's own time, which a tempo stretches
+      const double rate = m_audioSink.GetPlayRate();
+      msg.cachetotal = m_audioSink.GetMaxDelay() * DVD_TIME_BASE * rate;
+      msg.cachetime = m_audioSink.GetDelay() * rate;
       msg.timestamp = audioframe.hasTimestamp ? audioframe.pts : DVD_NOPTS_VALUE;
       m_messageParent.Put(std::make_shared<CDVDMsgType<SStartMsg>>(CDVDMsg::PLAYER_STARTED, msg));
 
@@ -616,6 +635,39 @@ void CVideoPlayerAudio::SetSyncType(bool passthrough)
     else
       m_audioSink.SetResampleMode(0);
   }
+
+  UpdateResampleRatio();
+}
+
+bool CVideoPlayerAudio::AllowPassthrough()
+{
+  // The display clock has every stream resampled to the display, a realtime stream
+  // is resampled to its source, and a tempo plays the audio at a rate: none of them
+  // can be done on a bitstream.
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK))
+    return false;
+  if (m_processInfo.IsRealtimeStream())
+    return false;
+  if (m_processInfo.GetNewTempo() != 1.0f)
+    return false;
+
+  return true;
+}
+
+void CVideoPlayerAudio::UpdateResampleRatio()
+{
+  // With the display clock the engine's sync servo resamples the audio to the clock,
+  // a tempo included. With the audio as the clock nothing would move it, so the rate
+  // is asked of the stream: 1/tempo output samples per input sample.
+  m_rateFollowsSpeed = m_synctype == SYNC_DISCON;
+
+  double ratio = 1.0;
+  if (m_synctype == SYNC_DISCON && m_speed != DVD_PLAYSPEED_NORMAL &&
+      m_processInfo.IsTempoAllowed(static_cast<float>(m_speed) / DVD_PLAYSPEED_NORMAL))
+    ratio = static_cast<double>(DVD_PLAYSPEED_NORMAL) / m_speed;
+
+  m_audioSink.SetResampleRatio(ratio);
 }
 
 void CVideoPlayerAudio::OnExit()
@@ -658,9 +710,7 @@ bool CVideoPlayerAudio::SwitchCodecIfNeeded()
 
   m_displayReset = false;
 
-  bool allowpassthrough = !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
-  if (m_processInfo.IsRealtimeStream() || m_synctype == SYNC_RESAMPLE)
-    allowpassthrough = false;
+  bool allowpassthrough = AllowPassthrough() && m_synctype != SYNC_RESAMPLE;
 
   CAEStreamInfo::DataType streamType = m_audioSink.GetPassthroughStreamType(
       m_streaminfo.codec, m_streaminfo.samplerate, m_streaminfo.profile);
