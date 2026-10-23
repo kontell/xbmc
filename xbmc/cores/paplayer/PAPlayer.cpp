@@ -433,7 +433,7 @@ bool PAPlayer::QueueNextFileEx(const CFileItem &file, bool fadeIn)
   {
     int64_t time = static_cast<int64_t>(static_cast<double>(si->m_seekFrame) /
                                         si->m_audioFormat.m_sampleRate * 1000.0);
-    si->m_framesSent = static_cast<int>(si->m_seekFrame - static_cast<double>(si->m_startOffset) *
+    si->m_framesSent = static_cast<int64_t>(si->m_seekFrame - static_cast<double>(si->m_startOffset) *
                                                               si->m_audioFormat.m_sampleRate /
                                                               1000.0);
     si->m_seekFrame = -1;
@@ -450,7 +450,7 @@ bool PAPlayer::QueueNextFileEx(const CFileItem &file, bool fadeIn)
   if (!MUSIC::IsCDDA(file))
   {
     if (streamTotalTime >= TIME_TO_CACHE_NEXT_FILE + m_defaultCrossfadeMS)
-      si->m_prepareNextAtFrame = (int)((streamTotalTime - TIME_TO_CACHE_NEXT_FILE - m_defaultCrossfadeMS) * si->m_audioFormat.m_sampleRate / 1000.0f);
+      si->m_prepareNextAtFrame = static_cast<int64_t>((streamTotalTime - TIME_TO_CACHE_NEXT_FILE - m_defaultCrossfadeMS) * si->m_audioFormat.m_sampleRate / 1000.0);
   }
 
   if (m_currentStream && ((m_currentStream->m_audioFormat.m_dataFormat == AE_FMT_RAW) || (si->m_audioFormat.m_dataFormat == AE_FMT_RAW)))
@@ -505,9 +505,9 @@ void PAPlayer::UpdateStreamInfoPlayNextAtFrame(StreamInfo *si, unsigned int cros
     if (si->m_endOffset)
       streamTotalTime = si->m_endOffset - si->m_startOffset;
     if (streamTotalTime < crossFadingTime)
-      si->m_playNextAtFrame = (int)((streamTotalTime / 2) * si->m_audioFormat.m_sampleRate / 1000.0f);
+      si->m_playNextAtFrame = static_cast<int64_t>((streamTotalTime / 2) * si->m_audioFormat.m_sampleRate / 1000.0);
     else
-      si->m_playNextAtFrame = (int)((streamTotalTime - crossFadingTime) * si->m_audioFormat.m_sampleRate / 1000.0f);
+      si->m_playNextAtFrame = static_cast<int64_t>((streamTotalTime - crossFadingTime) * si->m_audioFormat.m_sampleRate / 1000.0);
   }
 }
 
@@ -834,8 +834,8 @@ inline bool PAPlayer::ProcessStream(StreamInfo *si, double &freeBufferTime)
     /* if its a direct seek */
     if (si->m_seekFrame > -1)
     {
-      time = (int64_t)((float)si->m_seekFrame / (float)si->m_audioFormat.m_sampleRate * 1000.0f);
-      si->m_framesSent = (int)(si->m_seekFrame - ((float)si->m_startOffset * (float)si->m_audioFormat.m_sampleRate) / 1000.0f);
+      time = static_cast<int64_t>(static_cast<double>(si->m_seekFrame) / si->m_audioFormat.m_sampleRate * 1000.0);
+      si->m_framesSent = static_cast<int64_t>(si->m_seekFrame - static_cast<double>(si->m_startOffset) * si->m_audioFormat.m_sampleRate / 1000.0);
       si->m_seekFrame  = -1;
       m_playerGUIData.m_time = time; //update for GUI
       si->m_seekNextAtFrame = 0;
@@ -846,7 +846,7 @@ inline bool PAPlayer::ProcessStream(StreamInfo *si, double &freeBufferTime)
     {
       si->m_framesSent      += si->m_audioFormat.m_sampleRate * (m_playbackSpeed  - 1);
       si->m_seekNextAtFrame  = si->m_framesSent + si->m_audioFormat.m_sampleRate / 2;
-      time = (int64_t)(((float)si->m_framesSent / (float)si->m_audioFormat.m_sampleRate * 1000.0f) + (float)si->m_startOffset);
+      time = static_cast<int64_t>(static_cast<double>(si->m_framesSent) / si->m_audioFormat.m_sampleRate * 1000.0 + si->m_startOffset);
     }
 
     /* if we are seeking back before the start of the track start normal playback */
@@ -890,7 +890,7 @@ inline bool PAPlayer::ProcessStream(StreamInfo *si, double &freeBufferTime)
       // calculate time when to prepare next stream
       si->m_prepareNextAtFrame = 0;
       if (streamTotalTime >= TIME_TO_CACHE_NEXT_FILE + m_defaultCrossfadeMS)
-        si->m_prepareNextAtFrame = (int)((streamTotalTime - TIME_TO_CACHE_NEXT_FILE - m_defaultCrossfadeMS) * si->m_audioFormat.m_sampleRate / 1000.0f);
+        si->m_prepareNextAtFrame = static_cast<int64_t>((streamTotalTime - TIME_TO_CACHE_NEXT_FILE - m_defaultCrossfadeMS) * si->m_audioFormat.m_sampleRate / 1000.0);
 
       si->m_prepareTriggered = false;
       si->m_playNextAtFrame = 0;
@@ -1257,7 +1257,7 @@ void PAPlayer::SeekTime(int64_t iTime /*=0*/)
     SetSpeed(1);
 
   m_chapterSeekTarget = -1;
-  m_currentStream->m_seekFrame = (int)((float)m_currentStream->m_audioFormat.m_sampleRate * ((float)iTime + (float)m_currentStream->m_startOffset) / 1000.0f);
+  m_currentStream->m_seekFrame = static_cast<int64_t>(static_cast<double>(m_currentStream->m_audioFormat.m_sampleRate) * (iTime + m_currentStream->m_startOffset) / 1000.0);
   m_callback.OnPlayBackSeek(iTime, seekOffset);
 }
 
@@ -1694,7 +1694,7 @@ void PAPlayer::ProcessAudioStreamChange(std::unique_lock<CCriticalSection>& lock
 
   // Rebase the frame counter onto the new sample rate before priming the new sink. It counts
   // from the start of the track, not the start of the file.
-  si->m_framesSent = static_cast<int>(
+  si->m_framesSent = static_cast<int64_t>(
       ((currentTime - si->m_startOffset) * static_cast<int64_t>(si->m_audioFormat.m_sampleRate)) /
       1000);
   si->m_seekFrame = -1;
@@ -1713,8 +1713,8 @@ void PAPlayer::ProcessAudioStreamChange(std::unique_lock<CCriticalSection>& lock
   if (!waitingToDrain && streamTotalTime >= TIME_TO_CACHE_NEXT_FILE + m_defaultCrossfadeMS)
   {
     si->m_prepareNextAtFrame =
-        static_cast<int>((streamTotalTime - TIME_TO_CACHE_NEXT_FILE - m_defaultCrossfadeMS) *
-                         si->m_audioFormat.m_sampleRate / 1000.0f);
+        static_cast<int64_t>((streamTotalTime - TIME_TO_CACHE_NEXT_FILE - m_defaultCrossfadeMS) *
+                             si->m_audioFormat.m_sampleRate / 1000.0);
   }
 
   UpdateStreamInfoPlayNextAtFrame(si, m_upcomingCrossfadeMS);
