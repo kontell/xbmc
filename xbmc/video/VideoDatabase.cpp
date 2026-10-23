@@ -224,6 +224,9 @@ void CVideoDatabase::CreateTables()
 void CVideoDatabase::CreateAnalytics()
 {
   KODI::DATABASE::CVideoDatabaseDDL::CreateAnalytics(*this);
+  // MySQL already compares names without regard to case
+  if (m_sqlite)
+    KODI::DATABASE::CVideoDatabaseDDL::CreateNameLookupIndices(*this);
 }
 
 //********************************************************************************************************************************
@@ -1505,7 +1508,10 @@ int CVideoDatabase::AddToTable(const std::string& table, const std::string& firs
     if (nullptr == m_pDS)
       return -1;
 
-    std::string strSQL = PrepareSQL("select %s from %s where %s like '%s'", firstField.c_str(), table.c_str(), secondField.c_str(), value.substr(0, 255).c_str());
+    // Ordered so that names differing only by case resolve as they did before the NOCASE indexes
+    std::string strSQL = PrepareSQL("select %s from %s where %s like '%s' order by %s",
+                                    firstField.c_str(), table.c_str(), secondField.c_str(),
+                                    value.substr(0, 255).c_str(), secondField.c_str());
     m_pDS->query(strSQL);
     if (m_pDS->num_rows() == 0)
     {
@@ -1755,7 +1761,9 @@ int CVideoDatabase::AddActor(const std::string& name, const std::string& thumbUR
     std::string trimmedName = name;
     StringUtils::Trim(trimmedName);
 
-    std::string strSQL=PrepareSQL("select actor_id from actor where name like '%s'", trimmedName.substr(0, 255).c_str());
+    // Ordered so that names differing only by case resolve as they did before the NOCASE index
+    std::string strSQL = PrepareSQL("select actor_id from actor where name like '%s' order by name",
+                                    trimmedName.substr(0, 255).c_str());
     m_pDS->query(strSQL);
     if (m_pDS->num_rows() == 0)
     {

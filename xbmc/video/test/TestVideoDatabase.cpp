@@ -1822,3 +1822,32 @@ TEST_F(TestVideoDatabaseClean, RemovesAPathStylePluginItemItsAddonSaysHasGone)
 
   EXPECT_EQ(-1, m_db.GetMovieId(film));
 }
+
+TEST_F(TestVideoDatabase, NamesAreLookedUpThroughCaseInsensitiveIndices)
+{
+  for (const char* table : {"actor", "studio", "tag"})
+  {
+    EXPECT_EQ("NOCASE",
+              m_db.GetSingleValue(m_db.PrepareSQL(
+                  "SELECT coll FROM pragma_index_xinfo('ix_%s_nocase') WHERE name='name'", table)))
+        << table;
+  }
+}
+
+TEST_F(TestVideoDatabase, ANameMatchingCaseVariantsLinksTheFirstInBinaryOrder)
+{
+  ASSERT_TRUE(m_db.ExecuteQuery("INSERT INTO actor (name) VALUES ('tom'), ('TOM'), ('Tom')"));
+  const int first{m_db.GetSingleValueInt("SELECT actor_id FROM actor WHERE name='TOM'")};
+  ASSERT_GT(first, 0);
+
+  CVideoInfoTag tag{Tag("/videos/cast.mkv")};
+  SActorInfo actor;
+  actor.strName = "tom";
+  tag.m_cast.push_back(actor);
+  const int idMovie{m_db.SetDetailsForMovie(tag, KODI::ART::Artwork{})};
+  ASSERT_GT(idMovie, 0);
+
+  EXPECT_EQ(first, m_db.GetSingleValueInt(m_db.PrepareSQL(
+                       "SELECT actor_id FROM actor_link WHERE media_type='movie' AND media_id=%i",
+                       idMovie)));
+}
