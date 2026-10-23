@@ -858,7 +858,8 @@ bool CMusicDatabase::AddAlbum(CAlbum& album, int idSource)
                              song->votes, //
                              song->iBPM, song->iBitRate, song->iSampleRate, song->iChannels, //
                              song->songVideoURL, //
-                             song->replayGain);
+                             song->replayGain, //
+                             song->dateAdded);
 
       // Song must have at least one artist so set artist to [Missing]
       if (song->artistCredits.empty())
@@ -1114,7 +1115,8 @@ int CMusicDatabase::AddSong(const int idSong,
                             int iSampleRate,
                             int iChannels,
                             const std::string& songVideoURL,
-                            const ReplayGain& replayGain)
+                            const ReplayGain& replayGain,
+                            const CDateTime& dtDateAdded)
 {
   int idNew = -1;
   std::string strSQL;
@@ -1168,7 +1170,7 @@ int CMusicDatabase::AddSong(const int idSong,
       NormaliseSongDates(strRelease, strOriginal);
 
       // Get dateAdded from music file timestamp
-      std::string strDateMedia = GetMediaDateFromFile(strPathAndFileName);
+      std::string strDateMedia = GetMediaDateFromFile(strPathAndFileName, dtDateAdded);
 
       strSQL = "INSERT INTO song ("
                "idSong, dateNew, idAlbum, idPath, strArtistDisp, "
@@ -1243,7 +1245,7 @@ int CMusicDatabase::AddSong(const int idSong,
                  dtLastPlayed, //
                  rating, userrating, votes, //
                  replayGain, //
-                 iBPM, iBitRate, iSampleRate, iChannels, songVideoURL);
+                 iBPM, iBitRate, iSampleRate, iChannels, songVideoURL, dtDateAdded);
     }
     if (!strThumb.empty())
       SetArtForItem(idNew, MEDIA::TYPE::SONG, ART::TYPE::THUMB, strThumb);
@@ -1336,7 +1338,8 @@ bool CMusicDatabase::UpdateSong(CSong& song, bool bArtists /*= true*/, bool bArt
                           song.rating, song.userrating, song.votes, //
                           song.replayGain, //
                           song.iBPM, song.iBitRate, song.iSampleRate, song.iChannels, //
-                          song.songVideoURL);
+                          song.songVideoURL, //
+                          song.dateAdded);
   if (result < 0)
     return false;
 
@@ -1396,7 +1399,8 @@ int CMusicDatabase::UpdateSong(int idSong,
                                int iBitRate,
                                int iSampleRate,
                                int iChannels,
-                               const std::string& songVideoURL)
+                               const std::string& songVideoURL,
+                               const CDateTime& dtDateAdded)
 {
   if (idSong < 0)
     return -1;
@@ -1412,7 +1416,7 @@ int CMusicDatabase::UpdateSong(int idSong,
   std::string strOriginal = strOrigReleaseDate;
   NormaliseSongDates(strRelease, strOriginal);
 
-  std::string strDateMedia = GetMediaDateFromFile(strPathAndFileName);
+  std::string strDateMedia = GetMediaDateFromFile(strPathAndFileName, dtDateAdded);
 
   strSQL = PrepareSQL(
       "UPDATE song SET idPath = %i, strArtistDisp = '%s', strGenres = '%s', "
@@ -13785,7 +13789,8 @@ bool CMusicDatabase::GetFilter(CDbUrl& musicUrl, Filter& filter, SortDescription
   return true;
 }
 
-std::string CMusicDatabase::GetMediaDateFromFile(const std::string& strFileNameAndPath) const
+std::string CMusicDatabase::GetMediaDateFromFile(const std::string& strFileNameAndPath,
+                                                 const CDateTime& songDateAdded) const
 {
   if (strFileNameAndPath.empty())
     return std::string();
@@ -13802,6 +13807,9 @@ std::string CMusicDatabase::GetMediaDateFromFile(const std::string& strFileNameA
   //3 using the older datetime of the file's mtime and ctime
   else if (code == 3)
     dateMedia = CFileUtils::GetModificationDate(2, strFileNameAndPath);
+  // A file with no date of its own, such as a plugin's, keeps the date its song carries
+  if (!dateMedia.IsValid() && code != 0)
+    dateMedia = songDateAdded;
   //0 using the current datetime if none of the above matches or one returns an invalid datetime
   if (!dateMedia.IsValid())
     dateMedia = CDateTime::GetCurrentDateTime();
