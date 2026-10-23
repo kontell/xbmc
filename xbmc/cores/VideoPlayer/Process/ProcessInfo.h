@@ -16,6 +16,7 @@
 #include <atomic>
 #include <list>
 #include <map>
+#include <optional>
 #include <string>
 
 class CProcessInfo;
@@ -130,6 +131,8 @@ public:
   unsigned int GetMaxPassthroughOffSyncDuration() const;
 
   void SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max);
+  //! ms to add to the play time for the position on the stream's own clock, when known
+  void SetPresentationTimeOffset(std::optional<int64_t> offsetMs);
   int64_t GetMaxTime();
 
   // settings
