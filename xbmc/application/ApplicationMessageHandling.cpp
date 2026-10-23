@@ -603,14 +603,18 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
 
         const PLAYLIST::Id playlistId = playlistPlayer.GetCurrentPlaylist();
         const int current = playlistPlayer.GetCurrentItemIdx();
+        const CFileItemPtr nextEntry = playlist[iNext];
 
         XFILE::CPluginDirectory::GetPluginResult(url.Get(), file, false, quietTime);
 
         // The GUI was in use while the plugin answered. If playback moved on to another item
-        // meanwhile (a track skip, a new selection), the item asked for is no longer the next
-        // one: queued now, it would play behind the new one, which asks for a next of its own.
+        // meanwhile (a track skip, a new selection), or the playlist was edited at this place
+        // (an item removed, inserted or moved), the item asked for is no longer the next one:
+        // queued now, it would play behind the new one, which asks for a next of its own, or
+        // in place of the item now listed there, whose details the start would then take.
         if (playlistPlayer.GetCurrentPlaylist() != playlistId ||
-            playlistPlayer.GetCurrentItemIdx() != current)
+            playlistPlayer.GetCurrentItemIdx() != current || iNext >= playlist.size() ||
+            playlist[iNext] != nextEntry)
           return true;
       }
 
