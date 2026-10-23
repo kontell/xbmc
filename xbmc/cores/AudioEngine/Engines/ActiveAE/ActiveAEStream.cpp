@@ -51,6 +51,7 @@ CActiveAEStream::CActiveAEStream(AEAudioFormat* format, unsigned int streamid, C
   m_lastPts = 0;
   m_lastPtsJump = 0;
   m_clockSpeed = 1.0;
+  m_requestedResampleRatio = 1.0;
 }
 
 void CActiveAEStream::IncFreeBuffers()
@@ -378,7 +379,7 @@ double CActiveAEStream::GetCacheTime()
 
 double CActiveAEStream::GetCacheTotal()
 {
-  return static_cast<double>(m_activeAE->GetCacheTotal());
+  return static_cast<double>(m_activeAE->GetCacheTotal(this));
 }
 
 double CActiveAEStream::GetMaxDelay()
@@ -685,6 +686,20 @@ float CActiveAEStreamBuffers::GetDelay()
 
   delay += m_resampleBuffers->GetDelay();
   delay += m_atempoBuffers->GetDelay();
+
+  // the atempo stage's output stands for tempo times as much of the stream's time
+  const float tempo = m_atempoBuffers->GetTempo();
+  for (auto &buf : m_outputSamples)
+  {
+    delay += (float)buf->pkt->nb_samples / buf->pkt->config.sample_rate * tempo;
+  }
+
+  return delay;
+}
+
+float CActiveAEStreamBuffers::GetRateDelay()
+{
+  float delay = m_atempoBuffers->GetRateDelay();
 
   for (auto &buf : m_outputSamples)
   {
