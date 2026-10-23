@@ -1007,6 +1007,15 @@ JSONRPC_STATUS CVideoLibrary::RemoveMusicVideo(const std::string &method, ITrans
   return RemoveVideo(parameterObject);
 }
 
+JSONRPC_STATUS CVideoLibrary::RemoveMovieSet(const std::string& method,
+                                             ITransportLayer* transport,
+                                             IClient* client,
+                                             const CVariant& parameterObject,
+                                             CVariant& result)
+{
+  return RemoveVideo(parameterObject);
+}
+
 JSONRPC_STATUS CVideoLibrary::Scan(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result)
 {
   std::string directory = parameterObject["directory"].asString();
@@ -1303,6 +1312,8 @@ JSONRPC_STATUS CVideoLibrary::RemoveVideo(const CVariant &parameterObject)
     videodatabase.DeleteEpisode((int)parameterObject["episodeid"].asInteger());
   else if (parameterObject.isMember("musicvideoid"))
     videodatabase.DeleteMusicVideo((int)parameterObject["musicvideoid"].asInteger());
+  else if (parameterObject.isMember("setid"))
+    videodatabase.DeleteSet(static_cast<int>(parameterObject["setid"].asInteger()));
 
   CJSONRPCUtils::NotifyItemUpdated();
   return ACK;
