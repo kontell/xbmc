@@ -138,10 +138,11 @@ void CLanguageInvokerThread::Process()
     // waits for this lock, the app thread waits for that job, and this
     // script waits for the GUI.
     lckdl.unlock();
+    bool started = false;
     bool threw = false;
     try
     {
-      m_invoker->Execute(script, args);
+      started = m_invoker->Execute(script, args);
     }
     catch (const XbmcCommons::Exception& e)
     {
@@ -172,9 +173,11 @@ void CLanguageInvokerThread::Process()
     // The state here is this run's own outcome. A concurrent claimer can only
     // Reset() (to Uninitialized) a thread it has claimed, so a terminal failure
     // is always ours to act on; an Uninitialized seen under someone else's
-    // claim is their Reset() and must not retire the thread they will run.
+    // claim is their Reset() and must not retire the thread they will run. A
+    // run that never started leaves the same Uninitialized under our own
+    // claim, which only Execute()'s result tells apart.
     const InvokerState state = m_invoker->GetState();
-    if (state == InvokerStateFailed || state == InvokerStateExecutionDone ||
+    if (!started || state == InvokerStateFailed || state == InvokerStateExecutionDone ||
         (!IsClaimed() && state != InvokerStateScriptDone))
       m_reusable = false;
 
