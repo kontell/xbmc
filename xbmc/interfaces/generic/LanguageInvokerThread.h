@@ -58,11 +58,6 @@ public:
 
   bool IsClaimed() const { return m_claimed; }
 
-  //! \brief True once Release()/stop() has asked this thread to finish.
-  //! Deliberately not IsStopping(): that is an ILanguageInvoker virtual meaning
-  //! "the invoker reached InvokerStateStopping", which is a different question.
-  bool IsStopRequested() const { return m_bStop; }
-
   /*!
    * \brief True once the Process() loop has left and will accept no more work.
    *
