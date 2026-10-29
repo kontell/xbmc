@@ -413,6 +413,24 @@ bool PAPlayer::QueueNextFileEx(const CFileItem &file, bool fadeIn)
         CUtil::ConvertMilliSecsToSecs(
             si->m_fileItem->GetProperty(ITEM::PROPERTY::AUDIOBOOK_BOOKMARK).asInteger());
 
+  // Seek here rather than in ProcessStream: PrepareStream fills the stream before playback
+  // starts, and what it decodes from the start of the file would play ahead of the resume point.
+  if (si->m_seekFrame > -1)
+  {
+    int64_t time = static_cast<int64_t>(static_cast<double>(si->m_seekFrame) /
+                                        si->m_audioFormat.m_sampleRate * 1000.0);
+    si->m_framesSent = static_cast<int>(si->m_seekFrame - static_cast<double>(si->m_startOffset) *
+                                                              si->m_audioFormat.m_sampleRate /
+                                                              1000.0);
+    si->m_seekFrame = -1;
+    if (time < si->m_startOffset || si->m_framesSent < 0)
+    {
+      time = si->m_startOffset;
+      si->m_framesSent = 0;
+    }
+    si->m_decoder.Seek(time);
+  }
+
   si->m_prepareNextAtFrame = 0;
   // cd drives don't really like it to be crossfaded or prepared
   if (!MUSIC::IsCDDA(file))
