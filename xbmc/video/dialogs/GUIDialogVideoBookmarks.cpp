@@ -273,6 +273,11 @@ void CGUIDialogVideoBookmarks::OnRefreshList()
     items.push_back(item);
   }
 
+  // A thumbnail is extracted at the file's own chapter, so not for chapters an add-on set
+  const CFileItem& playingItem{g_application.CurrentFileItem()};
+  const bool itemHasChapters{playingItem.HasVideoInfoTag() &&
+                             !playingItem.GetVideoInfoTag()->GetChapterMarks().empty()};
+
   // add chapters if around
   for (int i = 1; i <= appPlayer->GetChapterCount(); ++i)
   {
@@ -290,8 +295,8 @@ void CGUIDialogVideoBookmarks::OnRefreshList()
     CFileItemPtr item(new CFileItem(chapterName));
     item->SetLabel2(time);
 
-    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
-            CSettings::SETTING_MYVIDEOS_EXTRACTCHAPTERTHUMBS))
+    if (!itemHasChapters && CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+                                CSettings::SETTING_MYVIDEOS_EXTRACTCHAPTERTHUMBS))
     {
       auto chapterPath = IMAGE_FILES::CImageFileURL::FromFile(m_filePath, "video");
       chapterPath.AddOption("chapter", std::to_string(i));
