@@ -1466,9 +1466,13 @@ void CVideoDatabase::UpdateTables(int iVersion)
     // gamma was never applied and stored 20, 50 is neutral now
     m_pDS->exec("UPDATE settings SET Gamma=50");
   }
+
+  if (iVersion < 154)
+    m_pDS->exec("DELETE FROM tag_link WHERE media_type = 'episode' AND media_id NOT IN "
+                "(SELECT idEpisode FROM episode)");
 }
 
 int CVideoDatabase::GetSchemaVersion() const
 {
-  return 153;
+  return 154;
 }
