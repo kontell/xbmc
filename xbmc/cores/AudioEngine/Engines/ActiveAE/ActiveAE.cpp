@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <mutex>
 
@@ -131,6 +132,7 @@ void CEngineStats::AddStream(unsigned int streamid)
   StreamStats stream;
   stream.m_streamId = streamid;
   stream.m_bufferedTime = 0;
+  stream.m_rateTime = 0;
   stream.m_resampleRatio = 1.0;
   stream.m_syncError = 0;
   stream.m_syncState = CAESyncInfo::AESyncState::SYNC_OFF;
@@ -163,10 +165,12 @@ void CEngineStats::UpdateStream(CActiveAEStream *stream)
       {
         str.m_resampleRatio = stream->m_processingBuffers->GetRR();
         delay += stream->m_processingBuffers->GetDelay();
+        str.m_rateTime = static_cast<double>(stream->m_processingBuffers->GetRateDelay());
       }
       else
       {
         str.m_resampleRatio = 1.0;
+        str.m_rateTime = 0;
       }
 
       std::unique_lock lock(stream->m_statsLock);
@@ -228,6 +232,7 @@ void CEngineStats::GetSyncInfo(CAESyncInfo& info, CActiveAEStream *stream)
     if (str.m_streamId == stream->m_id)
     {
       std::unique_lock lock(stream->m_statsLock);
+      info.rateDelay = status.GetDelay() + str.m_rateTime;
       float buffertime = static_cast<float>(str.m_bufferedTime) + stream->m_bufferedTime;
       status.delay += static_cast<double>(buffertime) * str.m_resampleRatio;
       info.delay = status.GetDelay();
@@ -258,8 +263,16 @@ float CEngineStats::GetCacheTime(CActiveAEStream *stream)
   return delay;
 }
 
-float CEngineStats::GetCacheTotal()
+float CEngineStats::GetCacheTotal(CActiveAEStream* stream)
 {
+  std::unique_lock lock(m_lock);
+  // A stream's input buffers hold MAX_CACHE_LEVEL of its own time, which is all a paused stream
+  // takes, and which plays in less at a ratio below 1.
+  for (const auto& str : m_streamStats)
+  {
+    if (str.m_streamId == stream->m_id)
+      return MAX_CACHE_LEVEL * static_cast<float>(std::min(1.0, str.m_resampleRatio));
+  }
   return MAX_CACHE_LEVEL;
 }
 
@@ -796,10 +809,33 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
           return;
         case CActiveAEControlProtocol::STREAMRESAMPLERATIO:
           par = reinterpret_cast<MsgStreamParameter*>(msg->data);
-          if (par->stream->m_processingBuffers)
+          // While the servo resamples it owns the ratio and this one waits; the servo needs
+          // a clock to run.
+          if (par->stream->m_processingBuffers &&
+              (!par->stream->m_resampleMode || !par->stream->m_pClock))
           {
-            par->stream->m_processingBuffers->SetRR(par->parameter.double_par, m_settings.atempoThreshold);
+            if (par->stream->m_pClock &&
+                par->parameter.double_par != par->stream->m_requestedResampleRatio)
+            {
+              // What the sink holds and the stream's stages have made was made at the old ratio,
+              // and RunStages() would read it at the new one: sync waits until it has played.
+              AEDelayStatus status;
+              m_stats.GetDelay(status);
+              const double held =
+                  status.GetDelay() +
+                  static_cast<double>(par->stream->m_processingBuffers->GetRateDelay());
+              par->stream->m_ratioSettle.Set(
+                  std::chrono::milliseconds(std::lround(held * 1000.0)));
+            }
+            par->stream->m_processingBuffers->SetRR(par->parameter.double_par,
+                                                     m_settings.atempoThreshold);
+            // The stats read the stream's cache at its ratio, and a paused stream's would keep
+            // the old one until it plays.
+            m_stats.UpdateStream(par->stream);
           }
+          // Remembered, so that it survives a flush and a re-configuration of the
+          // buffers, and so that SyncStream() can hold it while the servo is off.
+          par->stream->m_requestedResampleRatio = par->parameter.double_par;
           return;
         case CActiveAEControlProtocol::STREAMFFMPEGINFO:
           MsgStreamFFmpegInfo *info;
@@ -1459,6 +1495,8 @@ void CActiveAE::Configure(AEAudioFormat *desiredFmt)
 
         (*it)->m_processingBuffers->Create(MAX_CACHE_LEVEL * 1000, false, m_settings.stereoupmix,
                                            m_settings.normalizelevels, m_settings.mixSubLevel);
+        (*it)->m_processingBuffers->SetRR((*it)->m_requestedResampleRatio,
+                                          m_settings.atempoThreshold);
       }
       if (m_mode == MODE_TRANSCODE || m_streams.size() > 1)
         (*it)->m_processingBuffers->FillBuffer();
@@ -1650,7 +1688,8 @@ void CActiveAE::SFlushStream(CActiveAEStream *stream)
   stream->m_resampleIntegral = 0.0;
   if (stream->m_processingBuffers)
   {
-    stream->m_processingBuffers->SetRR(1.0, m_settings.atempoThreshold);
+    stream->m_processingBuffers->SetRR(stream->m_requestedResampleRatio,
+                                       m_settings.atempoThreshold);
   }
 
   // flush the engine if we only have a single stream
@@ -2157,7 +2196,8 @@ bool CActiveAE::RunStages()
       if ((*it)->m_paused && (*it)->m_started && m_settings.lowLatencyMode)
         m_targetBufferLevel = m_initialTargetBufferLevel;
 
-      if ((*it)->m_paused || !(*it)->m_started || !(*it)->m_processingBuffers || !(*it)->m_pClock)
+      if ((*it)->m_paused || !(*it)->m_started || !(*it)->m_processingBuffers ||
+          !(*it)->m_pClock || !(*it)->m_ratioSettle.IsTimePast())
         continue;
 
       if ((*it)->m_processingBuffers->m_outputSamples.empty())
@@ -2168,8 +2208,13 @@ bool CActiveAE::RunStages()
       {
         AEDelayStatus status;
         m_stats.GetDelay(status);
-        double pts = buf->timestamp - (buf->pkt_start_offset * 1000 / buf->pkt->config.sample_rate);
-        double delay = status.GetDelay() * 1000;
+        // The timestamp is in the stream's own time; the buffer's length and the delay
+        // are output samples, which at a resample ratio stand for ratio times less of
+        // it. Both go back into the stream's time before the clock is compared.
+        const double rr = (*it)->m_processingBuffers->GetRR();
+        double pts = buf->timestamp -
+                     (buf->pkt_start_offset * 1000.0 / buf->pkt->config.sample_rate) / rr;
+        double delay = status.GetDelay() * 1000 / rr;
         double playingPts = pts - delay;
         double maxError = ((*it)->m_syncState == CAESyncInfo::SYNC_INSYNC) ? 1000 : 5000;
         double error = playingPts - (*it)->m_pClock->GetClock();
@@ -2585,11 +2630,16 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
   if (!stream->m_pClock)
     return ret;
 
+  // the error is in the stream's time; a correction is made in output samples, which at
+  // a resample ratio are ratio times as many per unit of the stream's time
+  const double rr = stream->m_processingBuffers ? stream->m_processingBuffers->GetRR() : 1.0;
+
   if (stream->m_syncState == CAESyncInfo::AESyncState::SYNC_START)
   {
     stream->m_syncState = CAESyncInfo::AESyncState::SYNC_MUTE;
     stream->m_syncError.Flush(100ms);
-    stream->m_processingBuffers->SetRR(1.0, m_settings.atempoThreshold);
+    stream->m_processingBuffers->SetRR(stream->m_requestedResampleRatio,
+                                       m_settings.atempoThreshold);
     stream->m_resampleIntegral = 0;
     stream->m_lateStartHandedOver = false;
     CLog::Log(LOGDEBUG,"ActiveAE - start sync of audio stream");
@@ -2637,7 +2687,8 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
   if (newerror && fabs(error) > threshold && stream->m_syncState == CAESyncInfo::AESyncState::SYNC_INSYNC)
   {
     stream->m_syncState = CAESyncInfo::AESyncState::SYNC_ADJUST;
-    stream->m_processingBuffers->SetRR(1.0, m_settings.atempoThreshold);
+    stream->m_processingBuffers->SetRR(stream->m_requestedResampleRatio,
+                                       m_settings.atempoThreshold);
     stream->m_resampleIntegral = 0;
     stream->m_lastSyncError = error;
     CLog::Log(LOGDEBUG, "ActiveAE::SyncStream - average error {:f} above threshold of {:f}", error,
@@ -2692,7 +2743,7 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
       {
         ret->pkt->nb_samples = 0;
         ret->pkt->pause_burst_ms = 0;
-        int framesToDelay = error / 1000 * ret->pkt->config.sample_rate;
+        int framesToDelay = error * rr / 1000 * ret->pkt->config.sample_rate;
         if (framesToDelay > ret->pkt->max_nb_samples)
           framesToDelay = ret->pkt->max_nb_samples;
         if (m_mode == MODE_TRANSCODE)
@@ -2715,8 +2766,9 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
         }
         else
         {
-          stream->m_syncError.Correction(-framesToDelay*1000/ret->pkt->config.sample_rate);
-          error -= framesToDelay*1000/ret->pkt->config.sample_rate;
+          const double delayedMs = framesToDelay * 1000.0 / ret->pkt->config.sample_rate / rr;
+          stream->m_syncError.Correction(-delayedMs);
+          error -= delayedMs;
           for(int i=0; i<ret->pkt->planes; i++)
           {
             memset(ret->pkt->data[i], 0, ret->pkt->linesize);
@@ -2733,7 +2785,7 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
     else
     {
       CSampleBuffer *buf = stream->m_processingBuffers->m_outputSamples.front();
-      int framesToSkip = -error / 1000 * buf->pkt->config.sample_rate;
+      int framesToSkip = -error * rr / 1000 * buf->pkt->config.sample_rate;
       if (framesToSkip > buf->pkt->nb_samples)
         framesToSkip = buf->pkt->nb_samples;
       if (m_mode == MODE_TRANSCODE)
@@ -2761,8 +2813,9 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
           memmove(buf->pkt->data[i], buf->pkt->data[i]+bytesToSkip, buf->pkt->linesize - bytesToSkip);
         }
         buf->pkt->nb_samples -= framesToSkip;
-        stream->m_syncError.Correction((double)framesToSkip * 1000 / buf->pkt->config.sample_rate);
-        error += (double)framesToSkip * 1000 / buf->pkt->config.sample_rate;
+        const double skippedMs = framesToSkip * 1000.0 / buf->pkt->config.sample_rate / rr;
+        stream->m_syncError.Correction(skippedMs);
+        error += skippedMs;
       }
     }
 
@@ -2781,7 +2834,8 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
         stream->m_syncState = CAESyncInfo::AESyncState::SYNC_INSYNC;
         stream->m_syncError.Flush(1000ms);
         stream->m_resampleIntegral = 0;
-        stream->m_processingBuffers->SetRR(1.0, m_settings.atempoThreshold);
+        stream->m_processingBuffers->SetRR(stream->m_requestedResampleRatio,
+                                           m_settings.atempoThreshold);
         CLog::Log(LOGDEBUG, "ActiveAE::SyncStream - average error {:f} below threshold of {:f}",
                   error, 30.0);
       }
@@ -2802,7 +2856,9 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
   }
   else if (stream->m_processingBuffers)
   {
-    stream->m_processingBuffers->SetRR(1.0, m_settings.atempoThreshold);
+    // not resampling to the clock: the ratio the stream's owner asked for stands
+    stream->m_processingBuffers->SetRR(stream->m_requestedResampleRatio,
+                                       m_settings.atempoThreshold);
   }
 
   stream->m_syncError.SetErrorInterval(stream->GetErrorInterval());
