@@ -2319,19 +2319,23 @@ JSONRPC_STATUS CPlayerOperations::GetChapters(const std::string& method,
                                               const CVariant& parameterObject,
                                               CVariant& result)
 {
-  // Return the chapters list of the running video or empty list if none
+  // Return the chapters list of the running video or audio or empty list if none
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+
   switch (GetPlayer(parameterObject["playerid"]))
   {
     case Video:
+      if (!appPlayer->IsPlayingVideo())
+        return FailedToExecute; // No running video
+      break;
+    case Audio:
+      if (!appPlayer->IsPlayingAudio())
+        return FailedToExecute;
       break;
     default:
       return InvalidParams;
   }
-  auto& components = CServiceBroker::GetAppComponents();
-  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-
-  if (!appPlayer->IsPlayingVideo())
-    return FailedToExecute; // No running video
 
   // Extract chapters from CApplicationPlayer
   const int chapterCount = appPlayer->GetChapterCount();

@@ -14,6 +14,8 @@
 #include "music/tags/MusicInfoTag.h"
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #define READ_EOF      -1
 #define READ_SUCCESS   0
@@ -86,6 +88,11 @@ public:
   {
     info.valid = false;
   }
+
+  /*!
+   * \brief The file's chapters, as name and start time in ms, in order
+   */
+  virtual std::vector<std::pair<std::string, int64_t>> GetChapters() const { return {}; }
 
   int64_t m_TotalTime;  // time in ms
   int m_bitRate;
