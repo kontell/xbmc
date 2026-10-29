@@ -66,6 +66,8 @@
 #include "video/VideoFileItemClassify.h"
 #include "windowing/WinSystem.h"
 
+#include <algorithm>
+#include <chrono>
 #include <memory>
 
 #ifdef TARGET_ANDROID
@@ -571,12 +573,14 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
     {
       // Check to see if our playlist player has a new item for us,
       // and if so, we check whether our current player wants the file
-      int iNext = CServiceBroker::GetPlaylistPlayer().GetNextItemIdx();
-      const PLAYLIST::CPlayList& playlist = CServiceBroker::GetPlaylistPlayer().GetPlaylist(
-          CServiceBroker::GetPlaylistPlayer().GetCurrentPlaylist());
+      auto& playlistPlayer = CServiceBroker::GetPlaylistPlayer();
+      const auto appPlayer = m_app.GetComponent<CApplicationPlayer>();
+      int iNext = playlistPlayer.GetNextItemIdx();
+      const PLAYLIST::CPlayList& playlist =
+          playlistPlayer.GetPlaylist(playlistPlayer.GetCurrentPlaylist());
       if (iNext < 0 || iNext >= playlist.size())
       {
-        m_app.GetComponent<CApplicationPlayer>()->OnNothingToQueueNotify();
+        appPlayer->OnNothingToQueueNotify();
         return true; // nothing to do
       }
 
@@ -585,12 +589,38 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
       // handle plugin://
       CURL url(file.GetDynPath());
       if (url.IsProtocol("plugin"))
-        XFILE::CPluginDirectory::GetPluginResult(url.Get(), file, false);
+      {
+        // The player asks for its next item ahead of time (PAPlayer: five seconds before the
+        // playing track ends, and a crossfade's length more). While that track plays on, the
+        // wait for the plugin costs the listener nothing, so the GUI runs on as it is for as
+        // long as the track has left; the busy dialog comes only once the track has run out
+        // with the plugin still being asked, which is when the gap between the two is heard.
+        const int crossfadeMs = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+                                    CSettings::SETTING_MUSICPLAYER_CROSSFADE) *
+                                1000;
+        const int64_t timeLeftMs = appPlayer->GetTotalTime() - appPlayer->GetTime() - crossfadeMs;
+        const std::chrono::milliseconds quietTime{std::max<int64_t>(timeLeftMs, 0)};
+
+        const PLAYLIST::Id playlistId = playlistPlayer.GetCurrentPlaylist();
+        const int current = playlistPlayer.GetCurrentItemIdx();
+        const CFileItemPtr nextEntry = playlist[iNext];
+
+        XFILE::CPluginDirectory::GetPluginResult(url.Get(), file, false, quietTime);
+
+        // The GUI was in use while the plugin answered. If playback moved on to another item
+        // meanwhile (a track skip, a new selection), or the playlist was edited at this place
+        // (an item removed, inserted or moved), the item asked for is no longer the next one:
+        // queued now, it would play behind the new one, which asks for a next of its own, or
+        // in place of the item now listed there, whose details the start would then take.
+        if (playlistPlayer.GetCurrentPlaylist() != playlistId ||
+            playlistPlayer.GetCurrentItemIdx() != current || iNext >= playlist.size() ||
+            playlist[iNext] != nextEntry)
+          return true;
+      }
 
       // Don't queue if next media type is different from current one
       bool bNothingToQueue = false;
 
-      const auto appPlayer = m_app.GetComponent<CApplicationPlayer>();
       if (!VIDEO::IsVideo(file) && appPlayer->IsPlayingVideo())
         bNothingToQueue = true;
       else if ((!MUSIC::IsAudio(file) || VIDEO::IsVideo(file)) && appPlayer->IsPlayingAudio())
@@ -618,7 +648,7 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
       {
         /* Player didn't accept next file: *ALWAYS* advance playlist in this case so the player can
             queue the next (if it wants to) and it doesn't keep looping on this song */
-        CServiceBroker::GetPlaylistPlayer().SetCurrentItemIdx(iNext);
+        playlistPlayer.SetCurrentItemIdx(iNext);
       }
 
       return true;
