@@ -3329,6 +3329,7 @@ int CVideoDatabase::SetDetailsForEpisode(CVideoInfoTag& details,
     AddCast(idEpisode, MEDIA::TYPE::EPISODE, details.m_cast);
     AddActorLinksToItem(idEpisode, MEDIA::TYPE::EPISODE, "director", details.m_director);
     AddActorLinksToItem(idEpisode, MEDIA::TYPE::EPISODE, "writer", details.m_writingCredits);
+    AddLinksToItem(idEpisode, MEDIA::TYPE::EPISODE, "tag", details.m_tags);
 
     // add ratings
     details.m_iIdRating =
@@ -4765,7 +4766,7 @@ void CVideoDatabase::DeleteTag(int idTag, VideoDbContentType mediaType)
       return;
 
     if (mediaType != VideoDbContentType::MOVIES && mediaType != VideoDbContentType::TVSHOWS &&
-        mediaType != VideoDbContentType::MUSICVIDEOS)
+        mediaType != VideoDbContentType::EPISODES && mediaType != VideoDbContentType::MUSICVIDEOS)
       return;
 
     std::string strSQL =
@@ -5400,6 +5401,9 @@ CVideoInfoTag CVideoDatabase::GetDetailsForEpisode(const dbiplus::sql_record* co
       GetCast(details.m_iDbId, MEDIA::TYPE::EPISODE, details.m_cast);
       GetCast(details.m_iIdShow, MEDIA::TYPE::TV_SHOW, details.m_cast);
     }
+
+    if (getDetails & VideoDbDetailsTag)
+      GetTags(details.m_iDbId, MEDIA::TYPE::EPISODE, details.m_tags);
 
     if (getDetails & VideoDbDetailsRating)
       GetRatings(details.m_iDbId, MEDIA::TYPE::EPISODE, details.m_ratings);

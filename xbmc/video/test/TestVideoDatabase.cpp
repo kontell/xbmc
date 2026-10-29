@@ -142,12 +142,42 @@ protected:
                                     KODI::ART::SeasonsArtwork{});
   }
 
-  int AddEpisode(int idShow, const std::string& fileAndPath, int episode)
+  int AddEpisode(int idShow,
+                 const std::string& fileAndPath,
+                 int episode,
+                 const std::vector<std::string>& tags = {})
   {
     CVideoInfoTag tag{Tag(fileAndPath)};
     tag.m_iSeason = 1;
     tag.m_iEpisode = episode;
+    tag.SetTags(tags);
     return m_db.SetDetailsForEpisode(tag, KODI::ART::Artwork{}, idShow);
+  }
+
+  std::vector<std::string> EpisodeTags(int idEpisode)
+  {
+    CVideoInfoTag details;
+    m_db.GetEpisodeInfo("", details, idEpisode);
+    return details.m_tags;
+  }
+
+  // The episodes a smart playlist rule on episodes finds
+  std::set<int> EpisodesWhere(Field field,
+                              CDatabaseQueryRule::SearchOperator op,
+                              const std::string& value)
+  {
+    KODI::PLAYLIST::CSmartPlaylistRule rule;
+    rule.m_field = static_cast<int>(field);
+    rule.m_operator = op;
+    rule.m_parameter = {value};
+    CFileItemList items;
+    EXPECT_TRUE(m_db.GetEpisodesByWhere("videodb://tvshows/titles/",
+                                        CDatabase::Filter{rule.GetWhereClause(m_db, "episodes")},
+                                        items));
+    std::set<int> episodes;
+    for (const auto& item : items)
+      episodes.insert(item->GetVideoInfoTag()->m_iDbId);
+    return episodes;
   }
 
   // A movie with the given art, and a second movie with the given art converted into a version
@@ -489,6 +519,86 @@ TEST_F(TestVideoDatabase, ASmartPlaylistGenreRuleFindsAMovieOfThatGenre)
   ASSERT_TRUE(m_db.GetMoviesByWhere("videodb://movies/titles/", CDatabase::Filter{where}, items));
   ASSERT_EQ(1, items.Size());
   EXPECT_EQ(idMovie, items[0]->GetVideoInfoTag()->m_iDbId);
+}
+
+TEST_F(TestVideoDatabase, AnEpisodeKeepsItsTags)
+{
+  const int idShow{AddTvShow("/tv/Show/")};
+  ASSERT_GT(idShow, 0);
+  const int idEpisode{AddEpisode(idShow, "/tv/Show/e01.mkv", 1, {"Favourite", "Pilot"})};
+  ASSERT_GT(idEpisode, 0);
+
+  EXPECT_EQ((std::vector<std::string>{"Favourite", "Pilot"}), EpisodeTags(idEpisode));
+}
+
+TEST_F(TestVideoDatabase, WritingAnEpisodeWithoutItsTagsKeepsThem)
+{
+  const int idShow{AddTvShow("/tv/Show/")};
+  ASSERT_GT(idShow, 0);
+  const int idEpisode{AddEpisode(idShow, "/tv/Show/e01.mkv", 1, {"Favourite", "Pilot"})};
+  ASSERT_GT(idEpisode, 0);
+
+  // As a listing's item is written back after its streams were read, with no tags loaded
+  CVideoInfoTag details;
+  ASSERT_TRUE(m_db.GetEpisodeInfo("", details, idEpisode, VideoDbDetailsNone));
+  ASSERT_TRUE(details.m_tags.empty());
+  ASSERT_EQ(idEpisode, m_db.SetDetailsForEpisode(details, KODI::ART::Artwork{}, idShow, idEpisode));
+
+  EXPECT_EQ((std::vector<std::string>{"Favourite", "Pilot"}), EpisodeTags(idEpisode));
+}
+
+TEST_F(TestVideoDatabase, RemovingAnEpisodeRemovesItsTags)
+{
+  const int idShow{AddTvShow("/tv/Show/")};
+  ASSERT_GT(idShow, 0);
+  const int idEpisode{AddEpisode(idShow, "/tv/Show/e01.mkv", 1, {"Favourite"})};
+  ASSERT_GT(idEpisode, 0);
+  ASSERT_EQ(1, m_db.GetSingleValueInt("SELECT COUNT(*) FROM tag_link WHERE media_type='episode'"));
+
+  m_db.DeleteEpisode(idEpisode);
+
+  EXPECT_EQ(0, m_db.GetSingleValueInt("SELECT COUNT(*) FROM tag_link WHERE media_type='episode'"));
+  EXPECT_EQ(0, m_db.GetSingleValueInt("SELECT COUNT(*) FROM tag WHERE name='Favourite'"));
+}
+
+TEST_F(TestVideoDatabase, RemovingATagFromEpisodesUntagsThem)
+{
+  const int idShow{AddTvShow("/tv/Show/")};
+  ASSERT_GT(idShow, 0);
+  const int idEpisode{AddEpisode(idShow, "/tv/Show/e01.mkv", 1, {"Favourite"})};
+  ASSERT_GT(idEpisode, 0);
+  const int idTag{m_db.GetSingleValueInt("SELECT tag_id FROM tag WHERE name='Favourite'")};
+  ASSERT_GT(idTag, 0);
+
+  m_db.DeleteTag(idTag, VideoDbContentType::EPISODES);
+
+  EXPECT_TRUE(EpisodeTags(idEpisode).empty());
+}
+
+TEST_F(TestVideoDatabase, ASmartPlaylistTagRuleFindsEpisodesTaggedThemselvesOrByTheirShow)
+{
+  CVideoInfoTag kids;
+  kids.m_strTitle = "Kids";
+  kids.m_strPath = "/tv/Kids/";
+  kids.SetTags({"Favourite"});
+  const int idKids{m_db.SetDetailsForTvShow({kids.m_strPath}, kids, KODI::ART::Artwork{},
+                                            KODI::ART::SeasonsArtwork{})};
+  ASSERT_GT(idKids, 0);
+  const int idShow{AddTvShow("/tv/Show/")};
+  ASSERT_GT(idShow, 0);
+  const int byShow{AddEpisode(idKids, "/tv/Kids/e01.mkv", 1)};
+  const int tagged{AddEpisode(idShow, "/tv/Show/e01.mkv", 1, {"Favourite"})};
+  const int untagged{AddEpisode(idShow, "/tv/Show/e02.mkv", 2)};
+  ASSERT_GT(byShow, 0);
+  ASSERT_GT(tagged, 0);
+  ASSERT_GT(untagged, 0);
+
+  EXPECT_EQ(
+      (std::set<int>{byShow, tagged}),
+      EpisodesWhere(Field::TAG, CDatabaseQueryRule::SearchOperator::OPERATOR_EQUALS, "Favourite"));
+  EXPECT_EQ(std::set<int>{untagged},
+            EpisodesWhere(Field::TAG, CDatabaseQueryRule::SearchOperator::OPERATOR_DOES_NOT_EQUAL,
+                          "Favourite"));
 }
 
 TEST_F(TestVideoDatabase, GetPlayCountsListingInsideArchiveAcrossZipAndArchiveProtocols)

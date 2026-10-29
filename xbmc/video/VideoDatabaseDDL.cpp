@@ -356,6 +356,7 @@ void CVideoDatabaseDDL::CreateTriggers(CDatabase& db)
       "DELETE FROM director_link WHERE media_id=old.idEpisode AND media_type='episode'; "
       "DELETE FROM writer_link WHERE media_id=old.idEpisode AND media_type='episode'; "
       "DELETE FROM art WHERE media_id=old.idEpisode AND media_type='episode'; "
+      "DELETE FROM tag_link WHERE media_id=old.idEpisode AND media_type='episode'; "
       "DELETE FROM rating WHERE media_id=old.idEpisode AND media_type='episode'; "
       "DELETE FROM uniqueid WHERE media_id=old.idEpisode AND media_type='episode'; "
       "END");
