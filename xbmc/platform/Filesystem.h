@@ -25,6 +25,13 @@ struct space_info {
 
 space_info space(const std::string &path, std::error_code &ec);
 
+/*!
+ * \brief Whether a directory is on a filesystem served over the network, such as NFS or SMB.
+ * \param path The directory to look at.
+ * \return true if it is; false if it is local or can't be told.
+ */
+bool is_network_filesystem(const std::string& path);
+
 std::string temp_directory_path(std::error_code &ec);
 std::string create_temp_directory(std::error_code &ec);
 std::string temp_file_path(const std::string& suffix, std::error_code& ec);
