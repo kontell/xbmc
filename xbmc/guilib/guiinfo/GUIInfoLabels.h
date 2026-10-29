@@ -443,6 +443,7 @@ constexpr uint32_t PLAYLIST_REPEAT                   = 403;
 constexpr uint32_t PLAYLIST_ISRANDOM                 = 404;
 constexpr uint32_t PLAYLIST_ISREPEAT                 = 405;
 constexpr uint32_t PLAYLIST_ISREPEATONE              = 406;
+constexpr uint32_t PLAYLIST_HASHISTORY               = 407;
 
 constexpr uint32_t VISUALISATION_LOCKED              = 410;
 constexpr uint32_t VISUALISATION_PRESET              = 411;
