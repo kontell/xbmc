@@ -203,6 +203,9 @@ void CVideoDatabase::CreateTables()
 void CVideoDatabase::CreateAnalytics()
 {
   KODI::DATABASE::CVideoDatabaseDDL::CreateAnalytics(*this);
+  // MySQL already compares names without regard to case
+  if (m_sqlite)
+    KODI::DATABASE::CVideoDatabaseDDL::CreateNameLookupIndices(*this);
 }
 
 //********************************************************************************************************************************

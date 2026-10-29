@@ -2266,3 +2266,15 @@ TEST_F(TestVideoDatabase, AnExtraFoundBySearchPlaysItsFile)
   ASSERT_EQ(items.Size(), 1);
   EXPECT_EQ(items[0]->GetDynPath(), playlist);
 }
+
+TEST_F(TestVideoDatabase, NamesAreLookedUpThroughCaseInsensitiveIndices)
+{
+  for (const char* table : {"actor", "studio", "tag"})
+  {
+    EXPECT_EQ(1,
+              m_db.GetSingleValueInt(m_db.PrepareSQL(
+                  "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='ix_%s_nocase'",
+                  table)))
+        << table;
+  }
+}
