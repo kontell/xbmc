@@ -90,6 +90,7 @@ bool CPluginDirectory::StartScript(const CURL& url, bool resume)
   m_listItems->SetLabel(addon->Name());
   m_cancelled = false;
   m_success = false;
+  m_answered = false;
   m_totalItems = 0;
 
   if (path.empty())
@@ -210,6 +211,7 @@ void CPluginDirectory::EndOfDirectory(int handle, bool success, bool replaceList
                                                : CFileItemList::CacheType::NEVER);
 
   dir->m_success = success;
+  dir->m_answered = true;
   dir->m_listItems->SetReplaceListing(replaceListing);
 
   if (!dir->m_listItems->HasSortDetails())
@@ -507,6 +509,7 @@ void CPluginDirectory::SetResolvedUrl(int handle, bool success, const CFileItem 
     return;
 
   dir->m_success = success;
+  dir->m_answered = true;
   *dir->m_fileResult = *resultItem;
 
   // set the event to mark that we're done
@@ -595,16 +598,20 @@ bool CPluginDirectory::IsMediaLibraryScanningAllowed(const std::string& content,
   return false;
 }
 
-bool CPluginDirectory::CheckExists(const std::string& content, const std::string& strPath)
+PluginItemExists CPluginDirectory::CheckExists(const std::string& content,
+                                               const std::string& strPath)
 {
   if (!IsMediaLibraryScanningAllowed(content, strPath))
-    return false;
+    return PluginItemExists::UNKNOWN;
   // call the plugin at specified path with option "kodi_action=check_exists"
   // url exists if the plugin returns any fileitem with setResolvedUrl
   CURL url(strPath);
   url.SetOption("kodi_action", "check_exists");
-  CFileItem item;
-  return CPluginDirectory::GetPluginResult(url.Get(), item, false);
+  CPluginDirectory dir;
+  dir.StartScript(url, false);
+  if (!dir.m_answered)
+    return PluginItemExists::UNKNOWN;
+  return dir.m_success ? PluginItemExists::YES : PluginItemExists::NO;
 }
 
 bool CPluginDirectory::Resolve(CFileItem& item) const
