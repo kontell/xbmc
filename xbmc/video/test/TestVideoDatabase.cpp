@@ -17,6 +17,7 @@
 #include "filesystem/Directory.h"
 #include "filesystem/File.h"
 #include "filesystem/MultiPathDirectory.h"
+#include "filesystem/PluginDirectory.h"
 #include "filesystem/SpecialProtocol.h"
 #include "imagefiles/ImageFileURL.h"
 #include "interfaces/AnnouncementManager.h"
@@ -49,6 +50,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -60,6 +62,21 @@
 namespace
 {
 constexpr const char* DB_NAME = "TestVideoDatabase";
+
+// Answers for the plugins of a test, which has none to ask
+class CTestVideoDatabase : public CVideoDatabase
+{
+public:
+  std::map<std::string, XFILE::PluginItemExists, std::less<>> m_pluginAnswers;
+
+protected:
+  XFILE::PluginItemExists CheckPluginItemExists(const std::string& content,
+                                                const std::string& path) const override
+  {
+    const auto answer{m_pluginAnswers.find(path)};
+    return answer == m_pluginAnswers.end() ? XFILE::PluginItemExists::UNKNOWN : answer->second;
+  }
+};
 
 class TestVideoDatabase : public ::testing::Test
 {
@@ -178,7 +195,7 @@ protected:
   }
 
   DatabaseSettings m_settings;
-  CVideoDatabase m_db;
+  CTestVideoDatabase m_db;
   std::shared_ptr<ANNOUNCEMENT::CAnnouncementManager> m_previousAnnouncementManager;
 };
 } // namespace
@@ -1010,9 +1027,10 @@ protected:
 
   void TearDown() override
   {
-    std::erase_if(CMediaSourceSettings::GetInstance().GetSources(KODI::MEDIA::MediaSection::VIDEO),
-                  [this](const CMediaSource& source)
-                  { return source.strPath.starts_with(m_root); });
+    std::erase_if(
+        CMediaSourceSettings::GetInstance().GetSources(KODI::MEDIA::MediaSection::VIDEO),
+        [this](const CMediaSource& source)
+        { return source.strPath.starts_with(m_root) || source.strPath.starts_with(PLUGIN_ROOT); });
     XFILE::CDirectory::RemoveRecursive(m_root);
     TestVideoDatabase::TearDown();
   }
@@ -1047,6 +1065,13 @@ protected:
         .GetSources(KODI::MEDIA::MediaSection::VIDEO)
         .push_back(source);
 
+    SetContent(path, content);
+  }
+
+  // Content set on a path without adding it as a source, as Set content on an add-on's folder
+  // does
+  void SetContent(const std::string& path, const std::string& content)
+  {
     ASSERT_TRUE(m_db.ExecuteQuery(m_db.PrepareSQL(
         "UPDATE path SET strContent='%s', strScraper='metadata.local' WHERE idPath=%i",
         content.c_str(), m_db.AddPath(path))));
@@ -1074,6 +1099,10 @@ protected:
   }
 
   void Clean() { m_db.CleanDatabase(nullptr, {}, false); }
+
+  // A library item of a plugin, filed as the scanner files one under a folder with its content
+  // set, where Kodi asks the plugin whether it still exists
+  static constexpr const char* PLUGIN_ROOT = "plugin://plugin.video.test/";
 
   std::string m_root;
 };
@@ -2265,4 +2294,73 @@ TEST_F(TestVideoDatabase, AnExtraFoundBySearchPlaysItsFile)
   m_db.GetMovieExtrasByName("Gag", items);
   ASSERT_EQ(items.Size(), 1);
   EXPECT_EQ(items[0]->GetDynPath(), playlist);
+}
+
+TEST_F(TestVideoDatabaseClean, KeepsAPluginItemItsAddonCouldNotAnswerFor)
+{
+  const std::string movies{std::string{PLUGIN_ROOT} + "movies/"};
+  AddSource(movies, "movies");
+  const std::string film{movies + "?id=1"};
+  const int idMovie{AddMovie(film)};
+  ASSERT_GT(idMovie, 0);
+
+  Clean();
+
+  EXPECT_EQ(idMovie, m_db.GetMovieId(film));
+}
+
+TEST_F(TestVideoDatabaseClean, RemovesAPluginItemItsAddonSaysHasGone)
+{
+  const std::string movies{std::string{PLUGIN_ROOT} + "movies/"};
+  AddSource(movies, "movies");
+  const std::string film{movies + "?id=1"};
+  ASSERT_GT(AddMovie(film), 0);
+  m_db.m_pluginAnswers.emplace(film, XFILE::PluginItemExists::NO);
+
+  Clean();
+
+  EXPECT_EQ(-1, m_db.GetMovieId(film));
+}
+
+TEST_F(TestVideoDatabaseClean, KeepsTheContentOfAPluginFolderItsAddonCouldNotAnswerFor)
+{
+  const std::string movies{Folder(m_root, "movies")};
+  AddSource(movies, "movies");
+  ASSERT_GT(AddMovie(File(movies, "Kept.mkv")), 0);
+  const std::string shows{std::string{PLUGIN_ROOT} + "tvshows/"};
+  AddSource(shows, "tvshows");
+
+  Clean();
+
+  EXPECT_EQ(1, m_db.GetSingleValueInt(m_db.PrepareSQL(
+                   "SELECT COUNT(*) FROM path WHERE strPath='%s' AND strContent='tvshows'",
+                   shows.c_str())));
+}
+
+TEST_F(TestVideoDatabaseClean, RemovesAPluginItemItsAddonSaysHasGoneWithoutASource)
+{
+  const std::string movies{std::string{PLUGIN_ROOT} + "movies/"};
+  SetContent(movies, "movies");
+  const std::string film{movies + "?id=1"};
+  ASSERT_GT(AddMovie(film), 0);
+  m_db.m_pluginAnswers.emplace(film, XFILE::PluginItemExists::NO);
+
+  Clean();
+
+  EXPECT_EQ(-1, m_db.GetMovieId(film));
+}
+
+TEST_F(TestVideoDatabaseClean, RemovesAPathStylePluginItemItsAddonSaysHasGone)
+{
+  // The parent Kodi takes for a plugin path is the add-on's root, which a source on the content
+  // root does not match
+  const std::string movies{std::string{PLUGIN_ROOT} + "lib/movies/"};
+  AddSource(movies, "movies");
+  const std::string film{movies + "1"};
+  ASSERT_GT(AddMovie(film), 0);
+  m_db.m_pluginAnswers.emplace(film, XFILE::PluginItemExists::NO);
+
+  Clean();
+
+  EXPECT_EQ(-1, m_db.GetMovieId(film));
 }
