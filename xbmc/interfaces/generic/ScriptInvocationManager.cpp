@@ -278,6 +278,14 @@ int CScriptInvocationManager::ExecuteAsync(
     if (addon != nullptr)
       invokerThread->SetAddon(addon);
 
+    // A listing that adopted an interpreter left by a handle-less run brings a
+    // handle of its own; the slot serves that handle from now on.
+    if (pluginHandle >= 0 && m_lastInvokerThread == invokerThread)
+    {
+      m_lastPluginHandle = pluginHandle;
+      claim->m_pluginHandle = pluginHandle;
+    }
+
     lock.unlock();
     // The claim keeps the thread spoken for across the hand-off.
     if (invokerThread->Execute(script, arguments))
