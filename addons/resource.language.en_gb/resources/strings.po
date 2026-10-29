@@ -26224,3 +26224,63 @@ msgstr ""
 msgctxt "#40813"
 msgid "Restoring playlist"
 msgstr ""
+
+#. Group of music player settings about the history of playlists playback left behind
+#: system/settings/settings.xml
+msgctxt "#40814"
+msgid "Playlist history"
+msgstr ""
+
+#. Setting "musicplayer.playlisthistorysize"
+#: system/settings/settings.xml
+msgctxt "#40815"
+msgid "Playlists to keep"
+msgstr ""
+
+#. Description of setting with label #40815 "Playlists to keep"
+#: system/settings/settings.xml
+msgctxt "#40816"
+msgid "How many music playlists that were replaced, interrupted, stopped or played through are kept for restoring. Lowering it drops the oldest; Off keeps none."
+msgstr ""
+
+#. Setting "musicplayer.restoreplaylistpaused"
+#: system/settings/settings.xml
+msgctxt "#40817"
+msgid "Start restored playlists paused"
+msgstr ""
+
+#. Description of setting with label #40817 "Start restored playlists paused"
+#: system/settings/settings.xml
+msgctxt "#40818"
+msgid "Load a restored playlist on the right track at the right second, but wait for play to be pressed."
+msgstr ""
+
+#. Setting "musicplayer.restoreplaylistfromstart"
+#: system/settings/settings.xml
+msgctxt "#40819"
+msgid "Restore from the start of the track"
+msgstr ""
+
+#. Description of setting with label #40819 "Restore from the start of the track"
+#: system/settings/settings.xml
+msgctxt "#40820"
+msgid "Go back to the right track but play it from the beginning, instead of the second it was interrupted at."
+msgstr ""
+
+#. Option of the "Perform on startup" setting: restore the newest music playlist from the history
+#: system/settings/settings.xml
+msgctxt "#40821"
+msgid "Restore the last music playlist"
+msgstr ""
+
+#. Setting "musicplayer.restoreplaylistaftervideo"
+#: system/settings/settings.xml
+msgctxt "#40822"
+msgid "Restore after a video"
+msgstr ""
+
+#. Description of setting with label #40822 "Restore after a video"
+#: system/settings/settings.xml
+msgctxt "#40823"
+msgid "When a video takes over from a music playlist, put the playlist back once the video is stopped or ends."
+msgstr ""

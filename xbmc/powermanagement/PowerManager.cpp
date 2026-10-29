@@ -9,6 +9,7 @@
 #include "PowerManager.h"
 
 #include "FileItem.h"
+#include "PlayListPlayer.h"
 #include "PowerTypes.h"
 #include "ServiceBroker.h"
 #include "TextureCache.h"
@@ -204,6 +205,7 @@ void CPowerManager::OnSleep()
 
   StorePlayerState();
 
+  CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
   g_application.StopPlaying();
   CServiceBroker::GetPVRManager().OnSleep();
   CServiceBroker::GetRepositoryUpdater().OnSleep();
