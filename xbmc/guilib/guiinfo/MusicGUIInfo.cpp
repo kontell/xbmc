@@ -36,10 +36,22 @@
 #include "utils/URIUtils.h"
 #include "utils/log.h"
 
+#include <cmath>
+
 using namespace KODI;
 using namespace KODI::GUILIB;
 using namespace KODI::GUILIB::GUIINFO;
 using namespace MUSIC_INFO;
+
+namespace
+{
+int GetPercentPlayed(const CMusicInfoTag& tag)
+{
+  const CBookmark& resumePoint = tag.GetResumePoint();
+  return std::lrintf(static_cast<float>(resumePoint.timeInSeconds) /
+                     static_cast<float>(resumePoint.totalTimeInSeconds) * 100.0f);
+}
+} // namespace
 
 bool CMusicGUIInfo::InitCurrentItem(CFileItem* item)
 {
@@ -124,6 +136,13 @@ bool CMusicGUIInfo::GetLabel(std::string& value,
         if (tag->GetPlayCount() > 0)
         {
           value = std::to_string(tag->GetPlayCount());
+          return true;
+        }
+        break;
+      case LISTITEM_PERCENT_PLAYED:
+        if (tag->GetResumePoint().IsPartWay())
+        {
+          value = std::to_string(GetPercentPlayed(*tag));
           return true;
         }
         break;
@@ -674,6 +693,16 @@ bool CMusicGUIInfo::GetInt(int& value,
                            int contextWindow,
                            const CGUIInfo& info) const
 {
+  if (!gitem->IsFileItem())
+    return false;
+
+  const auto* item{static_cast<const CFileItem*>(gitem)};
+  const CMusicInfoTag* tag = item->GetMusicInfoTag();
+  if (tag && info.GetInfo() == LISTITEM_PERCENT_PLAYED && tag->GetResumePoint().IsPartWay())
+  {
+    value = GetPercentPlayed(*tag);
+    return true;
+  }
   return false;
 }
 

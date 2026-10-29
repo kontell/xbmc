@@ -6675,6 +6675,9 @@ constexpr std::array<InfoMap, 3> container_str = {{
 ///                  _string_,
 ///     @return The percentage value [0-100] of how far the selected video has been
 ///     played.
+///     <p><hr>
+///     @skinning_v23 **[Infolabel Updated]** \link ListItem_PercentPlayed `ListItem.PercentPlayed`\endlink
+///     also reads a song's resume point. A song without one reads empty, not 0.
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`ListItem.LastPlayed`</b>,
