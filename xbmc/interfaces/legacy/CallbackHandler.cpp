@@ -45,20 +45,13 @@ namespace XBMCAddon
   RetardedAsyncCallbackHandler::~RetardedAsyncCallbackHandler()
   {
     XBMC_TRACE;
-    std::unique_lock lock(critSection);
-
-    // find any messages that might be there because of me ... and remove them
-    CallbackQueue::iterator iter = g_callQueue.begin();
-    while (iter != g_callQueue.end())
-    {
-      if ((*iter)->handler.get() == this) // then this message is because of me
-      {
-        g_callQueue.erase(iter);
-        iter = g_callQueue.begin();
-      }
-      else
-        ++iter;
-    }
+    // A queued message holds a reference to its handler, so no message of
+    //  this handler is in the queue when it is destroyed. makePendingCalls
+    //  and clearPendingCalls keep a reference of their own while they take
+    //  a message out, so from there this runs with the message already
+    //  gone. The one way here with the message still an element is the
+    //  queue's own destruction at exit, which destroys it in place, and
+    //  the queue must not be touched from inside that.
   }
 
   void RetardedAsyncCallbackHandler::makePendingCalls()
