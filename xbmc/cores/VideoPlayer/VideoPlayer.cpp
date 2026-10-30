@@ -1738,6 +1738,8 @@ void CVideoPlayer::Process()
       /* a source that cannot keep up hands these back as fast as we ask */
       if (++emptyPackets > 10)
         CThread::Sleep(10ms);
+      if (m_sourceDrySince == std::chrono::steady_clock::time_point{})
+        m_sourceDrySince = std::chrono::steady_clock::now();
 
       continue;
     }
@@ -1794,6 +1796,9 @@ void CVideoPlayer::Process()
       // input stream asked us to just retry
       if(next == CDVDInputStream::NEXTSTREAM_RETRY)
       {
+        // nothing to read, as an empty packet says
+        if (m_sourceDrySince == std::chrono::steady_clock::time_point{})
+          m_sourceDrySince = std::chrono::steady_clock::now();
         CThread::Sleep(100ms);
         continue;
       }
@@ -1826,6 +1831,8 @@ void CVideoPlayer::Process()
 
       break;
     }
+
+    m_sourceDrySince = {};
 
     // see if we can find something better to play
     CheckBetterStream(m_CurrentAudio,    pStream);
@@ -2232,7 +2239,11 @@ void CVideoPlayer::HandlePlaySpeed()
 
   if (m_caching == CACHESTATE_DONE)
   {
-    if (m_playSpeed == DVD_PLAYSPEED_NORMAL && !tolerateStall)
+    // a realtime stream at a tempo is buffered as at normal speed, and keeps the tempo when it
+    // plays on
+    const bool playing = m_playSpeed == DVD_PLAYSPEED_NORMAL ||
+                         (m_playSpeedIsTempo && m_pInputStream->IsRealtime());
+    if (playing && !tolerateStall)
     {
       // take action if audio or video stream is stalled
       if (((m_VideoPlayerAudio->IsStalled() && m_CurrentAudio.inited) ||
@@ -2278,8 +2289,8 @@ void CVideoPlayer::HandlePlaySpeed()
           }
         }
       }
-      // care for live streams
-      else if (m_pInputStream->IsRealtime())
+      // care for live streams; at a tempo the audio is the clock, see CVideoPlayerAudio
+      else if (m_pInputStream->IsRealtime() && m_playSpeed == DVD_PLAYSPEED_NORMAL)
       {
         // Skip SpeedAdjust for passthrough: the message queue level metric is
         // meaningless because passthrough packets are tiny and drain instantly,
@@ -2532,6 +2543,24 @@ void CVideoPlayer::HandlePlaySpeed()
     {
       SetTempo(1.0f);
     }
+  }
+  // Faster than its source, a realtime stream plays what it holds ahead of the position until it
+  // reaches the source's live edge, where the demuxer finds nothing to read until the next piece
+  // arrives. Half a second of that is longer than a source takes between its own downloads short
+  // of the edge, and shorter than a live source's segments. Then back to normal speed, with what
+  // the queues hold to play on.
+  else if (m_playSpeedIsTempo && m_playSpeed > DVD_PLAYSPEED_NORMAL &&
+           m_sourceDrySince != std::chrono::steady_clock::time_point{} &&
+           std::chrono::steady_clock::now() - m_sourceDrySince >= 500ms &&
+           m_caching == CACHESTATE_DONE && m_pInputStream->IsRealtime() &&
+           m_processInfo->GetNewTempo() != 1.0f)
+  {
+    CLog::Log(LOGDEBUG,
+              "CVideoPlayer::HandlePlaySpeed - realtime stream caught up with its source at "
+              "tempo {:.3f}, back to normal speed. Audio: {} - Video: {}",
+              static_cast<double>(m_playSpeed) / DVD_PLAYSPEED_NORMAL,
+              m_VideoPlayerAudio->GetLevel(), m_processInfo->GetLevelVQ());
+    SetTempo(1.0f);
   }
 }
 
@@ -3559,7 +3588,7 @@ void CVideoPlayer::HandleMessages()
       const bool playingBefore = m_playSpeed != DVD_PLAYSPEED_PAUSE && !wasFFRW;
       const bool playingAfter = speed == DVD_PLAYSPEED_NORMAL || isTempoSpeed;
       const double rateDelay = playingBefore && playingAfter && speed != m_playSpeed
-                                   ? m_VideoPlayerAudio->GetRateChangeDelay()
+                                   ? m_VideoPlayerAudio->GetRateChangeDelay(isTempoSpeed)
                                    : 0.0;
       // the speed the clock already runs at, or has queued, leaves it alone
       const bool repeated = speed == m_playSpeed && isTempoSpeed == m_playSpeedIsTempo &&
@@ -3573,6 +3602,9 @@ void CVideoPlayer::HandleMessages()
         m_clock.SetSpeedAt(speed, m_clock.GetAbsoluteClock() + rateDelay);
       else if (!repeated)
         m_clock.SetSpeed(speed);
+      // the live clock adjustment does not carry into or out of a tempo
+      if (isTempoSpeed && m_pInputStream->IsRealtime())
+        m_clock.SetSpeedAdjust(0);
       m_VideoPlayerAudio->SetSpeed(speed, isTempoSpeed);
       m_VideoPlayerVideo->SetSpeed(speed);
       m_streamPlayerSpeed = speed;
@@ -5909,8 +5941,10 @@ void CVideoPlayer::UpdatePlayState(double timeout)
 
     state.canpause = m_pInputStream->CanPause();
 
+    // A realtime stream plays at a tempo too, with its audio as the clock while it does (see
+    // CVideoPlayerAudio). One with no time range to move in is refused below.
     bool realtime = m_pInputStream->IsRealtime();
-    state.cantempo = CanTempo() && !realtime;
+    state.cantempo = CanTempo();
 
     m_processInfo->SetStateRealtime(realtime);
   }
