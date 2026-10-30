@@ -73,6 +73,17 @@ TEST(TestDataCacheCore, PlayTimeHoldsWhilePaused)
   EXPECT_EQ(cache.GetPlayTime(), 10000);
 }
 
+TEST(TestDataCacheCore, PlayTimeHoldsWhileTheClockIsStopped)
+{
+  CDataCacheCore cache;
+  cache.SetSpeed(1.0f, 1.0f);
+  cache.SetPlayTimes(0, 10000, 0, 60000, false);
+
+  std::this_thread::sleep_for(60ms);
+
+  EXPECT_EQ(cache.GetPlayTime(), 10000);
+}
+
 TEST(TestDataCacheCore, PlayTimeKeepsItsPlaceWhenPaused)
 {
   CDataCacheCore cache;

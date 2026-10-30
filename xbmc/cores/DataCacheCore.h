@@ -180,7 +180,13 @@ public:
   bool GetGuiRender();
   void SetVideoRender(bool video);
   bool GetVideoRender();
-  void SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max);
+  /*!
+   * \brief Store the player's times
+   * \param moving whether the time moves on from here until the next store; false while the
+   * player's clock is stopped, as it is while the player buffers
+   */
+  void SetPlayTimes(
+      time_t start, int64_t current, int64_t min, int64_t max, bool moving = true);
   void GetPlayTimes(time_t &start, int64_t &current, int64_t &min, int64_t &max);
 
   /*!

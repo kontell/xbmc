@@ -578,14 +578,16 @@ bool CDataCacheCore::GetVideoRender()
   return m_stateInfo.m_renderVideoLayer;
 }
 
-void CDataCacheCore::SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max)
+void CDataCacheCore::SetPlayTimes(
+    time_t start, int64_t current, int64_t min, int64_t max, bool moving)
 {
   std::unique_lock lock(m_stateSection);
   m_timeInfo.m_startTime = start;
   m_timeInfo.m_time = current;
   m_timeInfo.m_timeMin = min;
   m_timeInfo.m_timeMax = max;
-  m_timeInfo.m_timeStamp = std::chrono::steady_clock::now();
+  m_timeInfo.m_timeStamp =
+      moving ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 }
 
 void CDataCacheCore::GetPlayTimes(time_t &start, int64_t &current, int64_t &min, int64_t &max)

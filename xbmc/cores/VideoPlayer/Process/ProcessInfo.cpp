@@ -818,7 +818,8 @@ bool CProcessInfo::GetVideoRender()
   return m_renderVideoLayer;
 }
 
-void CProcessInfo::SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max)
+void CProcessInfo::SetPlayTimes(
+    time_t start, int64_t current, int64_t min, int64_t max, bool moving)
 {
   std::unique_lock lock(m_stateSection);
   m_startTime = start;
@@ -828,7 +829,7 @@ void CProcessInfo::SetPlayTimes(time_t start, int64_t current, int64_t min, int6
 
   if (m_dataCache)
   {
-    m_dataCache->SetPlayTimes(start, current, min, max);
+    m_dataCache->SetPlayTimes(start, current, min, max, moving);
   }
 }
 
