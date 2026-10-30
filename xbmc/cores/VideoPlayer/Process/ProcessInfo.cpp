@@ -676,7 +676,7 @@ void CProcessInfo::SetSpeed(float speed)
   m_newSpeed = speed;
 
   if (m_dataCache)
-    m_dataCache->SetSpeed(m_newTempo, speed);
+    m_dataCache->SetSpeed(m_newTempo, speed, m_tempoIsCorrection);
 }
 
 void CProcessInfo::SetNewSpeed(float speed)
@@ -686,7 +686,7 @@ void CProcessInfo::SetNewSpeed(float speed)
   m_newSpeed = speed;
 
   if (m_dataCache)
-    m_dataCache->SetSpeed(m_tempo, speed);
+    m_dataCache->SetSpeed(m_tempo, speed, m_tempoIsCorrection);
 }
 
 float CProcessInfo::GetNewSpeed()
@@ -713,25 +713,27 @@ bool CProcessInfo::IsFrameAdvance()
   return m_frameAdvance;
 }
 
-void CProcessInfo::SetTempo(float tempo)
+void CProcessInfo::SetTempo(float tempo, bool correction)
 {
   std::unique_lock lock(m_stateSection);
 
   m_tempo = tempo;
   m_newTempo = tempo;
+  m_tempoIsCorrection = correction;
 
   if (m_dataCache)
-    m_dataCache->SetSpeed(tempo, m_newSpeed);
+    m_dataCache->SetSpeed(tempo, m_newSpeed, correction);
 }
 
-void CProcessInfo::SetNewTempo(float tempo)
+void CProcessInfo::SetNewTempo(float tempo, bool correction)
 {
   std::unique_lock lock(m_stateSection);
 
   m_newTempo = tempo;
+  m_tempoIsCorrection = correction;
 
   if (m_dataCache)
-    m_dataCache->SetSpeed(tempo, m_speed);
+    m_dataCache->SetSpeed(tempo, m_speed, correction);
 }
 
 float CProcessInfo::GetNewTempo()
@@ -739,6 +741,13 @@ float CProcessInfo::GetNewTempo()
   std::unique_lock lock(m_stateSection);
 
   return m_newTempo;
+}
+
+bool CProcessInfo::IsTempoCorrection()
+{
+  std::unique_lock lock(m_stateSection);
+
+  return m_tempoIsCorrection;
 }
 
 float CProcessInfo::MinTempoPlatform()
