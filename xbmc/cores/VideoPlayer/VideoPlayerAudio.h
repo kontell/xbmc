@@ -107,6 +107,7 @@ protected:
   BitstreamStats m_audioStats;
 
   int m_speed;
+  bool m_passthroughOffForTempo = false; // a tempo has the bitstream decoded
   bool m_stalled;
   bool m_paused;
   IDVDStreamPlayer::ESyncState m_syncState;

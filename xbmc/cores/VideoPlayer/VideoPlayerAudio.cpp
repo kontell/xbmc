@@ -109,6 +109,7 @@ bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
 void CVideoPlayerAudio::OpenStream(CDVDStreamInfo& hints, std::unique_ptr<CDVDAudioCodec> codec)
 {
   m_pAudioCodec = std::move(codec);
+  m_passthroughOffForTempo = false;
 
   m_processInfo.ResetAudioCodecInfo();
 
@@ -394,12 +395,21 @@ void CVideoPlayerAudio::Process()
       m_speed = (int)speed;
       UpdateResampleRatio();
 
-      // A tempo plays the audio at a rate, which a bitstream cannot: decode it instead.
-      // Passthrough is allowed again once the tempo is 1.0, at the next stream change.
-      if (m_pAudioCodec && m_pAudioCodec->NeedPassthrough() && !AllowPassthrough() &&
-          SwitchCodecIfNeeded())
+      // A tempo plays the audio at a rate, which a bitstream cannot: decode it instead, and
+      // bitstream again once the tempo is 1.0.
+      if (m_pAudioCodec && m_pAudioCodec->NeedPassthrough() && !AllowPassthrough())
       {
-        audioframe.nb_frames = 0;
+        if (SwitchCodecIfNeeded())
+        {
+          m_passthroughOffForTempo = true;
+          audioframe.nb_frames = 0;
+        }
+      }
+      else if (m_passthroughOffForTempo && AllowPassthrough())
+      {
+        m_passthroughOffForTempo = false;
+        if (SwitchCodecIfNeeded())
+          audioframe.nb_frames = 0;
       }
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_STREAMCHANGE))
