@@ -576,6 +576,8 @@ protected:
   static SpeedChangeNotifications GetSpeedChangeNotifications(int previousSpeed,
                                                               int newSpeed,
                                                               bool isTempo);
+  // The speed a tempo plays at: its own floor is 1/DVD_PLAYSPEED_NORMAL
+  static int TempoToSpeed(float tempo);
 
   bool m_players_created;
 

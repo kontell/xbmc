@@ -18,6 +18,7 @@
 #include "threads/Thread.h"
 #include "utils/BitstreamStats.h"
 
+#include <atomic>
 #include <list>
 #include <mutex>
 #include <utility>
@@ -59,6 +60,11 @@ public:
   std::string GetPlayerInfo() override;
   int GetAudioChannels() override;
 
+  double GetRateChangeDelay() override
+  {
+    return m_rateFollowsSpeed ? m_audioSink.GetRateChangeDelay() : 0.0;
+  }
+
   double GetCurrentPts() override
   {
     std::unique_lock lock(m_info_section);
@@ -81,6 +87,11 @@ protected:
   //! codec changes, in which case we may want to switch passthrough on/off.
   bool SwitchCodecIfNeeded();
   void SetSyncType(bool passthrough);
+  //! Whether a bitstream may be output as it is: not with the display clock, not for a
+  //! realtime stream, and not while a tempo is asked for.
+  bool AllowPassthrough();
+  //! Ask the stream for the playing rate when a tempo is in force and the audio is the clock.
+  void UpdateResampleRatio();
 
   CDVDMessageQueue m_messageQueue;
   CDVDMessageQueue& m_messageParent;
@@ -96,12 +107,15 @@ protected:
   BitstreamStats m_audioStats;
 
   int m_speed;
+  bool m_passthroughOffForTempo = false; // a tempo has the bitstream decoded
   bool m_stalled;
   bool m_paused;
   IDVDStreamPlayer::ESyncState m_syncState;
   XbmcThreads::EndTime<> m_syncTimer;
 
   int m_synctype;
+  //! Whether a speed reaches the stream as a resample ratio (not with the display clock)
+  std::atomic<bool> m_rateFollowsSpeed{false};
   int m_prevsynctype;
 
   bool   m_prevskipped;
