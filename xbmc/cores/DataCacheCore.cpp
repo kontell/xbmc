@@ -633,6 +633,21 @@ int64_t CDataCacheCore::CurrentPlayTime() const
   return time;
 }
 
+void CDataCacheCore::SetPresentationTimeOffset(std::optional<int64_t> offsetMs)
+{
+  std::unique_lock lock(m_stateSection);
+  m_timeInfo.m_presentationOffset = offsetMs;
+}
+
+std::optional<int64_t> CDataCacheCore::GetPresentationTime()
+{
+  std::unique_lock lock(m_stateSection);
+  if (!m_timeInfo.m_presentationOffset)
+    return std::nullopt;
+
+  return GetPlayTime() + *m_timeInfo.m_presentationOffset;
+}
+
 time_t CDataCacheCore::GetStartTime()
 {
   std::unique_lock lock(m_stateSection);
