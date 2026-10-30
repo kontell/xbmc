@@ -58,7 +58,6 @@
 #include "video/VideoDatabase.h"
 
 #include <algorithm>
-#include <limits>
 #include <map>
 #include <optional>
 #include <tuple>
@@ -1728,10 +1727,9 @@ JSONRPC_STATUS CPlayerOperations::GetPropertyValue(PlayerType player, const std:
         const auto& components = CServiceBroker::GetAppComponents();
         const auto appPlayer = components.GetComponent<CApplicationPlayer>();
         const std::optional<int64_t> ms = appPlayer->GetPresentationTime();
-        if (ms)
-          MillisecondsToTimeObject(
-              static_cast<int>(std::clamp<int64_t>(*ms, 0, std::numeric_limits<int>::max())),
-              result);
+        // a position before the clock's zero is none on it
+        if (ms && *ms >= 0)
+          MillisecondsToTimeObject(*ms, result);
         else
           result = CVariant(CVariant::VariantTypeNull);
         break;

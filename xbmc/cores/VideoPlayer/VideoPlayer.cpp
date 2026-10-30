@@ -5880,7 +5880,7 @@ void CVideoPlayer::UpdatePlayState(double timeout)
     // less that origin and the continuity correction in force.
     const double playingOffsetPts = GetPlayingOffsetPts();
     double presentationOrigin = DVD_NOPTS_VALUE;
-    if (haveTimes)
+    if (haveTimes && times.ptsPresentationOffset != DVD_NOPTS_VALUE)
       presentationOrigin = times.ptsPresentationOffset;
     else if (m_pDemuxer)
       presentationOrigin = m_pDemuxer->GetPresentationTimeOffset();
