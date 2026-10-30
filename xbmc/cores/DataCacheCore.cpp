@@ -11,9 +11,21 @@
 #include "ServiceBroker.h"
 #include "cores/EdlEdit.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <mutex>
 #include <utility>
+
+namespace
+{
+// The rate the play time moves at, by the player's rule: a tempo plays at normal speed, and
+// trickplay runs at its speed alone while a tempo is kept for the return to normal speed
+double PlayRate(float tempo, float speed)
+{
+  return static_cast<double>(speed == 1.0f ? tempo : speed);
+}
+} // namespace
 
 CDataCacheCore::CDataCacheCore()
   : m_playerVideoInfo{}, m_playerAudioInfo{}, m_contentInfo{}, m_stateInfo{}
@@ -485,6 +497,15 @@ void CDataCacheCore::SetSpeed(float tempo, float speed)
 {
   std::unique_lock lock(m_stateSection);
 
+  // Bank the time played at the old rate, so the new rate moves the play time on from now
+  // rather than from the last store
+  if (PlayRate(tempo, speed) != PlayRate(m_stateInfo.m_tempo, m_stateInfo.m_speed) &&
+      m_timeInfo.m_timeStamp != std::chrono::steady_clock::time_point{})
+  {
+    m_timeInfo.m_time = CurrentPlayTime();
+    m_timeInfo.m_timeStamp = std::chrono::steady_clock::now();
+  }
+
   m_stateInfo.m_tempo = tempo;
   m_stateInfo.m_speed = speed;
 }
@@ -557,22 +578,51 @@ bool CDataCacheCore::GetVideoRender()
   return m_stateInfo.m_renderVideoLayer;
 }
 
-void CDataCacheCore::SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max)
+void CDataCacheCore::SetPlayTimes(
+    time_t start, int64_t current, int64_t min, int64_t max, bool moving)
 {
   std::unique_lock lock(m_stateSection);
   m_timeInfo.m_startTime = start;
   m_timeInfo.m_time = current;
   m_timeInfo.m_timeMin = min;
   m_timeInfo.m_timeMax = max;
+  m_timeInfo.m_timeStamp =
+      moving ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 }
 
 void CDataCacheCore::GetPlayTimes(time_t &start, int64_t &current, int64_t &min, int64_t &max)
 {
   std::unique_lock lock(m_stateSection);
   start = m_timeInfo.m_startTime;
-  current = m_timeInfo.m_time;
+  current = CurrentPlayTime();
   min = m_timeInfo.m_timeMin;
   max = m_timeInfo.m_timeMax;
+}
+
+int64_t CDataCacheCore::CurrentPlayTime() const
+{
+  // the bound: a player that stopped storing its time must not run away
+  constexpr int64_t MAX_OFFSET_MS = 1000;
+
+  if (m_timeInfo.m_timeStamp == std::chrono::steady_clock::time_point{})
+    return m_timeInfo.m_time;
+
+  const double rate = PlayRate(m_stateInfo.m_tempo, m_stateInfo.m_speed);
+  if (rate == 0.0)
+    return m_timeInfo.m_time;
+
+  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::steady_clock::now() - m_timeInfo.m_timeStamp)
+                           .count();
+  const int64_t offset =
+      std::clamp<int64_t>(std::llround(static_cast<double>(elapsed) * rate), -MAX_OFFSET_MS,
+                          MAX_OFFSET_MS);
+
+  int64_t time = m_timeInfo.m_time + offset;
+  if (m_timeInfo.m_timeMax > m_timeInfo.m_timeMin)
+    time = std::clamp(time, m_timeInfo.m_timeMin, m_timeInfo.m_timeMax);
+
+  return time;
 }
 
 time_t CDataCacheCore::GetStartTime()
@@ -584,7 +634,7 @@ time_t CDataCacheCore::GetStartTime()
 int64_t CDataCacheCore::GetPlayTime()
 {
   std::unique_lock lock(m_stateSection);
-  return m_timeInfo.m_time;
+  return CurrentPlayTime();
 }
 
 int64_t CDataCacheCore::GetMinTime()
