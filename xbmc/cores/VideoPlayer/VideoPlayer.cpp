@@ -1736,16 +1736,15 @@ void CVideoPlayer::Process()
       CDVDDemuxUtils::FreeDemuxPacket(pPacket);
 
       /* a source that cannot keep up hands these back as fast as we ask */
-      if (++emptyPackets == 1)
-        m_sourceDrySince = std::chrono::steady_clock::now();
-      else if (emptyPackets > 10)
+      if (++emptyPackets > 10)
         CThread::Sleep(10ms);
+      if (m_sourceDrySince == std::chrono::steady_clock::time_point{})
+        m_sourceDrySince = std::chrono::steady_clock::now();
 
       continue;
     }
 
     emptyPackets = 0;
-    m_sourceDrySince = {};
 
     if (!pPacket)
     {
@@ -1797,6 +1796,9 @@ void CVideoPlayer::Process()
       // input stream asked us to just retry
       if(next == CDVDInputStream::NEXTSTREAM_RETRY)
       {
+        // nothing to read, as an empty packet says
+        if (m_sourceDrySince == std::chrono::steady_clock::time_point{})
+          m_sourceDrySince = std::chrono::steady_clock::now();
         CThread::Sleep(100ms);
         continue;
       }
@@ -1829,6 +1831,8 @@ void CVideoPlayer::Process()
 
       break;
     }
+
+    m_sourceDrySince = {};
 
     // see if we can find something better to play
     CheckBetterStream(m_CurrentAudio,    pStream);
