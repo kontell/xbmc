@@ -18,6 +18,7 @@
 #include "ImageSettings.h"
 #include "guilib/guiinfo/GUIInfoLabel.h"
 
+#include <optional>
 #include <vector>
 
 /*!
@@ -79,6 +80,8 @@ public:
   void SetPosition(float posX, float posY) override;
   std::string GetDescription() const override;
   void SetCrossFade(unsigned int time);
+  //! the part of the image drawn, in its own pixels given the image's width; none for the whole
+  void SetRegion(const std::optional<CRect>& region, float imageWidth = 0.0f);
   void SetImageFilter(const KODI::GUILIB::GUIINFO::CGUIInfoLabel& imageFilter);
   void SetDiffuseFilter(const KODI::GUILIB::GUIINFO::CGUIInfoLabel& diffuseFilter);
 

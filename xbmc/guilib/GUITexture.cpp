@@ -281,20 +281,31 @@ void CGUITexture::Render(int32_t depthOffset, int32_t overrideDepth)
 
 void CGUITexture::UpdateSegments()
 {
-  // compute the texture coordinates
-  float u1, u2, u3, v1, v2, v3;
-  u1 = m_info.border.x1;
-  u2 = m_frameWidth - m_info.border.x2;
-  u3 = m_frameWidth;
-  v1 = m_info.border.y1;
-  v2 = m_frameHeight - m_info.border.y2;
-  v3 = m_frameHeight;
+  // compute the texture coordinates of what is drawn: a region of the image, or the frame
+  float u0 = 0.0f;
+  float v0 = 0.0f;
+  float u3 = m_frameWidth;
+  float v3 = m_frameHeight;
+  if (m_region)
+  {
+    const CRect region = RegionInFrame();
+    u0 = region.x1;
+    v0 = region.y1;
+    u3 = region.x2;
+    v3 = region.y2;
+  }
+  float u1 = u0 + m_info.border.x1;
+  float u2 = u3 - m_info.border.x2;
+  float v1 = v0 + m_info.border.y1;
+  float v2 = v3 - m_info.border.y2;
 
   if (!m_texture.m_texCoordsArePixels)
   {
+    u0 *= m_texCoordsScaleU;
     u1 *= m_texCoordsScaleU;
     u2 *= m_texCoordsScaleU;
     u3 *= m_texCoordsScaleU;
+    v0 *= m_texCoordsScaleV;
     v1 *= m_texCoordsScaleV;
     v2 *= m_texCoordsScaleV;
     v3 *= m_texCoordsScaleV;
@@ -347,14 +358,14 @@ void CGUITexture::UpdateSegments()
   if (b.x1)
   {
     if (b.y1)
-      add(0, 0, 1, 1, 0, 0, u1, v1);
-    add(0, 1, 1, 2, 0, v1, u1, v2);
+      add(0, 0, 1, 1, u0, v0, u1, v1);
+    add(0, 1, 1, 2, u0, v1, u1, v2);
     if (b.y2)
-      add(0, 2, 1, 3, 0, v2, u1, v3);
+      add(0, 2, 1, 3, u0, v2, u1, v3);
   }
   // middle segment (u1,0,u2,v3)
   if (b.y1)
-    add(1, 0, 2, 1, u1, 0, u2, v1);
+    add(1, 0, 2, 1, u1, v0, u2, v1);
   if (m_info.m_infill)
     add(1, 1, 2, 2, u1, v1, u2, v2);
   if (b.y2)
@@ -363,7 +374,7 @@ void CGUITexture::UpdateSegments()
   if (b.x2)
   { // have a left border
     if (b.y1)
-      add(2, 0, 3, 1, u2, 0, u3, v1);
+      add(2, 0, 3, 1, u2, v0, u3, v1);
     add(2, 1, 3, 2, u2, v1, u3, v2);
     if (b.y2)
       add(2, 2, 3, 3, u2, v2, u3, v3);
@@ -477,7 +488,12 @@ bool CGUITexture::AllocResources()
     if (m_isAllocated != NORMAL)
     { // use our large image background loader
       CTextureArray texture;
-      if (m_requestWidth == REQUEST_SIZE_UNSET && m_requestHeight == REQUEST_SIZE_UNSET)
+      if (m_region)
+      { // a part is drawn, so the whole image is wanted, as large as the renderer allows
+        m_requestWidth = 0;
+        m_requestHeight = 0;
+      }
+      else if (m_requestWidth == REQUEST_SIZE_UNSET && m_requestHeight == REQUEST_SIZE_UNSET)
       {
         CGraphicContext& gfxContext = CServiceBroker::GetWinSystem()->GetGfxContext();
         m_requestWidth = (int)(m_width / gfxContext.GetGUIScaleX() + 0.5f);
@@ -548,24 +564,29 @@ bool CGUITexture::CalculateSize()
   m_texCoordsScaleU = 1.0f / m_texture.m_texWidth;
   m_texCoordsScaleV = 1.0f / m_texture.m_texHeight;
 
+  // what is drawn: a region of the image, or the whole frame
+  const CRect region = m_region ? RegionInFrame() : CRect();
+  const float frameWidth = m_region ? region.Width() : m_frameWidth;
+  const float frameHeight = m_region ? region.Height() : m_frameHeight;
+
   if (m_width == 0)
-    m_width = m_frameWidth;
+    m_width = frameWidth;
   if (m_height == 0)
-    m_height = m_frameHeight;
+    m_height = frameHeight;
 
   float newPosX = m_posX;
   float newPosY = m_posY;
   float newWidth = m_width;
   float newHeight = m_height;
 
-  if (m_aspect.ratio != CAspectRatio::STRETCH && m_frameWidth && m_frameHeight)
+  if (m_aspect.ratio != CAspectRatio::STRETCH && frameWidth && frameHeight)
   {
     // to get the pixel ratio, we must use the SCALED output sizes
     float pixelRatio = CServiceBroker::GetWinSystem()->GetGfxContext().GetScalingPixelRatio();
 
-    float fSourceFrameRatio = m_frameWidth / m_frameHeight;
+    float fSourceFrameRatio = frameWidth / frameHeight;
     if (GetOrientation() & 4)
-      fSourceFrameRatio = m_frameHeight / m_frameWidth;
+      fSourceFrameRatio = frameHeight / frameWidth;
     float fOutputFrameRatio = fSourceFrameRatio / pixelRatio;
 
     // maximize the width
@@ -579,8 +600,8 @@ bool CGUITexture::CalculateSize()
     }
     if (m_aspect.ratio == CAspectRatio::CENTER)
     { // keep original size + center
-      newWidth = m_frameWidth / sqrt(pixelRatio);
-      newHeight = m_frameHeight * sqrt(pixelRatio);
+      newWidth = frameWidth / sqrt(pixelRatio);
+      newHeight = frameHeight * sqrt(pixelRatio);
     }
 
     if (m_aspect.align & ASPECT_ALIGN_LEFT)
@@ -853,6 +874,32 @@ bool CGUITexture::SetAspectRatio(const CAspectRatio& aspect)
   }
   else
     return false;
+}
+
+CRect CGUITexture::RegionInFrame() const
+{
+  const CRect& region = *m_region;
+  if (m_regionImageWidth <= 0.0f || m_frameWidth <= 0.0f)
+    return region;
+  // a decode larger than the renderer allows comes back smaller, the same on both axes
+  const float scale = m_frameWidth / m_regionImageWidth;
+  return CRect(region.x1 * scale, region.y1 * scale, region.x2 * scale, region.y2 * scale);
+}
+
+bool CGUITexture::SetRegion(const std::optional<CRect>& region, float imageWidth)
+{
+  if (m_region == region && m_regionImageWidth == imageWidth)
+    return false;
+
+  // with a region the whole image is wanted, which a load fitted to the control is not
+  if (static_cast<bool>(region) != static_cast<bool>(m_region) && m_isAllocated == LARGE)
+    FreeResources();
+
+  m_region = region;
+  m_regionImageWidth = imageWidth;
+  m_invalid = true;
+  m_segmentsDirty = true;
+  return true;
 }
 
 bool CGUITexture::SetFileName(const std::string& filename)

@@ -1062,6 +1062,46 @@ namespace XBMCAddon
       infoTag->m_cast = std::move(cast);
     }
 
+    void InfoTagVideo::setScrubPreviews(int interval,
+                                        int width,
+                                        int height,
+                                        int columns,
+                                        int rows,
+                                        const std::vector<String>& tiles)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      setScrubPreviewsRaw(infoTag, interval, width, height, columns, rows, tiles);
+    }
+
+    void InfoTagVideo::setScrubPreviewsRaw(CVideoInfoTag* infoTag,
+                                           int interval,
+                                           int width,
+                                           int height,
+                                           int columns,
+                                           int rows,
+                                           const std::vector<String>& tiles)
+    {
+      ScrubPreviews previews;
+      if (!tiles.empty())
+      {
+        if (interval <= 0 || width <= 0 || height <= 0 || columns <= 0 || rows <= 0)
+          throw WrongTypeException("InfoTagVideo.setScrubPreviews: the interval, the thumbnail "
+                                   "size and the cells to a tile must be above 0");
+        for (const String& tile : tiles)
+        {
+          if (tile.empty())
+            throw WrongTypeException("InfoTagVideo.setScrubPreviews: a tile must be a path");
+        }
+        previews.intervalMs = interval;
+        previews.width = width;
+        previews.height = height;
+        previews.columns = columns;
+        previews.rows = rows;
+        previews.tiles = tiles;
+      }
+      infoTag->SetScrubPreviews(std::move(previews));
+    }
+
     void InfoTagVideo::setResumePointRaw(CVideoInfoTag* infoTag,
                                          double time,
                                          double totalTime /* = 0.0 */)

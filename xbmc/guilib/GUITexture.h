@@ -109,6 +109,13 @@ public:
   bool SetFileName(const std::string &filename);
   void SetUseCache(const bool useCache = true);
   bool SetAspectRatio(const CAspectRatio &aspect);
+  /*!
+   * \brief Draw a part of the image: a rectangle in its own pixels, with the image's size, or
+   * none for the whole of it. With a region the whole image is loaded as large as the renderer
+   * allows, and the rectangle follows the size it was decoded at, so a tile of thumbnails is one
+   * texture and a cell of it a change of region.
+   */
+  bool SetRegion(const std::optional<CRect>& region, float imageWidth = 0.0f);
   void SetScalingMethod(TEXTURE_SCALING scalingMethod);
   void SetDiffuseScalingMethod(TEXTURE_SCALING scalingMethod);
 
@@ -206,6 +213,9 @@ protected:
   int m_requestHeight = REQUEST_SIZE_UNSET;
   bool m_largeInterim{false};
   static constexpr int REQUEST_SIZE_UNSET = -1;
+  std::optional<CRect> m_region; // the part of the image drawn, in its own pixels
+  float m_regionImageWidth{0.0f}; // the image's own width, to scale the region to the decode
+  CRect RegionInFrame() const; // the region in the pixels of the frame as decoded
 
   CRect m_vertex;       // vertex coords to render
   bool m_invalid;       // if true, we need to recalculate

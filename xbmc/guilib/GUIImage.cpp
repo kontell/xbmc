@@ -503,6 +503,14 @@ void CGUIImage::SetDiffuseScalingMethod(TEXTURE_SCALING scalingMethod)
   m_textureNext->SetDiffuseScalingMethod(scalingMethod);
 }
 
+void CGUIImage::SetRegion(const std::optional<CRect>& region, float imageWidth)
+{
+  bool changed = m_textureCurrent->SetRegion(region, imageWidth);
+  changed |= m_textureNext->SetRegion(region, imageWidth);
+  if (changed)
+    MarkDirtyRegion();
+}
+
 void CGUIImage::SetCrossFade(unsigned int time)
 {
   m_crossFadeTime = time;
