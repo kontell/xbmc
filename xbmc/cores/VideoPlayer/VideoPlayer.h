@@ -574,6 +574,7 @@ protected:
   // Callbacks to raise for a PLAYER_SETSPEED transition. Unpausing to normal or tempo
   // speed is excluded because SetSpeed() already raises OnPlayBackResumed.
   static SpeedChangeNotifications GetSpeedChangeNotifications(int previousSpeed,
+                                                              bool previousIsTempo,
                                                               int newSpeed,
                                                               bool isTempo);
   // The speed a tempo plays at: its own floor is 1/DVD_PLAYSPEED_NORMAL
@@ -616,6 +617,7 @@ protected:
   } m_content;
 
   int m_playSpeed;
+  bool m_playSpeedIsTempo = false; // m_playSpeed is a tempo, not trickplay
   int m_streamPlayerSpeed;
   int m_demuxerSpeed = DVD_PLAYSPEED_NORMAL;
   struct SSpeedState
