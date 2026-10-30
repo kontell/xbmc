@@ -12358,6 +12358,7 @@ void CGUIInfoManager::ResetCurrentItem()
 void CGUIInfoManager::UpdateCurrentItem(const CFileItem& item, bool replaceLabels /* = true */)
 {
   m_currentFile->UpdateInfo(item, replaceLabels);
+  m_infoProviders.GetPlayerInfoProvider().InitCurrentItem(m_currentFile.get());
 }
 
 void CGUIInfoManager::SetCurrentItem(const CFileItem& item)

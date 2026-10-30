@@ -17,6 +17,10 @@
 
 #include <cassert>
 #include <memory>
+#include "utils/StringUtils.h"
+
+#include <array>
+#include <cstdlib>
 
 using namespace KODI::GUILIB;
 
@@ -43,6 +47,7 @@ CGUIImage::CGUIImage(const CGUIImage& left)
   : CGUIControl(left),
     m_image(left.m_image),
     m_info(left.m_info),
+    m_regionInfo(left.m_regionInfo),
     m_textureCurrent(left.m_textureCurrent->Clone()),
     m_textureNext(left.m_textureNext->Clone()),
     m_imageFilterInfo(left.m_imageFilterInfo),
@@ -99,6 +104,9 @@ void CGUIImage::UpdateInfo(const CGUIListItem *item)
   if (m_textureCurrent->GetDiffuseColor().HasInfo())
     UpdateDiffuseColor(item);
 
+  if (!m_regionInfo.IsEmpty())
+    SetRegionFromLabel(item ? m_regionInfo.GetItemLabel(item) : m_regionInfo.GetLabel(m_parentID));
+
   if (m_info.IsConstant())
     return; // nothing to do
 
@@ -106,10 +114,34 @@ void CGUIImage::UpdateInfo(const CGUIListItem *item)
   if (HasProcessed() && IsAnimating(ANIM_TYPE_HIDDEN) && !IsVisibleFromSkin())
     return;
 
+  // a region needs the whole image, not a thumbnail of it
+  const bool useCache = m_regionInfo.IsEmpty();
   if (item)
-    SetFileName(m_info.GetItemLabel(item, true, &m_currentFallback));
+    SetFileName(m_info.GetItemLabel(item, true, &m_currentFallback), false, useCache);
   else
-    SetFileName(m_info.GetLabel(m_parentID, true, &m_currentFallback));
+    SetFileName(m_info.GetLabel(m_parentID, true, &m_currentFallback), false, useCache);
+}
+
+void CGUIImage::SetRegionInfo(const GUIINFO::CGUIInfoLabel& region)
+{
+  m_regionInfo = region;
+}
+
+void CGUIImage::SetRegionFromLabel(const std::string& label)
+{
+  std::array<float, 5> v{}; // x, y, width, height, image width
+  const std::vector<std::string> parts = StringUtils::Split(label, ',');
+  bool valid = parts.size() == v.size();
+  for (size_t i = 0; valid && i < v.size(); ++i)
+  {
+    char* end = nullptr;
+    v[i] = std::strtof(parts[i].c_str(), &end);
+    valid = end != parts[i].c_str() && *end == '\0';
+  }
+  if (valid && v[2] > 0.0f && v[3] > 0.0f && v[4] > 0.0f)
+    SetRegion(CRect(v[0], v[1], v[0] + v[2], v[1] + v[3]), v[4]);
+  else
+    SetRegion(std::nullopt);
 }
 
 void CGUIImage::AllocateOnDemand()

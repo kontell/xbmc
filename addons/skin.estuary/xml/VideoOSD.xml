@@ -113,7 +113,7 @@
 							<param name="texture" value="osd/fullscreen/buttons/scrub.png"/>
 						</include>
 						<onclick>ActivateWindow(videoscrub)</onclick>
-						<visible>Player.HasScrubPreviews</visible>
+						<visible>Player.HasScrubPreviews + Player.SeekEnabled</visible>
 					</control>
 					<control type="radiobutton" id="608">
 						<textureradioonfocus colordiffuse="white">osd/fullscreen/buttons/record-white.png</textureradioonfocus>

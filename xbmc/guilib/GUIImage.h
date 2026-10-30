@@ -82,6 +82,12 @@ public:
   void SetCrossFade(unsigned int time);
   //! the part of the image drawn, in its own pixels given the image's width; none for the whole
   void SetRegion(const std::optional<CRect>& region, float imageWidth = 0.0f);
+  /*!
+   * \brief Draw a region of the image given by an info label, resolved per item:
+   * "x,y,width,height,imagewidth" in the image's own pixels, empty for the whole image.
+   * Such an image is loaded whole and not through the thumbnail cache.
+   */
+  void SetRegionInfo(const KODI::GUILIB::GUIINFO::CGUIInfoLabel& region);
   void SetImageFilter(const KODI::GUILIB::GUIINFO::CGUIInfoLabel& imageFilter);
   void SetDiffuseFilter(const KODI::GUILIB::GUIINFO::CGUIInfoLabel& diffuseFilter);
 
@@ -114,6 +120,7 @@ protected:
   void UpdateDiffuseColor(const CGUIListItem* item);
 
   void UpdateImageFilter(KODI::GUILIB::IMAGE_FILTER imageFilter);
+  void SetRegionFromLabel(const std::string& label);
   void UpdateDiffuseFilter(KODI::GUILIB::IMAGE_FILTER diffuseFilter);
 
   bool m_bDynamicResourceAlloc;
@@ -121,6 +128,7 @@ protected:
   // border + conditional info
   CTextureInfo m_image;
   KODI::GUILIB::GUIINFO::CGUIInfoLabel m_info;
+  KODI::GUILIB::GUIINFO::CGUIInfoLabel m_regionInfo;
 
   bool m_isTransitioning{false};
   bool m_hasNewStagingTexture{false};

@@ -13,20 +13,24 @@
 
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 class CAction;
+class CFileItemList;
 
 /*!
- * \brief Scrubs through the playing video by its preview thumbnails. A press moves one
- * thumbnail; a held key moves on at a rate that doubles as the hold goes on; Select seeks to the
- * thumbnail shown, Back leaves the position alone.
+ * \brief Scrub through the playing video by its preview thumbnails: a strip of them, one per
+ * interval, that a press moves by one and a held key moves faster the longer it is held.
+ * Select seeks to the one in the middle.
  */
 class CGUIDialogVideoScrub : public CGUIDialog
 {
 public:
   CGUIDialogVideoScrub();
+  ~CGUIDialogVideoScrub() override;
+
   bool OnMessage(CGUIMessage& message) override;
   bool OnAction(const CAction& action) override;
 
@@ -34,14 +38,17 @@ protected:
   void OnDeinitWindow(int nextWindowID) override;
 
 private:
+  void FillStrip();
   int LastIndex() const;
   void Step(int thumbnails);
   void Move(const CAction& action, int direction);
   void SetIndex(int index);
+  void Seek(int index);
   void Prefetch(int tile);
   void ReleasePrefetched();
 
   ScrubPreviews m_previews;
+  std::unique_ptr<CFileItemList> m_items; //!< one per thumbnail, bound to the strip
   int64_t m_totalMs{0};
   int64_t m_startMs{0};
   int m_index{-1};

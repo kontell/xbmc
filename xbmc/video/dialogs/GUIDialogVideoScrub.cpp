@@ -9,13 +9,14 @@
 #include "GUIDialogVideoScrub.h"
 
 #include "FileItem.h"
+#include "FileItemList.h"
 #include "GUILargeTextureManager.h"
+#include "GUIUserMessages.h"
 #include "ServiceBroker.h"
 #include "application/Application.h"
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
 #include "guilib/GUIComponent.h"
-#include "guilib/GUIImage.h"
 #include "guilib/GUIMessage.h"
 #include "guilib/TextureManager.h"
 #include "guilib/WindowIDs.h"
@@ -29,7 +30,7 @@
 
 namespace
 {
-constexpr int CONTROL_PREVIEW = 10;
+constexpr int CONTROL_STRIP = 50;
 
 // A held key moves BASE_RATE thumbnails a second, doubling every TIER_MS of holding, TIERS times
 // over: at a 10 s interval that is 30x, 60x, 120x and 240x real time, so a feature film is
@@ -39,36 +40,68 @@ constexpr unsigned int TIER_MS = 2000;
 constexpr int TIERS = 3;
 // a gap between two repeats longer than this counts as this long
 constexpr double MAX_TICK_SECONDS = 0.5;
+
+std::string TimeLabel(int64_t ms)
+{
+  return StringUtils::SecondsToTimeString(static_cast<long>(ms / 1000), TIME_FORMAT_GUESS);
+}
 } // namespace
 
 CGUIDialogVideoScrub::CGUIDialogVideoScrub()
-  : CGUIDialog(WINDOW_DIALOG_VIDEO_SCRUB, "DialogVideoScrub.xml")
+  : CGUIDialog(WINDOW_DIALOG_VIDEO_SCRUB, "DialogVideoScrub.xml"),
+    m_items(std::make_unique<CFileItemList>())
 {
   m_loadType = LOAD_EVERY_TIME;
 }
 
+CGUIDialogVideoScrub::~CGUIDialogVideoScrub() = default;
+
 bool CGUIDialogVideoScrub::OnMessage(CGUIMessage& message)
 {
-  if (message.GetMessage() == GUI_MSG_WINDOW_INIT)
+  switch (message.GetMessage())
   {
-    const auto& components = CServiceBroker::GetAppComponents();
-    const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-    const CFileItem& item = g_application.CurrentFileItem();
-    if (!appPlayer->IsPlayingVideo() || !item.HasVideoInfoTag() ||
-        !item.GetVideoInfoTag()->GetScrubPreviews().HasPreviews())
-      return false;
+    case GUI_MSG_WINDOW_INIT:
+    {
+      const auto& components = CServiceBroker::GetAppComponents();
+      const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+      const CFileItem& item = g_application.CurrentFileItem();
+      if (!appPlayer->IsPlayingVideo() || !item.HasVideoInfoTag() ||
+          !item.GetVideoInfoTag()->GetScrubPreviews().HasPreviews())
+        return false;
 
-    m_previews = item.GetVideoInfoTag()->GetScrubPreviews();
-    m_totalMs = appPlayer->GetTotalTime();
-    m_startMs = appPlayer->GetTime();
-    m_index = -1;
-    m_tile = -1;
-    m_direction = 0;
-    m_pending = 0.0;
-
-    CGUIDialog::OnMessage(message);
-    SetIndex(static_cast<int>(m_startMs / m_previews.intervalMs));
-    return true;
+      m_previews = item.GetVideoInfoTag()->GetScrubPreviews();
+      m_totalMs = appPlayer->GetTotalTime();
+      m_startMs = appPlayer->GetTime();
+      m_index = -1;
+      m_tile = -1;
+      m_direction = 0;
+      m_pending = 0.0;
+      CGUIDialog::OnMessage(message);
+      FillStrip();
+      SetIndex(static_cast<int>(m_startMs / m_previews.intervalMs));
+      return true;
+    }
+    case GUI_MSG_CLICKED:
+    {
+      if (message.GetSenderId() == CONTROL_STRIP &&
+          (message.GetParam1() == ACTION_SELECT_ITEM ||
+           message.GetParam1() == ACTION_MOUSE_LEFT_CLICK))
+      {
+        CGUIMessage selected(GUI_MSG_ITEM_SELECTED, GetID(), CONTROL_STRIP);
+        OnMessage(selected);
+        Seek(selected.GetParam1());
+        return true;
+      }
+      break;
+    }
+    case GUI_MSG_PLAYBACK_STARTED:
+    case GUI_MSG_PLAYBACK_ENDED:
+    case GUI_MSG_PLAYBACK_STOPPED:
+      // the previews are the item's that was playing when the dialog opened
+      Close();
+      return true;
+    default:
+      break;
   }
   return CGUIDialog::OnMessage(message);
 }
@@ -77,6 +110,7 @@ void CGUIDialogVideoScrub::OnDeinitWindow(int nextWindowID)
 {
   ReleasePrefetched();
   CGUIDialog::OnDeinitWindow(nextWindowID);
+  m_items->Clear();
 }
 
 bool CGUIDialogVideoScrub::OnAction(const CAction& action)
@@ -105,20 +139,35 @@ bool CGUIDialogVideoScrub::OnAction(const CAction& action)
       return true;
     case ACTION_SELECT_ITEM:
     case ACTION_PLAYER_PLAY:
-    {
-      if (m_index >= 0)
-      {
-        auto& components = CServiceBroker::GetAppComponents();
-        const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-        appPlayer->SeekTime(static_cast<int64_t>(m_index) * m_previews.intervalMs);
-      }
-      Close();
+      Seek(m_index);
       return true;
-    }
     default:
       break;
   }
   return CGUIDialog::OnAction(action);
+}
+
+void CGUIDialogVideoScrub::FillStrip()
+{
+  m_items->Clear();
+  const int cells = m_previews.CellsPerTile();
+  const int last = LastIndex();
+  for (int index = 0; index <= last; ++index)
+  {
+    const int cell = index % cells;
+    auto item = std::make_shared<CFileItem>(
+        TimeLabel(static_cast<int64_t>(index) * m_previews.intervalMs));
+    item->SetArt("thumb", m_previews.tiles[index / cells]);
+    // the cell in the tile's own pixels, for the image control's <region>
+    item->SetProperty("region", StringUtils::Format("{},{},{},{},{}",
+                                                    cell % m_previews.columns * m_previews.width,
+                                                    cell / m_previews.columns * m_previews.height,
+                                                    m_previews.width, m_previews.height,
+                                                    m_previews.columns * m_previews.width));
+    m_items->Add(std::move(item));
+  }
+  CGUIMessage msg(GUI_MSG_LABEL_BIND, GetID(), CONTROL_STRIP, 0, 0, m_items.get());
+  OnMessage(msg);
 }
 
 int CGUIDialogVideoScrub::LastIndex() const
@@ -147,7 +196,6 @@ void CGUIDialogVideoScrub::Move(const CAction& action, int direction)
     Step(direction);
     return;
   }
-
   const int tier = std::min(static_cast<int>(held / TIER_MS), TIERS);
   const double rate = BASE_RATE * static_cast<double>(1 << tier);
   const double elapsed =
@@ -163,36 +211,31 @@ void CGUIDialogVideoScrub::Move(const CAction& action, int direction)
 void CGUIDialogVideoScrub::SetIndex(int index)
 {
   index = std::clamp(index, 0, LastIndex());
-  const int cells = m_previews.CellsPerTile();
-  const int tile = index / cells;
-  const int cell = index % cells;
-  const float x = static_cast<float>(cell % m_previews.columns * m_previews.width);
-  const float y = static_cast<float>(cell / m_previews.columns * m_previews.height);
+  const int tile = index / m_previews.CellsPerTile();
+  CGUIMessage msg(GUI_MSG_ITEM_SELECT, GetID(), CONTROL_STRIP, index);
+  OnMessage(msg);
 
-  auto* image = dynamic_cast<CGUIImage*>(GetControl(CONTROL_PREVIEW));
-  if (image)
-  {
-    // the region before the tile, so the tile is loaded whole; the region is in the tile's own
-    // pixels, and follows whatever size the renderer could decode it at
-    image->SetRegion(CRect(x, y, x + m_previews.width, y + m_previews.height),
-                     static_cast<float>(m_previews.columns * m_previews.width));
-    if (tile != m_tile)
-      image->SetFileName(m_previews.tiles[tile], false, false);
-  }
   m_index = index;
   m_tile = tile;
   Prefetch(tile);
 
   const int64_t positionMs = static_cast<int64_t>(index) * m_previews.intervalMs;
   const int64_t deltaMs = positionMs - m_startMs;
-  SetProperty("scrubtime", StringUtils::SecondsToTimeString(static_cast<long>(positionMs / 1000),
-                                                            TIME_FORMAT_GUESS));
-  SetProperty("scrubdelta",
-              std::string(deltaMs < 0 ? "-" : "+") +
-                  StringUtils::SecondsToTimeString(static_cast<long>(std::llabs(deltaMs) / 1000),
-                                                   TIME_FORMAT_GUESS));
+  SetProperty("scrubtime", TimeLabel(positionMs));
+  SetProperty("scrubdelta", std::string(deltaMs < 0 ? "-" : "+") + TimeLabel(std::llabs(deltaMs)));
   SetProperty("scrubpercent",
               m_totalMs > 0 ? static_cast<int>(positionMs * 100 / m_totalMs) : 0);
+}
+
+void CGUIDialogVideoScrub::Seek(int index)
+{
+  if (index >= 0 && index <= LastIndex())
+  {
+    auto& components = CServiceBroker::GetAppComponents();
+    const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+    appPlayer->SeekTime(static_cast<int64_t>(index) * m_previews.intervalMs);
+  }
+  Close();
 }
 
 void CGUIDialogVideoScrub::Prefetch(int tile)
@@ -220,8 +263,8 @@ void CGUIDialogVideoScrub::Prefetch(int tile)
   {
     if (std::find(m_prefetched.begin(), m_prefetched.end(), path) != m_prefetched.end())
       continue;
-    // the same request as the image control's: the whole tile, uncached; the reference it
-    // takes is released in ReleasePrefetched() or above
+    // the same request as an image control's for a region of it: the whole tile, uncached;
+    // the reference it takes is released in ReleasePrefetched() or above
     CTextureArray texture;
     manager.GetImage(path, texture, 0, 0, CAspectRatio::KEEP, false, true, false);
     m_prefetched.push_back(path);

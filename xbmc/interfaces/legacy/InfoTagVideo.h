@@ -2820,7 +2820,7 @@ namespace XBMCAddon
 #ifdef DOXYGEN_SHOULD_USE_THIS
       ///
       /// \ingroup python_InfoTagVideo
-      /// @brief \python_func{ setScrubPreviews(interval, width, height, columns, rows, tiles) }
+      /// @brief \python_func{ setScrubPreviews(interval, width, height, columns, rows, tiles, [count]) }
       /// Set the thumbnails to scrub through the video with: one every `interval` from its
       /// start, packed into tiles of `columns` × `rows` cells in reading order. The scrub
       /// dialog steps through them; an empty list of tiles clears them.
@@ -2832,9 +2832,12 @@ namespace XBMCAddon
       /// @param rows               integer - cells down a tile.
       /// @param tiles              list - the tile images in order, as paths or URLs. A single
       ///                           image per thumbnail is a tile of one cell.
+      /// @param count              [opt] integer - thumbnails there are, when the last tile is
+      ///                           not full. 0, the default, is every cell of every tile.
       ///
-      /// With tiles set, an interval, size or cell count that is not above 0, or an empty
-      /// tile, raises TypeError, and the item's previews stay as they were.
+      /// With tiles set, an interval, size or cell count that is not above 0, cells to a tile
+      /// beyond what an integer counts, a count beyond the tiles, or an empty tile, raises
+      /// TypeError, and the item's previews stay as they were.
       ///
       ///
       ///-----------------------------------------------------------------------
@@ -2844,7 +2847,7 @@ namespace XBMCAddon
       /// ~~~~~~~~~~~~~{.py}
       /// ...
       /// # Jellyfin trickplay: 320x180 thumbnails every 10 s, 10x10 to a tile
-      /// info_tag.setScrubPreviews(10000, 320, 180, 10, 10, [tile_url(i) for i in range(8)])
+      /// info_tag.setScrubPreviews(10000, 320, 180, 10, 10, [tile_url(i) for i in range(8)], 759)
       /// ...
       /// ~~~~~~~~~~~~~
       ///
@@ -2855,7 +2858,8 @@ namespace XBMCAddon
                             int height,
                             int columns,
                             int rows,
-                            const std::vector<String>& tiles);
+                            const std::vector<String>& tiles,
+                            int count = 0);
 #endif
 
 #ifndef SWIG
@@ -2950,7 +2954,8 @@ namespace XBMCAddon
                                       int height,
                                       int columns,
                                       int rows,
-                                      const std::vector<String>& tiles);
+                                      const std::vector<String>& tiles,
+                                      int count = 0);
 #endif
     };
   }

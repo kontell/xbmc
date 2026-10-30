@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 TEST(TestInfoTagVideoScrubPreviews, SetScrubPreviewsStoresThem)
 {
   CVideoInfoTag tag;
@@ -24,9 +26,13 @@ TEST(TestInfoTagVideoScrubPreviews, SetScrubPreviewsStoresThem)
   EXPECT_EQ(320, previews.width);
   EXPECT_EQ(180, previews.height);
   EXPECT_EQ(100, previews.CellsPerTile());
-  EXPECT_EQ(200, previews.Count());
+  EXPECT_EQ(200, previews.Count()) << "no count given: every cell of every tile";
   ASSERT_EQ(2u, previews.tiles.size());
   EXPECT_EQ("http://s/t1.jpg", previews.tiles[1]);
+
+  XBMCAddon::xbmc::InfoTagVideo::setScrubPreviewsRaw(&tag, 10000, 320, 180, 10, 10,
+                                                     {"http://s/t0.jpg", "http://s/t1.jpg"}, 159);
+  EXPECT_EQ(159, tag.GetScrubPreviews().Count()) << "the last tile is part filled";
 }
 
 TEST(TestInfoTagVideoScrubPreviews, NoTilesClearsThem)
@@ -54,8 +60,19 @@ TEST(TestInfoTagVideoScrubPreviews, RefusesWhatItCannotStepThrough)
   EXPECT_THROW(
       XBMCAddon::xbmc::InfoTagVideo::setScrubPreviewsRaw(&tag, 10000, 320, 180, 1, 1, {""}),
       XBMCAddon::WrongTypeException);
+  // cells to a tile beyond an integer, and a count beyond the tiles
+  EXPECT_THROW(XBMCAddon::xbmc::InfoTagVideo::setScrubPreviewsRaw(
+                   &tag, 10000, 320, 180, std::numeric_limits<int>::max(), 2, {"t"}),
+               XBMCAddon::WrongTypeException);
+  EXPECT_THROW(
+      XBMCAddon::xbmc::InfoTagVideo::setScrubPreviewsRaw(&tag, 10000, 320, 180, 2, 2, {"t"}, 5),
+      XBMCAddon::WrongTypeException);
+  EXPECT_THROW(
+      XBMCAddon::xbmc::InfoTagVideo::setScrubPreviewsRaw(&tag, 10000, 320, 180, 2, 2, {"t"}, -1),
+      XBMCAddon::WrongTypeException);
 
   EXPECT_EQ(1u, tag.GetScrubPreviews().tiles.size());
+  EXPECT_EQ(100, tag.GetScrubPreviews().Count());
 }
 
 TEST(TestInfoTagVideoScrubPreviews, MergeTakesTheResolvedItems)

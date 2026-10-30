@@ -216,6 +216,11 @@ protected:
   std::optional<CRect> m_region; // the part of the image drawn, in its own pixels
   float m_regionImageWidth{0.0f}; // the image's own width, to scale the region to the decode
   CRect RegionInFrame() const; // the region in the pixels of the frame as decoded
+  //! a region is drawn from the whole image, so its requests share one entry whatever the aspect
+  CAspectRatio::AspectRatio RequestAspect() const
+  {
+    return m_region ? CAspectRatio::KEEP : m_aspect.ratio;
+  }
 
   CRect m_vertex;       // vertex coords to render
   bool m_invalid;       // if true, we need to recalculate
@@ -267,6 +272,8 @@ private:
   std::vector<Quad> m_quads;
   float m_frameU{0}; // frame size in texture coordinates
   float m_frameV{0};
+  float m_frameU0{0}; // the drawn part's origin in texture coordinates, 0 without a region
+  float m_frameV0{0};
   bool m_segmentsDirty{true};
   unsigned int m_quadsVersion{0};
 

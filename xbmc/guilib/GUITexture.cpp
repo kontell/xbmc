@@ -311,6 +311,8 @@ void CGUITexture::UpdateSegments()
     v3 *= m_texCoordsScaleV;
   }
 
+  m_frameU0 = u0;
+  m_frameV0 = v0;
   m_frameU = u3;
   m_frameV = v3;
 
@@ -444,16 +446,27 @@ void CGUITexture::Render(const Segment& segment)
 
 void CGUITexture::OrientateTexCoords(CRect& texture, CRect* diffuse, int orientation) const
 {
-  OrientateTexture(texture, m_frameU, m_frameV, orientation);
+  // within what is drawn: the region of the image, or all of it
+  const float width = m_frameU - m_frameU0;
+  const float height = m_frameV - m_frameV0;
+  texture.x1 -= m_frameU0;
+  texture.x2 -= m_frameU0;
+  texture.y1 -= m_frameV0;
+  texture.y2 -= m_frameV0;
+  OrientateTexture(texture, width, height, orientation);
+  texture.x1 += m_frameU0;
+  texture.x2 += m_frameU0;
+  texture.y1 += m_frameV0;
+  texture.y2 += m_frameV0;
 
   if (diffuse)
   {
     // flip the texture as necessary.  Diffuse just gets flipped according to m_info.orientation.
     // Main texture gets flipped according to GetOrientation().
-    diffuse->x1 *= m_diffuseScaleU / m_frameU;
-    diffuse->x2 *= m_diffuseScaleU / m_frameU;
-    diffuse->y1 *= m_diffuseScaleV / m_frameV;
-    diffuse->y2 *= m_diffuseScaleV / m_frameV;
+    diffuse->x1 = (diffuse->x1 - m_frameU0) * m_diffuseScaleU / width;
+    diffuse->x2 = (diffuse->x2 - m_frameU0) * m_diffuseScaleU / width;
+    diffuse->y1 = (diffuse->y1 - m_frameV0) * m_diffuseScaleV / height;
+    diffuse->y2 = (diffuse->y2 - m_frameV0) * m_diffuseScaleV / height;
     *diffuse += m_diffuseOffset;
     OrientateTexture(*diffuse, m_diffuseU, m_diffuseV, m_info.orientation);
   }
@@ -501,7 +514,7 @@ bool CGUITexture::AllocResources()
         CServiceBroker::GetGUI()->GetTextureCallbackManager().RegisterOnWindowResizeCallback(*this);
       }
       if (CServiceBroker::GetGUI()->GetLargeTextureManager().GetImage(
-              m_info.filename, texture, m_requestWidth, m_requestHeight, m_aspect.ratio,
+              m_info.filename, texture, m_requestWidth, m_requestHeight, RequestAspect(),
               m_info.m_mipmap, !IsAllocated(), m_use_cache))
       {
         m_isAllocated = LARGE;
@@ -662,7 +675,7 @@ void CGUITexture::FreeResources(bool immediately /* = false */)
   if (m_isAllocated == LARGE || m_isAllocated == LARGE_FAILED)
   {
     CServiceBroker::GetGUI()->GetLargeTextureManager().ReleaseImage(
-        m_info.filename, m_requestWidth, m_requestHeight, m_aspect.ratio, m_info.m_mipmap,
+        m_info.filename, m_requestWidth, m_requestHeight, RequestAspect(), m_info.m_mipmap,
         immediately || (m_isAllocated == LARGE_FAILED));
     m_requestWidth = REQUEST_SIZE_UNSET;
     m_requestHeight = REQUEST_SIZE_UNSET;

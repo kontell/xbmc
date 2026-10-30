@@ -25,9 +25,9 @@ struct ScrubPreviews
   int columns{0}; //!< cells across a tile
   int rows{0}; //!< cells down a tile
   std::vector<std::string> tiles; //!< the tile images, empty when the video has none
+  int count{0}; //!< thumbnails there are; the last tile may be part filled
 
   bool HasPreviews() const { return !tiles.empty(); }
   int CellsPerTile() const { return columns * rows; }
-  //! the thumbnails there are room for
-  int Count() const { return static_cast<int>(tiles.size()) * CellsPerTile(); }
+  int Count() const { return count; }
 };
