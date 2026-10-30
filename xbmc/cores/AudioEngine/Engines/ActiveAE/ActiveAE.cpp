@@ -814,11 +814,17 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
           if (par->stream->m_processingBuffers &&
               (!par->stream->m_resampleMode || !par->stream->m_pClock))
           {
-            if (par->stream->m_pClock &&
-                par->parameter.double_par != par->stream->m_requestedResampleRatio)
+            // What the sink holds and the stream's stages have made was made at the old ratio,
+            // and RunStages() would read it at the new one: sync waits until it has played.
+            // Between two ratios within the resampler's range the misreading is that audio
+            // times the ratios' difference, a few ms for a sync client's corrections, which
+            // can come faster than the audio plays out: measurement goes on.
+            const double requested = par->parameter.double_par;
+            const double before = par->stream->m_requestedResampleRatio;
+            const bool resampled = fabs(before - 1.0) < m_settings.atempoThreshold &&
+                                   fabs(requested - 1.0) < m_settings.atempoThreshold;
+            if (par->stream->m_pClock && requested != before && !resampled)
             {
-              // What the sink holds and the stream's stages have made was made at the old ratio,
-              // and RunStages() would read it at the new one: sync waits until it has played.
               AEDelayStatus status;
               m_stats.GetDelay(status);
               const double held =
