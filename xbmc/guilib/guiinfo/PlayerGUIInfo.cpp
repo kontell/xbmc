@@ -26,6 +26,7 @@
 #include "guilib/guiinfo/GUIInfo.h"
 #include "guilib/guiinfo/GUIInfoHelper.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
+#include "playlists/PlayListHistory.h"
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "utils/ArtTypes.h"
@@ -650,6 +651,9 @@ bool CPlayerGUIInfo::GetBool(bool& value,
         value = player.GetRepeat(player.GetCurrentPlaylist()) == PLAYLIST::RepeatState::ONE;
       return true;
     }
+    case PLAYLIST_HASHISTORY:
+      value = !CServiceBroker::GetPlaylistPlayer().GetHistory().Entries().empty();
+      return true;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // PLAYER_PROCESS_*
