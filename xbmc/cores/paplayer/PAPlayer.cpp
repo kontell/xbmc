@@ -220,6 +220,7 @@ bool PAPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options)
   // An item the listener chose plays at normal speed, as VideoPlayer's does; an item queued
   // after the playing one keeps the tempo.
   m_tempo = 1.0f;
+  m_tempoIsCorrection = false;
   CDataCacheCore::GetInstance().SetSpeed(1.0f, m_playbackSpeed);
 
   if (m_streams.size() > 1 || !m_defaultCrossfadeMS || m_isPaused)
@@ -1031,18 +1032,23 @@ void PAPlayer::SetDynamicRangeCompression(long drc)
 
 }
 
-void PAPlayer::SetTempo(float tempo)
+void PAPlayer::SetTempo(float tempo, bool correction)
 {
   if (!(tempo >= MIN_TEMPO && tempo <= MAX_TEMPO))
     return;
 
   // three decimals: the player speed's own floor, and what the OSD rounds to
   tempo = std::round(tempo * 1000.0f) / 1000.0f;
-  if (tempo == m_tempo)
+  const bool tempoChanged = tempo != m_tempo;
+  if (!tempoChanged && correction == m_tempoIsCorrection)
     return;
 
   m_tempo = tempo;
-  CDataCacheCore::GetInstance().SetSpeed(m_tempo, m_playbackSpeed);
+  m_tempoIsCorrection = correction;
+  CDataCacheCore::GetInstance().SetSpeed(m_tempo, m_playbackSpeed, m_tempoIsCorrection);
+  // the viewer taking a correction's tempo over changes only what the GUI shows
+  if (!tempoChanged)
+    return;
 
   std::unique_lock lock(m_streamsLock);
   for (StreamInfo* si : m_streams)
@@ -1094,7 +1100,7 @@ double PAPlayer::QueuedSeconds(StreamInfo& si) const
 void PAPlayer::SetSpeed(float speed)
 {
   m_playbackSpeed = static_cast<int>(speed);
-  CDataCacheCore::GetInstance().SetSpeed(m_tempo, speed);
+  CDataCacheCore::GetInstance().SetSpeed(m_tempo, speed, m_tempoIsCorrection);
   if (m_playbackSpeed != 0 && m_isPaused)
   {
     m_isPaused = false;

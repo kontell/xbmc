@@ -369,7 +369,7 @@ public:
   void SeekTime(int64_t iTime) override;
   bool SeekTimeRelative(int64_t iTime) override;
   void SetSpeed(float speed) override;
-  void SetTempo(float tempo) override;
+  void SetTempo(float tempo, bool correction) override;
   bool SupportsTempo() const override;
   void FrameAdvance(int frames) override;
   bool OnAction(const CAction &action) override;
@@ -575,13 +575,16 @@ protected:
   {
     bool resumed{false};
     bool speedChanged{false};
+    bool shownAsSeek{false}; // the GUI's seek bar shows the change
   };
   // Callbacks to raise for a PLAYER_SETSPEED transition. Unpausing to normal or tempo
-  // speed is excluded because SetSpeed() already raises OnPlayBackResumed.
+  // speed is excluded because SetSpeed() already raises OnPlayBackResumed. A correction is
+  // announced and not shown: the viewer did not change the speed.
   static SpeedChangeNotifications GetSpeedChangeNotifications(int previousSpeed,
                                                               bool previousIsTempo,
                                                               int newSpeed,
-                                                              bool isTempo);
+                                                              bool isTempo,
+                                                              bool isCorrection);
   // The speed a tempo plays at: its own floor is 1/DVD_PLAYSPEED_NORMAL
   static int TempoToSpeed(float tempo);
 
