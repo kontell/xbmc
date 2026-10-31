@@ -15,6 +15,7 @@
 
 #include "Artist.h"
 #include "XBDateTime.h"
+#include "media/ChapterDetails.h"
 #include "music/tags/ReplayGain.h"
 #include "utils/EmbeddedArt.h"
 #include "utils/ISerializable.h"
@@ -39,14 +40,6 @@ public:
 };
 
 class CFileItem;
-
-// Struct to store chapter information from mp3 files (could be used for m4b or mka files too)
-struct ChapterDetails
-{
-  std::string name;
-  std::chrono::milliseconds startTimeMs{0}; // All chapter timings are in milliseconds
-  std::chrono::milliseconds endTimeMs{0};
-};
 
 /*!
  \ingroup music

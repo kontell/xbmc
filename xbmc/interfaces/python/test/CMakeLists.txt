@@ -1,5 +1,6 @@
 if(TARGET ${APP_NAME_LC}::Python)
   set(SOURCES TestInfoTagMusic.cpp
+              TestInfoTagVideo.cpp
               TestPythonBindings.cpp
               TestWindowGetControl.cpp)
 

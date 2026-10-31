@@ -3294,13 +3294,27 @@ void CVideoPlayer::HandleMessages()
         seekDone = true;
       };
 
+      // An add-on's chapters for the item are sought by time; see UpdatePlayState()
+      const std::vector<ChapterDetails>* itemChapters{
+          m_item.HasVideoInfoTag() && !m_item.GetVideoInfoTag()->GetChapterMarks().empty()
+              ? &m_item.GetVideoInfoTag()->GetChapterMarks()
+              : nullptr};
+      const auto GetRawChapterPos = [this, itemChapters](int rawChapter)
+      {
+        if (!itemChapters)
+          return std::chrono::milliseconds{m_pDemuxer->GetChapterPos(rawChapter)};
+        if (rawChapter < 1 || rawChapter > static_cast<int>(itemChapters->size()))
+          return std::chrono::milliseconds{0};
+        return (*itemChapters)[rawChapter - 1].startTimeMs;
+      };
+
       // newChapter is kept in "visible" chapter numbering throughout (as reported by
       // GetChapter()/GetChapterCount()); it is translated to the demuxer/inputstream's own
       // chapter numbering via ToRawChapter() only at the point of calling into them.
       if (m_pDemuxer)
       {
         const bool forward{newChapter > GetChapter()};
-        std::chrono::milliseconds position{m_pDemuxer->GetChapterPos(ToRawChapter(newChapter))};
+        std::chrono::milliseconds position{GetRawChapterPos(ToRawChapter(newChapter))};
         const int chapterCount{GetChapterCount()};
         auto inEdit{m_Edl.InEdit(position)};
         inCut = inEdit && inEdit.value()->action == EDL::Action::CUT;
@@ -3310,7 +3324,7 @@ void CVideoPlayer::HandleMessages()
           while (inCut && ((forward && newChapter < chapterCount) || (!forward && newChapter > 1)))
           {
             newChapter += step;
-            position = m_pDemuxer->GetChapterPos(ToRawChapter(newChapter));
+            position = GetRawChapterPos(ToRawChapter(newChapter));
             inEdit = m_Edl.InEdit(position);
             inCut = inEdit && inEdit.value()->action == EDL::Action::CUT;
           }
@@ -3324,11 +3338,13 @@ void CVideoPlayer::HandleMessages()
         }
         else if (!inCut)
         {
-          if (m_pDemuxer->SeekChapter(ToRawChapter(newChapter), &start))
+          if (itemChapters
+                  ? m_pDemuxer->SeekTime(static_cast<double>(position.count()), true, &start)
+                  : m_pDemuxer->SeekChapter(ToRawChapter(newChapter), &start))
             FinishChapterSeek();
         }
       }
-      if (!inCut && !seekDone && m_pInputStream)
+      if (!inCut && !seekDone && !itemChapters && m_pInputStream)
       {
         CDVDInputStream::IChapter* pChapter = m_pInputStream->GetIChapter();
         if (pChapter)
@@ -5993,6 +6009,31 @@ void CVideoPlayer::UpdatePlayState(double timeout)
     state.cantempo = CanTempo();
 
     m_processInfo->SetStateRealtime(realtime);
+  }
+
+  // Chapters an add-on set on the item replace the stream's. state.timeMax is still the raw
+  // (pre-EDL) length here.
+  if (m_item.HasVideoInfoTag() && !m_item.GetVideoInfoTag()->GetChapterMarks().empty())
+  {
+    const std::vector<ChapterDetails>& marks = m_item.GetVideoInfoTag()->GetChapterMarks();
+    const std::chrono::milliseconds rawStreamEnd{llrint(state.timeMax)};
+
+    state.chapters.clear();
+    state.rawChapters.clear();
+    for (std::size_t i = 0; i < marks.size(); ++i)
+    {
+      const std::chrono::milliseconds rawStart{marks[i].startTimeMs};
+      const std::chrono::milliseconds rawEnd{
+          i + 1 < marks.size()
+              ? marks[i + 1].startTimeMs
+              : (rawStreamEnd > rawStart ? rawStreamEnd : std::chrono::milliseconds::max())};
+      if (IsChapterFullyCut(m_Edl, rawStart, rawEnd))
+        continue;
+
+      state.chapters.emplace_back(marks[i].name, m_Edl.GetTimeWithoutCuts(rawStart));
+      state.rawChapters.emplace_back(static_cast<int>(i) + 1);
+    }
+    state.chapter = 0;
   }
 
   if (m_Edl.HasCuts())
