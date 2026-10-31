@@ -45,6 +45,18 @@
             <formatlabel>14046</formatlabel>
           </control>
         </setting>
+        <setting id="videoplayer.scrubtoprate" type="integer" label="13560" help="37058">
+          <level>1</level>
+          <default>18</default>
+          <constraints>
+            <minimum>6</minimum>
+            <step>3</step>
+            <maximum>48</maximum>
+          </constraints>
+          <control type="spinner" format="string">
+            <formatlabel>13561</formatlabel>
+          </control>
+        </setting>
       </group>
       <group id="2" label="19177">
         <setting id="videoplayer.adjustrefreshrate" type="integer" label="170" help="36164">

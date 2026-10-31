@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 using KODI::MEDIA::MediaTypeFromName;
@@ -1125,6 +1126,57 @@ namespace XBMCAddon
     void InfoTagVideo::setCastRaw(CVideoInfoTag* infoTag, std::vector<SActorInfo> cast)
     {
       infoTag->m_cast = std::move(cast);
+    }
+
+    void InfoTagVideo::setScrubPreviews(int interval,
+                                        int width,
+                                        int height,
+                                        int columns,
+                                        int rows,
+                                        const std::vector<String>& tiles,
+                                        int count /* = 0 */)
+    {
+      XBMCAddonUtils::GuiLock lock(languageHook, offscreen);
+      setScrubPreviewsRaw(infoTag, interval, width, height, columns, rows, tiles, count);
+    }
+
+    void InfoTagVideo::setScrubPreviewsRaw(CVideoInfoTag* infoTag,
+                                           int interval,
+                                           int width,
+                                           int height,
+                                           int columns,
+                                           int rows,
+                                           const std::vector<String>& tiles,
+                                           int count /* = 0 */)
+    {
+      ScrubPreviews previews;
+      if (!tiles.empty())
+      {
+        if (interval <= 0 || width <= 0 || height <= 0 || columns <= 0 || rows <= 0)
+          throw WrongTypeException("InfoTagVideo.setScrubPreviews: the interval, the thumbnail "
+                                   "size and the cells to a tile must be above 0");
+        if (columns > std::numeric_limits<int>::max() / rows)
+          throw WrongTypeException("InfoTagVideo.setScrubPreviews: too many cells to a tile");
+        const int64_t capacity = static_cast<int64_t>(tiles.size()) * (columns * rows);
+        if (count < 0 || count > capacity)
+          throw WrongTypeException(
+              "InfoTagVideo.setScrubPreviews: the count must be within the tiles");
+        for (const String& tile : tiles)
+        {
+          if (tile.empty())
+            throw WrongTypeException("InfoTagVideo.setScrubPreviews: a tile must be a path");
+        }
+        previews.intervalMs = interval;
+        previews.width = width;
+        previews.height = height;
+        previews.columns = columns;
+        previews.rows = rows;
+        previews.tiles = tiles;
+        previews.count = count > 0 ? count
+                                   : static_cast<int>(std::min<int64_t>(
+                                         capacity, std::numeric_limits<int>::max()));
+      }
+      infoTag->SetScrubPreviews(std::move(previews));
     }
 
     void InfoTagVideo::setResumePointRaw(CVideoInfoTag* infoTag,

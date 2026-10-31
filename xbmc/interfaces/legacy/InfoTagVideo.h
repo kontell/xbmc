@@ -2954,6 +2954,51 @@ namespace XBMCAddon
       void setChapters(const std::vector<Tuple<double, double, std::string>>& chapters);
 #endif
 
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagVideo
+      /// @brief \python_func{ setScrubPreviews(interval, width, height, columns, rows, tiles, [count]) }
+      /// Set the thumbnails to scrub through the video with: one every `interval` from its
+      /// start, packed into tiles of `columns` × `rows` cells in reading order. The scrub
+      /// dialog steps through them; an empty list of tiles clears them.
+      ///
+      /// @param interval           integer - milliseconds between two thumbnails.
+      /// @param width              integer - a thumbnail's width in pixels, the width of a cell.
+      /// @param height             integer - a thumbnail's height in pixels.
+      /// @param columns            integer - cells across a tile.
+      /// @param rows               integer - cells down a tile.
+      /// @param tiles              list - the tile images in order, as paths or URLs. A single
+      ///                           image per thumbnail is a tile of one cell.
+      /// @param count              [opt] integer - thumbnails there are, when the last tile is
+      ///                           not full. 0, the default, is every cell of every tile.
+      ///
+      /// With tiles set, an interval, size or cell count that is not above 0, cells to a tile
+      /// beyond what an integer counts, a count beyond the tiles, or an empty tile, raises
+      /// TypeError, and the item's previews stay as they were.
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      /// **Example:**
+      /// ~~~~~~~~~~~~~{.py}
+      /// ...
+      /// # Jellyfin trickplay: 320x180 thumbnails every 10 s, 10x10 to a tile
+      /// info_tag.setScrubPreviews(10000, 320, 180, 10, 10, [tile_url(i) for i in range(8)], 759)
+      /// ...
+      /// ~~~~~~~~~~~~~
+      ///
+      setScrubPreviews(...);
+#else
+      void setScrubPreviews(int interval,
+                            int width,
+                            int height,
+                            int columns,
+                            int rows,
+                            const std::vector<String>& tiles,
+                            int count = 0);
+#endif
+
 #ifndef SWIG
       static void setDbIdRaw(CVideoInfoTag* infoTag, int dbId);
       static void setUniqueIDRaw(CVideoInfoTag* infoTag,
@@ -3044,6 +3089,14 @@ namespace XBMCAddon
                                         const std::vector<Properties>& images);
       static void setChaptersRaw(CVideoInfoTag* infoTag,
                                  const std::vector<Tuple<double, double, std::string>>& chapters);
+      static void setScrubPreviewsRaw(CVideoInfoTag* infoTag,
+                                      int interval,
+                                      int width,
+                                      int height,
+                                      int columns,
+                                      int rows,
+                                      const std::vector<String>& tiles,
+                                      int count = 0);
 #endif
     };
   }
