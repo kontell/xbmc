@@ -74,6 +74,8 @@ public:
     return GetSpeedChangeNotifications(previousSpeed, newSpeed, isTempo);
   }
 
+  static int InvokeTempoToSpeed(float tempo) { return TempoToSpeed(tempo); }
+
   void SetCurrentVideoId(int id) { m_CurrentVideo.id = id; }
   void SetCurrentAudioId(int id) { m_CurrentAudio.id = id; }
 
@@ -713,6 +715,19 @@ TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_PauseFromPlaying)
       DVD_PLAYSPEED_NORMAL, DVD_PLAYSPEED_PAUSE, false);
   EXPECT_FALSE(notifications.resumed);
   EXPECT_FALSE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, TempoToSpeedTakesEveryTempoOnTheGrid)
+{
+  // as Player.SetTempo hands them over; 1.017f is 1.01699996
+  for (int speed = DVD_PLAYSPEED_NORMAL / 2; speed <= 5 * DVD_PLAYSPEED_NORMAL; ++speed)
+  {
+    const float tempo = static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL;
+    EXPECT_EQ(CTestVideoPlayer::InvokeTempoToSpeed(tempo), speed);
+  }
+
+  EXPECT_EQ(CTestVideoPlayer::InvokeTempoToSpeed(1.0174f), 1017);
+  EXPECT_EQ(CTestVideoPlayer::InvokeTempoToSpeed(1.0176f), 1018);
 }
 
 TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_NoActualChange)
