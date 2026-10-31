@@ -56,6 +56,7 @@ private:
   double m_target{0.0}; // where the input has asked for, in thumbnails
   double m_position{0.0}; // where the strip is on its way there
   double m_rate{0.0}; // thumbnails a second a held key moves the target, signed; 0 when none is
+  double m_topRate{0.0};
   unsigned int m_lastRepeat{0};
   unsigned int m_lastFrame{0};
   std::vector<std::string> m_prefetched;

@@ -23,6 +23,8 @@
 #include "guilib/WindowIDs.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/StringUtils.h"
 #include "utils/TimeUtils.h"
 #include "video/VideoInfoTag.h"
@@ -36,11 +38,10 @@ namespace
 constexpr int CONTROL_STRIP = 50;
 
 // A held key moves BASE_RATE thumbnails a second, doubling every DOUBLING_SECONDS of holding up to
-// TOP_RATE: at a 10 s interval that is 15x real time rising to 240x in 6 s, so a feature film is
-// crossed in about half a minute.
+// the top rate setting: at a 10 s interval and the default of 18 that is 15x real time rising to
+// 180x in about 5 s, so a feature film is crossed in about 45 s.
 constexpr double BASE_RATE = 1.5;
 constexpr double DOUBLING_SECONDS = 1.5;
-constexpr double TOP_RATE = 24.0;
 // a repeat sooner than this after the press is still the press
 constexpr unsigned int HOLD_MS = 100;
 // actions carry no key-up, so a hold ends when its repeats, some 50 ms apart, stop coming
@@ -84,6 +85,8 @@ bool CGUIDialogVideoScrub::OnMessage(CGUIMessage& message)
       m_index = -1;
       m_tile = -1;
       m_rate = 0.0;
+      m_topRate = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+          CSettings::SETTING_VIDEOPLAYER_SCRUBTOPRATE);
       m_lastFrame = CTimeUtils::GetFrameTime();
       CGUIDialog::OnMessage(message);
       FillStrip();
@@ -239,7 +242,7 @@ void CGUIDialogVideoScrub::Move(const CAction& action, int direction)
   }
   m_lastRepeat = CTimeUtils::GetFrameTime();
   m_rate =
-      direction * std::min(BASE_RATE * std::pow(2.0, held / 1000.0 / DOUBLING_SECONDS), TOP_RATE);
+      direction * std::min(BASE_RATE * std::pow(2.0, held / 1000.0 / DOUBLING_SECONDS), m_topRate);
 }
 
 void CGUIDialogVideoScrub::SetIndex(int index)
