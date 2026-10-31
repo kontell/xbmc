@@ -6,13 +6,14 @@
  *  See LICENSES/README.md for more information.
  */
 
+#include "FileItem.h"
 #include "interfaces/legacy/Exception.h"
 #include "interfaces/legacy/InfoTagVideo.h"
 #include "video/VideoInfoTag.h"
 
-#include <gtest/gtest.h>
-
 #include <limits>
+
+#include <gtest/gtest.h>
 
 TEST(TestInfoTagVideoScrubPreviews, SetScrubPreviewsStoresThem)
 {
@@ -73,6 +74,25 @@ TEST(TestInfoTagVideoScrubPreviews, RefusesWhatItCannotStepThrough)
 
   EXPECT_EQ(1u, tag.GetScrubPreviews().tiles.size());
   EXPECT_EQ(100, tag.GetScrubPreviews().Count());
+}
+
+TEST(TestInfoTagVideoScrubPreviews, AnUpdateWithoutPreviewsKeepsThem)
+{
+  CFileItem playing;
+  XBMCAddon::xbmc::InfoTagVideo::setScrubPreviewsRaw(playing.GetVideoInfoTag(), 5000, 160, 90, 5, 5,
+                                                     {"old"});
+
+  CFileItem fromDatabase;
+  fromDatabase.GetVideoInfoTag()->SetTitle("title");
+  playing.UpdateInfo(fromDatabase);
+  EXPECT_EQ("title", playing.GetVideoInfoTag()->GetTitle());
+  EXPECT_EQ("old", playing.GetVideoInfoTag()->GetScrubPreviews().tiles.at(0));
+
+  CFileItem fromAddon;
+  XBMCAddon::xbmc::InfoTagVideo::setScrubPreviewsRaw(fromAddon.GetVideoInfoTag(), 10000, 320, 180,
+                                                     10, 10, {"new"});
+  playing.UpdateInfo(fromAddon);
+  EXPECT_EQ("new", playing.GetVideoInfoTag()->GetScrubPreviews().tiles.at(0));
 }
 
 TEST(TestInfoTagVideoScrubPreviews, MergeTakesTheResolvedItems)
