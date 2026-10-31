@@ -10,6 +10,7 @@
 
 #include "Interface/StreamInfo.h"
 #include "cores/FFmpeg.h"
+#include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "language/LanguageTag.h"
 
 #include <chrono>
@@ -309,6 +310,15 @@ public:
    * returns the total time in msec
    */
   virtual int GetStreamLength() { return 0; }
+
+  /*!
+   * \brief The presentation timestamp the container carries for this demuxer's time zero
+   *
+   * A packet's pts counts from the start of this playback. This value added to it is the
+   * timestamp the container carries, which every player of the same broadcast or live stream
+   * shares. In DVD_TIME_BASE units, or DVD_NOPTS_VALUE when the demuxer cannot tell.
+   */
+  virtual double GetPresentationTimeOffset() { return DVD_NOPTS_VALUE; }
 
   /*
    * returns the stream or nullptr on error

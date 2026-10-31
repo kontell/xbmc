@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -64,11 +65,14 @@ struct SPlayerState
     cache_time = 0.0;
     lastSeek = 0;
     streamsReady = false;
+    presentationOffset.reset();
   }
 
   double timestamp;         // last time of update
   double lastSeek;          // time of last seek
   double time_offset;       // difference between time and pts
+  // ms to add to time for the position on the stream's own clock, when the stream can tell
+  std::optional<int64_t> presentationOffset;
 
   double time;              // current playback time
   double timeMax;
@@ -501,6 +505,7 @@ protected:
   bool CheckContinuity(CCurrentStream& current, DemuxPacket* pPacket);
   bool CheckSceneSkip(const CCurrentStream& current);
   std::chrono::milliseconds GetEdlTime(const CCurrentStream& current) const;
+  double GetPlayingOffsetPts();
   std::chrono::milliseconds GetSourceStreamLength() const;
   bool CheckPlayerInit(CCurrentStream& current);
   void UpdateCorrection(DemuxPacket* pkt, double correction);
@@ -637,6 +642,11 @@ protected:
   } m_SpeedState;
 
   double m_offset_pts;
+  //! Continuity corrections the playing position has not reached yet: the clock from which
+  //! each applies, and m_offset_pts from there
+  std::deque<std::pair<double, double>> m_offsetPtsChanges;
+  //! The m_offset_pts what plays now was corrected by
+  double m_playingOffsetPts{0.0};
 
   CDVDMessageQueue m_messenger;
   std::unique_ptr<CJobQueue> m_outboundEvents;

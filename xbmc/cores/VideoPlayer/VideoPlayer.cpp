@@ -844,6 +844,7 @@ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options
   m_playerOptions = options;
 
   m_processInfo->SetPlayTimes(0, 0, 0, 0, false);
+  m_processInfo->SetPresentationTimeOffset(std::nullopt);
   m_bAbortRequest = false;
   m_error = false;
   m_bCloseRequest = false;
@@ -1027,6 +1028,8 @@ bool CVideoPlayer::OpenDemuxStream()
     m_pInputStream->SetReadRate(static_cast<uint32_t>(len * 1000 / tim));
 
   m_offset_pts = 0;
+  m_offsetPtsChanges.clear();
+  m_playingOffsetPts = 0;
 
   if (m_updateStreamDetails)
   {
@@ -1439,6 +1442,8 @@ void CVideoPlayer::Prepare()
   m_CurrentAudioID3.hint.Clear();
   m_SpeedState.Reset(DVD_NOPTS_VALUE);
   m_offset_pts = 0;
+  m_offsetPtsChanges.clear();
+  m_playingOffsetPts = 0;
   m_CurrentAudio.lastdts = DVD_NOPTS_VALUE;
   m_CurrentVideo.lastdts = DVD_NOPTS_VALUE;
 
@@ -2677,6 +2682,7 @@ bool CVideoPlayer::CheckContinuity(CCurrentStream& current, DemuxPacket* pPacket
     {
       m_offset_pts += correction;
       UpdateCorrection(pPacket, correction);
+      m_offsetPtsChanges.emplace_back(pPacket->dts, m_offset_pts);
       lastdts = pPacket->dts;
       CLog::Log(LOGDEBUG, "CVideoPlayer::CheckContinuity - update correction: {:f}", correction);
       if (current.avsync == CCurrentStream::AV_SYNC_CHECK)
@@ -2710,6 +2716,19 @@ std::chrono::milliseconds CVideoPlayer::GetEdlTime(const CCurrentStream& current
     return std::chrono::milliseconds(current.dispTime);
 
   return std::chrono::milliseconds(DVD_TIME_TO_MSEC(current.dts + m_offset_pts));
+}
+
+double CVideoPlayer::GetPlayingOffsetPts()
+{
+  // The demuxer reads ahead of the clock, so a correction applies to what plays only once the
+  // clock reaches the packet it was made on
+  const double clock = m_clock.GetClock();
+  while (!m_offsetPtsChanges.empty() && m_offsetPtsChanges.front().first <= clock)
+  {
+    m_playingOffsetPts = m_offsetPtsChanges.front().second;
+    m_offsetPtsChanges.pop_front();
+  }
+  return m_playingOffsetPts;
 }
 
 std::chrono::milliseconds CVideoPlayer::GetSourceStreamLength() const
@@ -3094,7 +3113,8 @@ void CVideoPlayer::HandleMessages()
       m_item = msg.GetItem();
       m_playerOptions = msg.GetOptions();
 
-  m_processInfo->SetPlayTimes(0, 0, 0, 0, false);
+      m_processInfo->SetPlayTimes(0, 0, 0, 0, false);
+      m_processInfo->SetPresentationTimeOffset(std::nullopt);
 
       m_outboundEvents->Submit([this]() {
         m_callback.OnPlayBackStarted(m_item);
@@ -4749,6 +4769,10 @@ void CVideoPlayer::FlushBuffers(double pts, bool accurate, bool sync)
 
   m_SpeedState.Reset(pts);
 
+  // what plays after a flush was all demuxed with the correction now in force
+  m_offsetPtsChanges.clear();
+  m_playingOffsetPts = m_offset_pts;
+
   if (sync)
   {
     m_CurrentAudio.inited = false;
@@ -5806,6 +5830,7 @@ void CVideoPlayer::UpdatePlayState(double timeout)
   state.cantempo = false;
   state.isInMenu = false;
   state.menuType = MenuType::NONE;
+  state.presentationOffset.reset();
 
   if (m_pInputStream)
   {
@@ -5883,6 +5908,21 @@ void CVideoPlayer::UpdatePlayState(double timeout)
       state.time_offset = 0;
     }
 
+    // The position on the stream's own clock: the container's timestamp of the stream's
+    // time zero, from the add-on that demuxes it or from the demuxer, carried to the time
+    // shown. time is clock plus time_offset, and the clock runs on the container's timestamps
+    // less that origin and the continuity correction in force.
+    const double playingOffsetPts = GetPlayingOffsetPts();
+    double presentationOrigin = DVD_NOPTS_VALUE;
+    if (haveTimes && times.ptsPresentationOffset != DVD_NOPTS_VALUE)
+      presentationOrigin = times.ptsPresentationOffset;
+    else if (m_pDemuxer)
+      presentationOrigin = m_pDemuxer->GetPresentationTimeOffset();
+
+    if (presentationOrigin != DVD_NOPTS_VALUE)
+      state.presentationOffset =
+          llrint((presentationOrigin + playingOffsetPts - state.time_offset) / 1000.0);
+
     if (pMenu)
     {
       if (!pMenu->GetState(state.player_state))
@@ -5917,9 +5957,13 @@ void CVideoPlayer::UpdatePlayState(double timeout)
 
   if (m_Edl.HasCuts())
   {
+    const double uncut = state.time;
     state.time = static_cast<double>(
         m_Edl.GetTimeWithoutCuts(std::chrono::milliseconds(std::lround(state.time))).count());
     state.timeMax = state.timeMax - static_cast<double>(m_Edl.GetTotalCutTime().count());
+    // a cut shortens the time shown, not the stream's own clock
+    if (state.presentationOffset)
+      *state.presentationOffset += llrint(uncut - state.time);
   }
 
   // Attempt to calculate the current chapter from the currently known playing position
@@ -5998,6 +6042,7 @@ void CVideoPlayer::UpdatePlayState(double timeout)
   // the clock is stopped while the player buffers, at the speed in force
   m_processInfo->SetPlayTimes(state.startTime, state.time, state.timeMin, state.timeMax,
                               m_streamPlayerSpeed != DVD_PLAYSPEED_PAUSE);
+  m_processInfo->SetPresentationTimeOffset(state.presentationOffset);
 
   std::unique_lock lock(m_StateSection);
   m_State = state;
