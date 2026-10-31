@@ -11,6 +11,7 @@
 #include "guilib/IMsgTargetCallback.h"
 #include "messaging/IMessageTarget.h"
 #include "playlists/PlayListTypes.h"
+#include "threads/CriticalSection.h"
 
 #include <chrono>
 #include <map>
@@ -174,12 +175,26 @@ public:
   /*! \brief The music playlists that were replaced, interrupted or stopped. */
   CPlayListHistory& GetHistory() { return *m_history; }
 
+  /*! \brief Load the history kept in a profile folder, as many playlists as the profile keeps. */
+  void LoadHistory(const std::string& folder);
+
   /*! \brief Save the music playlist to the history if it is being played.
    Called where this player is about to forget it, and by the application before
    it closes the player, whose time is gone once it has.
    \param playedThrough Whether the last item finished rather than being stopped.
+   \return Whether the history holds the playlist.
    */
-  void RecordMusicPlaylist(bool playedThrough = false);
+  bool RecordMusicPlaylist(bool playedThrough = false);
+
+  /*! \brief Put back the music playlist that a video took over, when the settings ask for it.
+   Called by the application once nothing is playing.
+   */
+  void RestoreReplacedPlaylist();
+
+  /*! \brief Restore nothing when playback ends, as when it is stopped for quitting, sleeping,
+   logging off, or the TV being switched off or to another source. Can be called from any thread.
+   */
+  void ForgetReplacedPlaylist();
 
   /*! \brief Replace the music playlist with one from the history and play it
    from where it was left.
@@ -208,6 +223,11 @@ protected:
                                const std::string& strProperty,
                                const CVariant& value);
 
+  /*! \brief Record the music playlist where something else is about to replace it, and keep it
+   for RestoreReplacedPlaylist() if it was still playing.
+   */
+  void RecordReplacedMusicPlaylist();
+
   bool m_bPlayedFirstFile;
   bool m_bPlaybackStarted;
   int m_iFailedSongs;
@@ -217,6 +237,8 @@ protected:
   bool m_musicPlaylistLive{false};
   bool m_pauseWhenStarted{false};
   std::unique_ptr<CPlayListHistory> m_history;
+  std::unique_ptr<CPlayListHistoryEntry> m_replacedPlaylist;
+  CCriticalSection m_replacedPlaylistSection;
   CPlayList* m_PlaylistMusic;
   CPlayList* m_PlaylistVideo;
   CPlayList* m_PlaylistEmpty;
