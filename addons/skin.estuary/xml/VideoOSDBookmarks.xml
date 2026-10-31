@@ -48,17 +48,19 @@
 					<param name="id" value="2" />
 					<param name="label" value="$LOCALIZE[294]" />
 					<param name="width" value="350" />
+					<param name="visible" value="Player.HasVideo" />
 				</include>
 				<include content="DefaultDialogButton">
 					<param name="id" value="3" />
 					<param name="label" value="$LOCALIZE[296]" />
 					<param name="width" value="350" />
+					<param name="visible" value="Player.HasVideo" />
 				</include>
 				<include content="DefaultDialogButton">
 					<param name="id" value="4" />
 					<param name="label" value="$LOCALIZE[20406]" />
 					<param name="width" value="350" />
-					<param name="visible" value="Control.IsEnabled(4)" />
+					<param name="visible" value="Control.IsEnabled(4) + Player.HasVideo" />
 				</include>
 			</control>
 			<control type="panel" id="11">
@@ -80,7 +82,7 @@
 							<width>330</width>
 							<height>250</height>
 							<aspectratio>scale</aspectratio>
-							<texture border="4" fallback="DefaultVideo.png">$INFO[ListItem.Art(thumb)]</texture>
+							<texture border="4" fallback="DefaultVideo.png">$VAR[BookmarkThumbVar]</texture>
 							<bordertexture colordiffuse="border_alpha">colors/black.png</bordertexture>
 							<bordersize>4</bordersize>
 						</control>
@@ -105,7 +107,7 @@
 							<width>330</width>
 							<height>250</height>
 							<aspectratio>scale</aspectratio>
-							<texture border="4" fallback="DefaultVideo.png">$INFO[ListItem.Art(thumb)]</texture>
+							<texture border="4" fallback="DefaultVideo.png">$VAR[BookmarkThumbVar]</texture>
 							<bordertexture colordiffuse="border_alpha">colors/black.png</bordertexture>
 							<bordersize>4</bordersize>
 						</control>
