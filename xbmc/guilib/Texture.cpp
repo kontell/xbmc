@@ -209,7 +209,9 @@ bool CTexture::LoadFromFileInternal(const std::string& texturePath,
 
   if (!LoadIImage(pImage, buf.data(), buf.size(), idealWidth, idealHeight, aspectRatio))
   {
-    CLog::Log(LOGDEBUG, "{} - Load of {} failed.", __FUNCTION__, CURL::GetRedacted(texturePath));
+    // what follows a | can be an Authorization header, which redacting keeps
+    CLog::Log(LOGDEBUG, "{} - Load of {} failed.", __FUNCTION__,
+              CURL::GetRedacted(texturePath.substr(0, texturePath.find('|'))));
     delete pImage;
     return false;
   }

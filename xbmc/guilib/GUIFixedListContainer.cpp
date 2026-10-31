@@ -14,6 +14,7 @@
 #include "input/actions/ActionIDs.h"
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 
 CGUIFixedListContainer::CGUIFixedListContainer(int parentID,
@@ -307,6 +308,18 @@ void CGUIFixedListContainer::SelectItem(int item)
     ScrollToOffset(item - GetCursor());
     MarkDirtyRegion();
   }
+}
+
+void CGUIFixedListContainer::SetScrollPosition(float item)
+{
+  if (!m_layout)
+    return;
+  const int nearest = static_cast<int>(std::lround(item));
+  if (nearest != GetSelectedItem())
+    SelectItem(nearest);
+  m_scroller.Stop();
+  m_scroller.SetValue((item - GetCursor()) * m_layout->Size(m_orientation));
+  MarkDirtyRegion();
 }
 
 void CGUIFixedListContainer::UpdatePageControl(int offset)
