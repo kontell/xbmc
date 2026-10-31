@@ -843,7 +843,7 @@ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options
   m_item = file;
   m_playerOptions = options;
 
-  m_processInfo->SetPlayTimes(0,0,0,0);
+  m_processInfo->SetPlayTimes(0, 0, 0, 0, false);
   m_bAbortRequest = false;
   m_error = false;
   m_bCloseRequest = false;
@@ -3094,7 +3094,7 @@ void CVideoPlayer::HandleMessages()
       m_item = msg.GetItem();
       m_playerOptions = msg.GetOptions();
 
-      m_processInfo->SetPlayTimes(0,0,0,0);
+  m_processInfo->SetPlayTimes(0, 0, 0, 0, false);
 
       m_outboundEvents->Submit([this]() {
         m_callback.OnPlayBackStarted(m_item);
@@ -5995,7 +5995,9 @@ void CVideoPlayer::UpdatePlayState(double timeout)
     state.canpause = true;
   }
 
-  m_processInfo->SetPlayTimes(state.startTime, state.time, state.timeMin, state.timeMax);
+  // the clock is stopped while the player buffers, at the speed in force
+  m_processInfo->SetPlayTimes(state.startTime, state.time, state.timeMin, state.timeMax,
+                              m_streamPlayerSpeed != DVD_PLAYSPEED_PAUSE);
 
   std::unique_lock lock(m_StateSection);
   m_State = state;
