@@ -3495,14 +3495,15 @@ void CVideoPlayer::HandleMessages()
       }
 
       const SpeedChangeNotifications notifications =
-          GetSpeedChangeNotifications(m_playSpeed, speed, msg->IsTempo());
+          GetSpeedChangeNotifications(m_playSpeed, m_playSpeedIsTempo, speed, msg->IsTempo());
 
       if (notifications.resumed)
         m_callback.OnPlayBackResumed();
 
       if (notifications.speedChanged)
       {
-        m_callback.OnPlayBackSpeedChanged(speed / DVD_PLAYSPEED_NORMAL);
+        // a tempo plays at normal speed: the announcement reads the tempo itself
+        m_callback.OnPlayBackSpeedChanged(msg->IsTempo() ? 1 : speed / DVD_PLAYSPEED_NORMAL);
         m_processInfo->SeekFinished(0);
       }
 
@@ -3516,9 +3517,8 @@ void CVideoPlayer::HandleMessages()
       assert(!(isTempoSpeed &&
                !m_processInfo->IsTempoAllowed(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL)));
 
-      const bool wasFFRW =
-          (m_playSpeed != DVD_PLAYSPEED_NORMAL && m_playSpeed != DVD_PLAYSPEED_PAUSE &&
-           !m_processInfo->IsTempoAllowed(static_cast<float>(m_playSpeed) / DVD_PLAYSPEED_NORMAL));
+      const bool wasFFRW = (m_playSpeed != DVD_PLAYSPEED_NORMAL &&
+                            m_playSpeed != DVD_PLAYSPEED_PAUSE && !m_playSpeedIsTempo);
 
       // Seek when returning to normal 1.0x, tempo play or pause from FF/RW
       // back from RW: clock is not in sync with current pts
@@ -3543,7 +3543,11 @@ void CVideoPlayer::HandleMessages()
       }
 
       if (isTempoSpeed)
+      {
+        // a tempo plays at normal speed, so it ends any trickplay
+        m_processInfo->SetSpeed(1.0f);
         m_processInfo->SetTempo(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL);
+      }
       else
         m_processInfo->SetSpeed(static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL);
 
@@ -3558,16 +3562,18 @@ void CVideoPlayer::HandleMessages()
                                    ? m_VideoPlayerAudio->GetRateChangeDelay()
                                    : 0.0;
       // the speed the clock already runs at, or has queued, leaves it alone
-      const bool repeated = speed == m_playSpeed && m_streamPlayerSpeed == speed;
+      const bool repeated = speed == m_playSpeed && isTempoSpeed == m_playSpeedIsTempo &&
+                            m_streamPlayerSpeed == speed;
 
       m_playSpeed = speed;
+      m_playSpeedIsTempo = isTempoSpeed;
 
       m_caching = CACHESTATE_DONE;
       if (rateDelay > 0.0)
         m_clock.SetSpeedAt(speed, m_clock.GetAbsoluteClock() + rateDelay);
       else if (!repeated)
         m_clock.SetSpeed(speed);
-      m_VideoPlayerAudio->SetSpeed(speed);
+      m_VideoPlayerAudio->SetSpeed(speed, isTempoSpeed);
       m_VideoPlayerVideo->SetSpeed(speed);
       m_streamPlayerSpeed = speed;
     }
@@ -3682,7 +3688,7 @@ void CVideoPlayer::SetCaching(ECacheState state)
      (state == CACHESTATE_DONE && m_caching != CACHESTATE_PLAY))
   {
     m_clock.SetSpeed(m_playSpeed);
-    m_VideoPlayerAudio->SetSpeed(m_playSpeed);
+    m_VideoPlayerAudio->SetSpeed(m_playSpeed, m_playSpeedIsTempo);
     m_VideoPlayerVideo->SetSpeed(m_playSpeed);
     m_streamPlayerSpeed = m_playSpeed;
   }
@@ -3691,19 +3697,22 @@ void CVideoPlayer::SetCaching(ECacheState state)
   m_clock.SetSpeedAdjust(0);
 }
 
-CVideoPlayer::SpeedChangeNotifications CVideoPlayer::GetSpeedChangeNotifications(int previousSpeed,
-                                                                                 int newSpeed,
-                                                                                 bool isTempo)
+CVideoPlayer::SpeedChangeNotifications CVideoPlayer::GetSpeedChangeNotifications(
+    int previousSpeed, bool previousIsTempo, int newSpeed, bool isTempo)
 {
   SpeedChangeNotifications notifications;
 
   const bool wasPaused = (previousSpeed == DVD_PLAYSPEED_PAUSE);
   const bool unpausedToNormal = wasPaused && (newSpeed == DVD_PLAYSPEED_NORMAL || isTempo);
+  // Trickplay and a tempo at the same speed are reported apart, as speed or as tempo
+  const bool modeChanged = newSpeed == previousSpeed && newSpeed != DVD_PLAYSPEED_NORMAL &&
+                           isTempo != previousIsTempo;
 
   if (wasPaused && newSpeed != DVD_PLAYSPEED_PAUSE && !unpausedToNormal)
     notifications.resumed = true;
 
-  if (newSpeed != DVD_PLAYSPEED_PAUSE && newSpeed != previousSpeed && !unpausedToNormal)
+  if (newSpeed != DVD_PLAYSPEED_PAUSE && (newSpeed != previousSpeed || modeChanged) &&
+      !unpausedToNormal)
     notifications.speedChanged = true;
 
   return notifications;
@@ -3719,6 +3728,7 @@ void CVideoPlayer::SetPlaySpeed(int speed)
   else
   {
     m_playSpeed = speed;
+    m_playSpeedIsTempo = false;
     m_streamPlayerSpeed = speed;
   }
 }
@@ -4789,7 +4799,7 @@ void CVideoPlayer::FlushBuffers(double pts, bool accurate, bool sync)
     m_renderManager.DiscardBuffer();
 
   if (m_playSpeed == DVD_PLAYSPEED_NORMAL || m_playSpeed == DVD_PLAYSPEED_PAUSE ||
-      m_processInfo->IsTempoAllowed(static_cast<float>(m_playSpeed) / DVD_PLAYSPEED_NORMAL))
+      m_playSpeedIsTempo)
   {
     // make sure players are properly flushed, should put them in stalled state
     auto msg = std::make_shared<CDVDMsgGeneralSynchronize>(1s, SYNCSOURCE_AUDIO | SYNCSOURCE_VIDEO);
