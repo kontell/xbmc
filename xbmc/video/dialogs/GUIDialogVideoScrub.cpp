@@ -17,29 +17,38 @@
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
 #include "guilib/GUIComponent.h"
+#include "guilib/GUIFixedListContainer.h"
 #include "guilib/GUIMessage.h"
 #include "guilib/TextureManager.h"
 #include "guilib/WindowIDs.h"
 #include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
 #include "utils/StringUtils.h"
+#include "utils/TimeUtils.h"
 #include "video/VideoInfoTag.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
 namespace
 {
 constexpr int CONTROL_STRIP = 50;
 
-// A held key moves BASE_RATE thumbnails a second, doubling every TIER_MS of holding, TIERS times
-// over: at a 10 s interval that is 30x, 60x, 120x and 240x real time, so a feature film is
-// crossed in about half a minute at the top.
-constexpr double BASE_RATE = 3.0;
-constexpr unsigned int TIER_MS = 2000;
-constexpr int TIERS = 3;
-// a gap between two repeats longer than this counts as this long
-constexpr double MAX_TICK_SECONDS = 0.5;
+// A held key moves BASE_RATE thumbnails a second, doubling every DOUBLING_SECONDS of holding up to
+// TOP_RATE: at a 10 s interval that is 15x real time rising to 240x in 6 s, so a feature film is
+// crossed in about half a minute.
+constexpr double BASE_RATE = 1.5;
+constexpr double DOUBLING_SECONDS = 1.5;
+constexpr double TOP_RATE = 24.0;
+// a repeat sooner than this after the press is still the press
+constexpr unsigned int HOLD_MS = 100;
+// actions carry no key-up, so a hold ends when its repeats, some 50 ms apart, stop coming
+constexpr unsigned int RELEASE_MS = 150;
+// the strip closes on the target with this time constant, so it neither rests nor jumps however
+// the input arrives
+constexpr double FOLLOW_SECONDS = 0.1;
+constexpr double SETTLED_THUMBNAILS = 0.002;
 
 std::string TimeLabel(int64_t ms)
 {
@@ -74,11 +83,16 @@ bool CGUIDialogVideoScrub::OnMessage(CGUIMessage& message)
       m_startMs = appPlayer->GetTime();
       m_index = -1;
       m_tile = -1;
-      m_direction = 0;
-      m_pending = 0.0;
+      m_rate = 0.0;
+      m_lastFrame = CTimeUtils::GetFrameTime();
       CGUIDialog::OnMessage(message);
       FillStrip();
-      SetIndex(static_cast<int>(m_startMs / m_previews.intervalMs));
+      const int index =
+          std::clamp(static_cast<int>(m_startMs / m_previews.intervalMs), 0, LastIndex());
+      m_target = m_position = index;
+      CGUIMessage msg(GUI_MSG_ITEM_SELECT, GetID(), CONTROL_STRIP, index);
+      OnMessage(msg);
+      SetIndex(index);
       return true;
     }
     case GUI_MSG_CLICKED:
@@ -139,12 +153,42 @@ bool CGUIDialogVideoScrub::OnAction(const CAction& action)
       return true;
     case ACTION_SELECT_ITEM:
     case ACTION_PLAYER_PLAY:
-      Seek(m_index);
+      Seek(static_cast<int>(std::lround(m_target)));
       return true;
     default:
       break;
   }
   return CGUIDialog::OnAction(action);
+}
+
+void CGUIDialogVideoScrub::Process(unsigned int currentTime, CDirtyRegionList& dirtyregions)
+{
+  const double seconds = (currentTime - m_lastFrame) / 1000.0;
+  m_lastFrame = currentTime;
+
+  if (m_rate != 0.0)
+  {
+    if (currentTime - m_lastRepeat > RELEASE_MS)
+    {
+      m_target = std::round(m_position);
+      m_rate = 0.0;
+    }
+    else
+      m_target = std::clamp(m_target + m_rate * seconds, 0.0, static_cast<double>(LastIndex()));
+  }
+
+  if (m_position != m_target)
+  {
+    m_position += (m_target - m_position) * (1.0 - std::exp(-seconds / FOLLOW_SECONDS));
+    if (std::abs(m_target - m_position) < SETTLED_THUMBNAILS)
+      m_position = m_target;
+    if (auto* strip = dynamic_cast<CGUIFixedListContainer*>(GetControl(CONTROL_STRIP)))
+      strip->SetScrollPosition(static_cast<float>(m_position));
+    SetIndex(static_cast<int>(std::lround(m_position)));
+  }
+
+  // the strip moves before it is processed, for it to lay out what this frame draws
+  CGUIDialog::Process(currentTime, dirtyregions);
 }
 
 void CGUIDialogVideoScrub::FillStrip()
@@ -180,40 +224,29 @@ int CGUIDialogVideoScrub::LastIndex() const
 
 void CGUIDialogVideoScrub::Step(int thumbnails)
 {
-  SetIndex(m_index + thumbnails);
+  m_target = std::clamp(std::round(m_target) + thumbnails, 0.0, static_cast<double>(LastIndex()));
 }
 
 void CGUIDialogVideoScrub::Move(const CAction& action, int direction)
 {
-  const auto now = std::chrono::steady_clock::now();
   const unsigned int held = action.GetHoldTime();
-  if (held == 0 || direction != m_direction)
+  if (held < HOLD_MS)
   {
     // a press is one thumbnail, and a hold moves on from there
-    m_direction = direction;
-    m_pending = 0.0;
-    m_lastTick = now;
+    m_rate = 0.0;
     Step(direction);
     return;
   }
-  const int tier = std::min(static_cast<int>(held / TIER_MS), TIERS);
-  const double rate = BASE_RATE * static_cast<double>(1 << tier);
-  const double elapsed =
-      std::min(std::chrono::duration<double>(now - m_lastTick).count(), MAX_TICK_SECONDS);
-  m_lastTick = now;
-  m_pending += rate * elapsed;
-  const int steps = static_cast<int>(m_pending);
-  m_pending -= steps;
-  if (steps > 0)
-    Step(direction * steps);
+  m_lastRepeat = CTimeUtils::GetFrameTime();
+  m_rate =
+      direction * std::min(BASE_RATE * std::pow(2.0, held / 1000.0 / DOUBLING_SECONDS), TOP_RATE);
 }
 
 void CGUIDialogVideoScrub::SetIndex(int index)
 {
-  index = std::clamp(index, 0, LastIndex());
+  if (index == m_index)
+    return;
   const int tile = index / m_previews.CellsPerTile();
-  CGUIMessage msg(GUI_MSG_ITEM_SELECT, GetID(), CONTROL_STRIP, index);
-  OnMessage(msg);
 
   m_index = index;
   m_tile = tile;

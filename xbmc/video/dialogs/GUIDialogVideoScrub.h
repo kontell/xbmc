@@ -11,7 +11,6 @@
 #include "guilib/GUIDialog.h"
 #include "media/ScrubPreviews.h"
 
-#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -35,6 +34,7 @@ public:
   bool OnAction(const CAction& action) override;
 
 protected:
+  void Process(unsigned int currentTime, CDirtyRegionList& dirtyregions) override;
   void OnDeinitWindow(int nextWindowID) override;
 
 private:
@@ -53,8 +53,10 @@ private:
   int64_t m_startMs{0};
   int m_index{-1};
   int m_tile{-1};
-  int m_direction{0};
-  double m_pending{0.0}; // thumbnails a hold has earned but not moved yet
-  std::chrono::steady_clock::time_point m_lastTick;
+  double m_target{0.0}; // where the input has asked for, in thumbnails
+  double m_position{0.0}; // where the strip is on its way there
+  double m_rate{0.0}; // thumbnails a second a held key moves the target, signed; 0 when none is
+  unsigned int m_lastRepeat{0};
+  unsigned int m_lastFrame{0};
   std::vector<std::string> m_prefetched;
 };
