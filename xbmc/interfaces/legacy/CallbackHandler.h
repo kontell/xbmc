@@ -35,21 +35,37 @@ namespace XBMCAddon
    *  messages over to a language controlled thread for eventual
    *  execution.
    *
+   * The messages are queued per thread that will execute them: the
+   *  queueKey a handler is constructed with names that thread (the Python
+   *  binding passes the thread state the object was created under), and
+   *  the thread pumps its own queue by calling makePendingCalls with the
+   *  same key.
+   *
    * @todo Allow a cross thread synchronous execution.
    * Fix the stupid means of calling the clearPendingCalls by passing
    *  userData which is specific to the handler/language type.
    */
   class RetardedAsyncCallbackHandler : public CallbackHandler
   {
+    const void* const m_queueKey;
+
   protected:
-    inline RetardedAsyncCallbackHandler() = default;
+    explicit RetardedAsyncCallbackHandler(const void* queueKey);
+
   public:
 
     ~RetardedAsyncCallbackHandler() override;
 
     void invokeCallback(Callback* cb) override;
-    static void makePendingCalls();
+
+    /**
+     * Execute the callbacks queued under \p queueKey, oldest first, on the
+     *  calling thread. Only that queue is touched.
+     */
+    static void makePendingCalls(const void* queueKey);
     static void clearPendingCalls(void* userData);
+
+    inline const void* queueKey() const { return m_queueKey; }
 
     virtual bool isStateOk(AddonClass* obj) =  0;
     virtual bool shouldRemoveCallback(AddonClass* obj, void* userData) = 0;
