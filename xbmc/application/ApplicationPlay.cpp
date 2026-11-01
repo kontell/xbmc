@@ -139,7 +139,10 @@ void CApplicationPlay::GetOptionsAndUpdateItem()
 
     // Note that we need to load the tag from database also if the item already has a tag,
     // because for example the (full) video info for strm files will be loaded here.
+    // The database has no scrub previews, which come with the item an add-on resolved to.
+    ScrubPreviews previews{m_item.GetVideoInfoTag()->GetScrubPreviews()};
     db.LoadVideoInfo(path, *m_item.GetVideoInfoTag());
+    m_item.GetVideoInfoTag()->SetScrubPreviews(std::move(previews));
 
     if (m_item.GetStartOffset() == STARTOFFSET_RESUME)
     {
