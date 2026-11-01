@@ -587,8 +587,12 @@ void CDirectoryProvider::OnJobComplete(unsigned int jobID, bool success, CJob* j
     else
     {
       // Finished job ended before job schedule timeslice was over. Start a new update job delayed.
-      m_nextJobTimer.Start(
-          std::chrono::duration_cast<std::chrono::milliseconds>(nextJobAllowedAt - now));
+      // The timer refuses a delay under a millisecond and any start while its last thread is
+      // still exiting. Nothing would then run the job, and Update() ignores every later request
+      // while one is pending, so run it now.
+      if (!m_nextJobTimer.Start(
+              std::chrono::duration_cast<std::chrono::milliseconds>(nextJobAllowedAt - now)))
+        StartDirectoryJob();
     }
   }
 }
