@@ -18,6 +18,7 @@
 #include "application/ApplicationPlayer.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIFixedListContainer.h"
+#include "guilib/GUIMacros.h"
 #include "guilib/GUIMessage.h"
 #include "guilib/TextureManager.h"
 #include "guilib/WindowIDs.h"
@@ -90,6 +91,8 @@ bool CGUIDialogVideoScrub::OnMessage(CGUIMessage& message)
       m_lastFrame = CTimeUtils::GetFrameTime();
       CGUIDialog::OnMessage(message);
       FillStrip();
+      // the window could not focus the strip while it was empty
+      SET_CONTROL_FOCUS(CONTROL_STRIP, 0);
       const int index =
           std::clamp(static_cast<int>(m_startMs / m_previews.intervalMs), 0, LastIndex());
       m_target = m_position = index;
@@ -169,6 +172,14 @@ void CGUIDialogVideoScrub::Process(unsigned int currentTime, CDirtyRegionList& d
   const double seconds = (currentTime - m_lastFrame) / 1000.0;
   m_lastFrame = currentTime;
 
+  auto* strip = dynamic_cast<CGUIFixedListContainer*>(GetControl(CONTROL_STRIP));
+  if (strip && strip->GetSelectedItem() != m_index)
+  {
+    // the strip moves itself for what the dialog leaves to it, such as the page keys
+    m_target = m_position = strip->GetSelectedItem();
+    SetIndex(strip->GetSelectedItem());
+  }
+
   if (m_rate != 0.0)
   {
     if (currentTime - m_lastRepeat > RELEASE_MS)
@@ -185,9 +196,10 @@ void CGUIDialogVideoScrub::Process(unsigned int currentTime, CDirtyRegionList& d
     m_position += (m_target - m_position) * (1.0 - std::exp(-seconds / FOLLOW_SECONDS));
     if (std::abs(m_target - m_position) < SETTLED_THUMBNAILS)
       m_position = m_target;
-    if (auto* strip = dynamic_cast<CGUIFixedListContainer*>(GetControl(CONTROL_STRIP)))
-      strip->SetScrollPosition(static_cast<float>(m_position));
-    SetIndex(static_cast<int>(std::lround(m_position)));
+    const auto position = static_cast<float>(m_position);
+    if (strip)
+      strip->SetScrollPosition(position);
+    SetIndex(static_cast<int>(std::lround(position)));
   }
 
   // the strip moves before it is processed, for it to lay out what this frame draws
