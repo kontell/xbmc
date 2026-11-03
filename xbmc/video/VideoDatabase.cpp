@@ -83,6 +83,7 @@
 #include <ranges>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -152,6 +153,15 @@ std::string GetSourcePathOfFile(const CMediaSource& source, const std::string& f
   return {};
 }
 
+// The folder of a file in the library. A plugin URL is filed under itself without its options, or
+// under the add-on's root when it has none, so its folder is taken from the URL.
+std::string GetFolderOfFile(const std::string& path, const std::string& fileName)
+{
+  if (URIUtils::IsPlugin(path))
+    return URIUtils::GetDirectory(CURL(fileName).GetWithoutOptions());
+  return path;
+}
+
 // Whether a scan caches art of this type, being on the art list
 bool IsCachedByScan(MEDIA::TYPE mediaType, const std::string& artType)
 {
@@ -167,6 +177,28 @@ CTextureCache::UncachedImage UncachedArt(bool cachedByScan)
           CSettings::SETTING_VIDEOLIBRARY_RETRIEVEALLARTONEXPORT))
     return CTextureCache::UncachedImage::SKIP;
   return cachedByScan ? CTextureCache::UncachedImage::CACHE : CTextureCache::UncachedImage::COPY;
+}
+
+// Asks whether to remove the media items of a source that can't be reached. Only Remove, the
+// dialog's No button, removes them: backing out keeps them.
+bool AskToRemoveItemsOfUnavailableSource(const std::string& sourcePath)
+{
+  CGUIDialogYesNo* pDialog =
+      CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogYesNo>(WINDOW_DIALOG_YES_NO);
+  if (!pDialog)
+    return false;
+
+  pDialog->Reset();
+  CURL sourceUrl(sourcePath);
+  pDialog->SetHeading(CVariant{15012});
+  pDialog->SetText(CVariant{
+      StringUtils::Format(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(15013),
+                          sourceUrl.GetWithoutUserDetails())});
+  pDialog->SetChoice(0, CVariant{15015});
+  pDialog->SetChoice(1, CVariant{15014});
+  pDialog->Open();
+
+  return pDialog->GetResult() == CGUIDialogYesNo::DIALOG_RESULT_NO;
 }
 } // unnamed namespace
 
@@ -10357,7 +10389,14 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
       std::string strPaths;
       for (const auto& i : paths)
         strPaths += StringUtils::Format(",{}", i);
-      sql += PrepareSQL(" AND path.idPath IN (%s)", strPaths.substr(1).c_str());
+      // A movie's versions and extras go with it, wherever they are filed
+      sql += PrepareSQL(" AND (path.idPath IN (%s) OR files.idFile IN "
+                        "(SELECT videoversion.idFile FROM videoversion "
+                        "JOIN movie ON movie.idMovie = videoversion.idMedia "
+                        "AND videoversion.media_type = 'movie' "
+                        "JOIN files AS moviefile ON moviefile.idFile = movie.idFile "
+                        "WHERE moviefile.idPath IN (%s)))",
+                        strPaths.substr(1).c_str(), strPaths.substr(1).c_str());
     }
 
     // For directory caching to work properly, we need to sort the files by path
@@ -10369,17 +10408,29 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
       std::string filesToTestForDelete;
       // missing files in a source, with the path of the source that held them
       std::map<int, std::string> missingFiles;
+      // Plugin files whose add-on could not answer, with the add-on
+      std::map<int, std::string> unreachableFiles;
+      // Files whose removal is decided without looking up their source
+      std::set<int> decidedFiles;
       std::vector<CMediaSource> videoSources(
           CMediaSourceSettings::GetInstance().GetSources(MediaSection::VIDEO));
       CServiceBroker::GetMediaManager().GetRemovableDrives(videoSources);
 
-      // Versions and extras, which can be added from outside the video sources
-      std::unordered_set<int> assetFiles;
-      m_pDS->query("SELECT idFile FROM videoversion WHERE NOT EXISTS "
-                   "(SELECT 1 FROM movie WHERE movie.idFile = videoversion.idFile)");
+      // Versions and extras, which can be added from outside the video sources, with the folder
+      // of their movie
+      std::unordered_map<int, std::string> assetFiles;
+      m_pDS->query(
+          "SELECT videoversion.idFile, path.strPath, files.strFileName FROM videoversion "
+          "JOIN movie ON movie.idMovie = videoversion.idMedia "
+          "AND videoversion.media_type = 'movie' "
+          "JOIN files ON files.idFile = movie.idFile "
+          "JOIN path ON path.idPath = files.idPath "
+          "WHERE NOT EXISTS (SELECT 1 FROM movie WHERE movie.idFile = videoversion.idFile)");
       while (!m_pDS->eof())
       {
-        assetFiles.insert(m_pDS->fv(0).get_asInt());
+        assetFiles.try_emplace(m_pDS->fv(0).get_asInt(),
+                               GetFolderOfFile(m_pDS->fv(1).get_asString(),
+                                               m_pDS->fv(2).get_asString()));
         m_pDS->next();
       }
       m_pDS->close();
@@ -10414,9 +10465,22 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
           SScanSettings settings;
           bool foundDirectly = false;
           ScraperPtr scraper = GetScraperForPath(fullPath, settings, foundDirectly);
-          if (scraper &&
-              CPluginDirectory::CheckExists(TranslateContent(scraper->Content()), fullPath))
-            del = false;
+          // A plugin URL with no options is filed under the add-on's root, which has no content
+          const auto asset{assetFiles.find(m_pDS2->fv("files.idFile").get_asInt())};
+          if (!scraper && asset != assetFiles.end())
+            scraper = GetScraperForPath(asset->second, settings, foundDirectly);
+          if (scraper)
+          {
+            const PluginItemExists exists{
+                CheckPluginItemExists(TranslateContent(scraper->Content()), fullPath)};
+            if (exists == PluginItemExists::UNKNOWN)
+              unreachableFiles.try_emplace(m_pDS2->fv("files.idFile").get_asInt(),
+                                           CURL(fullPath).GetHostName());
+            // The add-on is the source of its items, and it says this one has gone
+            if (exists == PluginItemExists::NO)
+              decidedFiles.insert(m_pDS2->fv("files.idFile").get_asInt());
+            del = exists == PluginItemExists::NO;
+          }
         }
         else
         {
@@ -10494,6 +10558,24 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
       }
       m_pDS->close();
 
+      // An add-on that could not answer is a source that can't be reached. A background clean
+      // keeps its items, otherwise the user is asked once what to do with them.
+      std::map<std::string, bool> removeFromAddon;
+      for (const auto& [idFile, addonId] : unreachableFiles)
+      {
+        auto decision = removeFromAddon.find(addonId);
+        if (decision == removeFromAddon.end())
+          decision = removeFromAddon
+                         .emplace(addonId, showProgress && AskToRemoveItemsOfUnavailableSource(
+                                                               "plugin://" + addonId + "/"))
+                         .first;
+        if (decision->second)
+        {
+          filesToTestForDelete += StringUtils::Format("{},", idFile);
+          decidedFiles.insert(idFile);
+        }
+      }
+
       std::map<int, bool> pathsDeleteDecisions;
       std::vector<int> movieIDs;
       std::vector<int> tvshowIDs;
@@ -10505,15 +10587,15 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
       {
         StringUtils::TrimRight(filesToTestForDelete, ",");
 
-        movieIDs = CleanMediaType(MEDIA::TYPE::MOVIE, filesToTestForDelete, pathsDeleteDecisions,
-                                  filesToDelete, !showProgress);
-        episodeIDs = CleanMediaType(MEDIA::TYPE::EPISODE, filesToTestForDelete,
-                                    pathsDeleteDecisions,
-                                    filesToDelete, !showProgress);
-        musicVideoIDs = CleanMediaType(MEDIA::TYPE::MUSIC_VIDEO, filesToTestForDelete,
+        movieIDs = CleanMediaType(MEDIA::TYPE::MOVIE, filesToTestForDelete, decidedFiles,
+                                  pathsDeleteDecisions, filesToDelete, !showProgress);
+        episodeIDs = CleanMediaType(MEDIA::TYPE::EPISODE, filesToTestForDelete, decidedFiles,
+                                    pathsDeleteDecisions, filesToDelete, !showProgress);
+        musicVideoIDs = CleanMediaType(MEDIA::TYPE::MUSIC_VIDEO, filesToTestForDelete, decidedFiles,
                                        pathsDeleteDecisions, filesToDelete, !showProgress);
-        videoVersionIDs = CleanMediaType(MEDIA::TYPE::VIDEO_VERSION, filesToTestForDelete,
-                                         pathsDeleteDecisions, filesToDelete, !showProgress);
+        videoVersionIDs =
+            CleanMediaType(MEDIA::TYPE::VIDEO_VERSION, filesToTestForDelete, decidedFiles,
+                           pathsDeleteDecisions, filesToDelete, !showProgress);
       }
 
       // A file outside the library only holds history, such as its watched state and resume
@@ -10588,6 +10670,24 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
         while (!m_pDS->eof())
         {
           pathsToInvalidate.emplace_back(m_pDS->fv("strPath").get_asString());
+          m_pDS->next();
+        }
+        m_pDS->close();
+
+        // The scanner finds a movie's versions and extras when it scans the movie's folder, and
+        // skips a folder whose hash matches. Clear it for a movie that loses one, wherever the
+        // file was filed, or the asset is not found again when it comes back.
+        m_pDS->query("SELECT DISTINCT path.strPath, files.strFileName FROM videoversion "
+                     "JOIN movie ON movie.idMovie = videoversion.idMedia "
+                     "AND videoversion.media_type = 'movie' "
+                     "JOIN files ON files.idFile = movie.idFile "
+                     "JOIN path ON path.idPath = files.idPath "
+                     "WHERE videoversion.idFile <> movie.idFile AND videoversion.idFile IN " +
+                     filesToDelete);
+        while (!m_pDS->eof())
+        {
+          pathsToInvalidate.emplace_back(
+              GetFolderOfFile(m_pDS->fv(0).get_asString(), m_pDS->fv(1).get_asString()));
           m_pDS->next();
         }
         m_pDS->close();
@@ -10739,8 +10839,16 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
           SScanSettings settings;
           bool foundDirectly = false;
           ScraperPtr scraper = GetScraperForPath(path, settings, foundDirectly);
-          if (scraper && CPluginDirectory::CheckExists(TranslateContent(scraper->Content()), path))
-            exists = true;
+          if (scraper)
+          {
+            const PluginItemExists answer{
+                CheckPluginItemExists(TranslateContent(scraper->Content()), path)};
+            // Unreachable, so follow what the user chose for the add-on's items
+            const auto decision{removeFromAddon.find(CURL(path).GetHostName())};
+            exists = answer == PluginItemExists::YES ||
+                     (answer == PluginItemExists::UNKNOWN &&
+                      (decision == removeFromAddon.end() || !decision->second));
+          }
         }
         else
         {
@@ -11021,9 +11129,18 @@ void CVideoDatabase::CleanDatabase(CGUIDialogProgressBarHandle* handle,
   CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::VideoLibrary, "OnCleanFinished");
 }
 
+XFILE::PluginItemExists CVideoDatabase::CheckPluginItemExists(const std::string& content,
+                                                              const std::string& path) const
+{
+  return CPluginDirectory::CheckExists(content, path);
+}
+
 std::vector<int> CVideoDatabase::CleanMediaType(MEDIA::TYPE mediaType,
-                                                const std::string &cleanableFileIDs,
-                                                std::map<int, bool> &pathsDeleteDecisions, std::string &deletedFileIDs, bool silent)
+                                                const std::string& cleanableFileIDs,
+                                                const std::set<int>& decidedFileIDs,
+                                                std::map<int, bool>& pathsDeleteDecisions,
+                                                std::string& deletedFileIDs,
+                                                bool silent)
 {
   std::vector<int> cleanedIDs;
   if (mediaType == MEDIA::TYPE::NONE || cleanableFileIDs.empty())
@@ -11086,7 +11203,7 @@ std::vector<int> CVideoDatabase::CleanMediaType(MEDIA::TYPE mediaType,
   while (!m_pDS2->eof())
   {
     bool del = true;
-    if (m_pDS2->fv(3).get_isNull() == false)
+    if (!decidedFileIDs.contains(m_pDS2->fv(1).get_asInt()) && m_pDS2->fv(3).get_isNull() == false)
     {
       std::string parentPath = m_pDS2->fv(3).get_asString();
 
@@ -11137,22 +11254,7 @@ std::vector<int> CVideoDatabase::CleanMediaType(MEDIA::TYPE mediaType,
           else if (silent)
             del = false;
           else
-          {
-            CGUIDialogYesNo* pDialog = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogYesNo>(WINDOW_DIALOG_YES_NO);
-            if (pDialog)
-            {
-              CURL sourceUrl(sourcePath);
-              pDialog->SetHeading(CVariant{15012});
-              pDialog->SetText(CVariant{StringUtils::Format(
-                  CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(15013),
-                  sourceUrl.GetWithoutUserDetails())});
-              pDialog->SetChoice(0, CVariant{15015});
-              pDialog->SetChoice(1, CVariant{15014});
-              pDialog->Open();
-
-              del = !pDialog->IsConfirmed();
-            }
-          }
+            del = AskToRemoveItemsOfUnavailableSource(sourcePath);
         }
 
         if (!looseAsset)
