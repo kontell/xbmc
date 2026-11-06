@@ -3478,6 +3478,7 @@ void CVideoPlayer::HandleMessages()
     {
       const auto msg = std::static_pointer_cast<CDVDMsgPlayerSetSpeed>(pMsg);
       const int speed = msg->GetSpeed();
+      const int previousSpeed = m_playSpeed;
 
       // correct our current clock, as it would start going wrong otherwise
       if (m_State.timestamp > 0)
@@ -3570,6 +3571,13 @@ void CVideoPlayer::HandleMessages()
       m_VideoPlayerAudio->SetSpeed(speed);
       m_VideoPlayerVideo->SetSpeed(speed);
       m_streamPlayerSpeed = speed;
+
+      CLog::Log(LOGDEBUG, "CVideoPlayer::HandleMessages - speed {:.3f} to {:.3f}{}, clock {}",
+                static_cast<double>(previousSpeed) / DVD_PLAYSPEED_NORMAL,
+                static_cast<double>(speed) / DVD_PLAYSPEED_NORMAL, isTempoSpeed ? " (tempo)" : "",
+                repeated          ? "unchanged"
+                : rateDelay > 0.0 ? StringUtils::Format("in {} ms", DVD_TIME_TO_MSEC(rateDelay))
+                                  : "now");
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_FRAME_ADVANCE))
     {
