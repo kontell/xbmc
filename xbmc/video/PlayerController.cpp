@@ -542,7 +542,7 @@ bool CPlayerController::OnAction(const CAction &action)
           dialog->SetSelected(playing);
           dialog->Open();
           idx = dialog->GetSelectedItem();
-          if (idx > 0)
+          if (idx >= 0 && !programs[idx].playing)
             appPlayer->SetProgram(programs[idx].id);
         }
         return true;
