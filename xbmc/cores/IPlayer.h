@@ -192,7 +192,12 @@ public:
    */
   virtual void SetTotalTime(int64_t time) { }
   virtual void SetSpeed(float speed) = 0;
-  virtual void SetTempo(float tempo) {}
+  /*!
+   \brief Play at a tempo, 1.0 for normal speed
+   \param correction true for a tempo that corrects the position, as a sync client's does: the
+   GUI shows the playback at normal speed through it
+   */
+  virtual void SetTempo(float tempo, bool correction) {}
   virtual bool SupportsTempo() const { return false; }
   virtual void FrameAdvance(int frames) {}
 
