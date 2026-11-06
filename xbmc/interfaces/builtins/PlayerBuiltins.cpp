@@ -851,7 +851,7 @@ static int SubtitleShiftDown(const std::vector<std::string>& params)
 ///     @param[in] param                 "notify" to notify user (optional\, certain controls).
 ///
 ///     @note 'TempoUp'\, 'TempoDown' and 'Tempo(n)' work while the player supports a tempo
-///     (Player.TempoEnabled)\, which VideoPlayer does for anything but a realtime stream.
+///     (Player.TempoEnabled)\, which VideoPlayer does for any stream with a time range to move in.
 ///     @note 'Next' will behave differently while using video playlists. In those\, chapters will be ignored and the next movie will be played.
 ///   }
 ///   \table_row2_l{
