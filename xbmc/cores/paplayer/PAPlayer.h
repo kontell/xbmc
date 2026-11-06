@@ -16,6 +16,7 @@
 #include "threads/Thread.h"
 
 #include <atomic>
+#include <chrono>
 #include <list>
 #include <mutex>
 #include <vector>
@@ -45,6 +46,8 @@ public:
   void SetVolume(float volume) override;
   void SetDynamicRangeCompression(long drc) override;
   void SetSpeed(float speed = 0) override;
+  void SetTempo(float tempo) override;
+  bool SupportsTempo() const override;
   int GetCacheLevel() const override;
   void SetTotalTime(int64_t time) override;
   void SetTime(int64_t time) override;
@@ -70,6 +73,7 @@ public:
     int          m_audioBitrate;
     int          m_cacheLevel;
     bool         m_canSeek;
+    bool         m_canTempo;
   } m_playerGUIData;
 
 protected:
@@ -80,6 +84,15 @@ protected:
   float GetPercentage();
 
 private:
+  // What the engine has made of a stream is heard at the tempo it was made at
+  struct MixedTempo
+  {
+    double ratio = 1.0; // the resample ratio the engine was last seen at
+    double tempoBefore = 1.0; // the tempo it played at before that ratio
+    double heldBefore = 0.0; // seconds it had made at the one before when it took that ratio
+    std::chrono::steady_clock::time_point since; // when it took that ratio
+  };
+
   struct StreamInfo
   {
     std::unique_ptr<CFileItem> m_fileItem;
@@ -110,6 +123,8 @@ private:
     bool m_isSlaved;                     /* true if the stream has been slaved to another */
     StreamInfo* m_slavedTo = nullptr; /* the stream that owns it while slaved, and resumes it */
     bool m_waitOnDrain;                  /* wait for stream being drained in AE */
+    float m_tempo = 1.0f; /* the tempo it plays at: a stream kept for a cross-fade keeps its own */
+    MixedTempo m_mixed;
   };
 
   typedef std::list<StreamInfo*> StreamList;
@@ -117,6 +132,7 @@ private:
   bool m_signalSpeedChange = false; /* true if OnPlaybackSpeedChange needs to be called */
   bool m_signalStarted = true;
   std::atomic_int m_playbackSpeed;           /* the playback speed (1 = normal) */
+  std::atomic<float> m_tempo{1.0f}; /* the playback tempo (1.0 = normal) */
   bool m_isPlaying = false;
   bool m_isPaused = false;
   bool m_isFinished = false; /* if there are no more songs in the queue */
@@ -153,6 +169,20 @@ private:
   void UpdateStreamInfoPlayNextAtFrame(StreamInfo *si, unsigned int crossFadingTime);
   void UpdateGUIData(StreamInfo *si);
   int64_t GetTimeInternal();
+
+  /*!
+   * \brief Seconds of content queued in si's IAEStream and not heard yet.
+   *
+   * IAEStream::GetDelay() is in output seconds, which at a tempo hold tempo times as much: what
+   * the engine had made when it took its ratio at the tempo before, and the rest at the new one.
+   */
+  double QueuedSeconds(StreamInfo& si) const;
+
+  /*!
+   * \brief Have si's IAEStream play at the tempo in force. A bitstream is left as it is.
+   */
+  void SetStreamTempo(StreamInfo* si) const;
+
   bool SetTimeInternal(int64_t time);
   bool SetTotalTimeInternal(int64_t time);
   void CloseFileCB(StreamInfo &si);
