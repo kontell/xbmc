@@ -163,6 +163,7 @@ protected:
   unsigned int m_program;
   unsigned int m_streamsInProgram;
   unsigned int m_newProgram;
+  bool m_programSwitchPending = false;
   unsigned int m_initialProgramNumber;
   int m_seekStream;
 

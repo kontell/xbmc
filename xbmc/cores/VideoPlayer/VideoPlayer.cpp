@@ -3446,7 +3446,20 @@ void CVideoPlayer::HandleMessages()
       if (m_pDemuxer)
       {
         m_pDemuxer->SetProgram(msg->m_value);
-        FlushBuffers(DVD_NOPTS_VALUE, false, true);
+
+        // Resume the new program from the time playing rather than from wherever the demuxer
+        // had read ahead to. A live stream is left to carry on from there.
+        if (m_State.canseek && !m_pInputStream->IsRealtime())
+        {
+          CDVDMsgPlayerSeek::CMode mode;
+          mode.time = static_cast<double>(GetUpdatedTime());
+          mode.backward = true;
+          mode.accurate = true;
+          mode.sync = true;
+          m_messenger.Put(std::make_shared<CDVDMsgPlayerSeek>(mode));
+        }
+        else
+          FlushBuffers(DVD_NOPTS_VALUE, false, true);
       }
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_SET_STATE))
