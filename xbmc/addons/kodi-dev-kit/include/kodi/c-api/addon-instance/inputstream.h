@@ -635,6 +635,11 @@ extern "C"
     double ptsStart;
     double ptsBegin;
     double ptsEnd;
+    //! @brief What to add to a pts of this stream to get the presentation timestamp the
+    //! container carries: the clock every player of the same broadcast or live stream shares,
+    //! where a pts counts from the start of this playback. Kodi sets STREAM_NOPTS_VALUE before
+    //! the call, which stands when the add-on cannot tell. Since inputstream API 3.5.0.
+    double ptsPresentationOffset;
   };
 
   /*!

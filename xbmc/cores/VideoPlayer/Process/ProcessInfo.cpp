@@ -847,6 +847,12 @@ void CProcessInfo::SetPlayTimes(
   }
 }
 
+void CProcessInfo::SetPresentationTimeOffset(std::optional<int64_t> offsetMs)
+{
+  if (m_dataCache)
+    m_dataCache->SetPresentationTimeOffset(offsetMs);
+}
+
 int64_t CProcessInfo::GetMaxTime()
 {
   std::unique_lock lock(m_stateSection);
