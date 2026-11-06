@@ -1021,7 +1021,8 @@ void PAPlayer::SetTempo(float tempo, bool correction)
   if (!tempoChanged && correction == m_tempoIsCorrection)
     return;
 
-  CLog::Log(LOGDEBUG, "PAPlayer::SetTempo - {:.3f} to {:.3f}", m_tempo, tempo);
+  CLog::Log(LOGDEBUG, "PAPlayer::SetTempo - {:.3f} to {:.3f}{}", m_tempo, tempo,
+            correction ? " (correction)" : "");
   m_tempo = tempo;
   m_tempoIsCorrection = correction;
   CDataCacheCore::GetInstance().SetSpeed(m_tempo, m_playbackSpeed, m_tempoIsCorrection);

@@ -3616,7 +3616,10 @@ void CVideoPlayer::HandleMessages()
 
       CLog::Log(LOGDEBUG, "CVideoPlayer::HandleMessages - speed {:.3f} to {:.3f}{}, clock {}",
                 static_cast<double>(previousSpeed) / DVD_PLAYSPEED_NORMAL,
-                static_cast<double>(speed) / DVD_PLAYSPEED_NORMAL, isTempoSpeed ? " (tempo)" : "",
+                static_cast<double>(speed) / DVD_PLAYSPEED_NORMAL,
+                !isTempoSpeed         ? ""
+                : msg->IsCorrection() ? " (tempo, correction)"
+                                      : " (tempo)",
                 repeated          ? "unchanged"
                 : rateDelay > 0.0 ? StringUtils::Format("in {} ms", DVD_TIME_TO_MSEC(rateDelay))
                                   : "now");
