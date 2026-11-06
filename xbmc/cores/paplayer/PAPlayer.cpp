@@ -1019,6 +1019,7 @@ void PAPlayer::SetTempo(float tempo)
   if (tempo == m_tempo)
     return;
 
+  CLog::Log(LOGDEBUG, "PAPlayer::SetTempo - {:.3f} to {:.3f}", m_tempo, tempo);
   m_tempo = tempo;
   CDataCacheCore::GetInstance().SetSpeed(m_tempo, m_playbackSpeed);
 
