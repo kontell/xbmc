@@ -143,6 +143,7 @@ protected:
   double StartTime() const;
   bool IsProgramChange();
   unsigned int HLSSelectProgram();
+  std::string HLSProgramName(const AVProgram& program) const;
 
   std::string GetStereoModeFromMetadata(AVDictionary* pMetadata);
   std::string ConvertCodecToInternalStereoMode(const std::string& mode, const StereoModeConversionMap* conversionMap);
