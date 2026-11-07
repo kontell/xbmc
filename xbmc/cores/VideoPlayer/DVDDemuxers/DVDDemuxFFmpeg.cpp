@@ -1050,6 +1050,22 @@ double CDVDDemuxFFmpeg::ConvertTimestamp(int64_t pts, int den, int num)
   // do calculations in floats as they can easily overflow otherwise
   // we don't care for having a completely exact timestamp anyway
   double timestamp = (double)pts * num / den;
+  const double starttime = StartTime();
+
+  if (!m_bSup)
+  {
+    if (timestamp > starttime || m_checkTransportStream)
+      timestamp -= starttime;
+    // allow for largest possible difference in pts and dts for a single packet
+    else if (timestamp + 0.5 > starttime)
+      timestamp = 0;
+  }
+
+  return timestamp * DVD_TIME_BASE;
+}
+
+double CDVDDemuxFFmpeg::StartTime() const
+{
   double starttime = 0.0;
 
   const std::shared_ptr<CDVDInputStream::IMenus> menuInterface =
@@ -1063,16 +1079,19 @@ double CDVDDemuxFFmpeg::ConvertTimestamp(int64_t pts, int den, int num)
   if (m_checkTransportStream)
     starttime = m_startTime;
 
-  if (!m_bSup)
-  {
-    if (timestamp > starttime || m_checkTransportStream)
-      timestamp -= starttime;
-    // allow for largest possible difference in pts and dts for a single packet
-    else if (timestamp + 0.5 > starttime)
-      timestamp = 0;
-  }
+  return starttime;
+}
 
-  return timestamp * DVD_TIME_BASE;
+double CDVDDemuxFFmpeg::GetPresentationTimeOffset()
+{
+  if (!m_pFormatContext || m_bSup)
+    return DVD_NOPTS_VALUE;
+
+  // a transport stream's origin is read off its first packets, and is not known before
+  if (m_checkTransportStream && m_startTime == 0)
+    return DVD_NOPTS_VALUE;
+
+  return StartTime() * DVD_TIME_BASE;
 }
 
 DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)

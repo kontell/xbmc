@@ -756,6 +756,7 @@
       "speed",
       "tempo",
       "time",
+      "presentationtime",
       "percentage",
       "totaltime",
       "playlistid",
@@ -797,6 +798,16 @@
       },
       "time": {
         "$ref": "Global.Time"
+      },
+      "presentationtime": {
+        "description": "The position on the stream's own clock: the presentation timestamp the container carries, which every player of the same broadcast or live stream shares, where time counts from the start of this playback. Null when the player cannot tell.",
+        "type": [
+          "null",
+          {
+            "$ref": "Global.Time",
+            "required": true
+          }
+        ]
       },
       "percentage": {
         "$ref": "Player.Position.Percentage"
