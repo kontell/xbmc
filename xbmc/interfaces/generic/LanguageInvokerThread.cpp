@@ -22,7 +22,7 @@ CLanguageInvokerThread::CLanguageInvokerThread(std::shared_ptr<ILanguageInvoker>
     CThread("LanguageInvoker"),
     m_invoker(std::move(invoker)),
     m_invocationManager(invocationManager),
-    m_reusable(reuseable)
+    m_mayReuse(reuseable)
 { }
 
 CLanguageInvokerThread::~CLanguageInvokerThread()
@@ -64,11 +64,10 @@ bool CLanguageInvokerThread::execute(const std::string &script, const std::vecto
 
   std::unique_lock<std::mutex> lck(m_mutex);
 
-  // Refuse once the loop has decided to finish (m_processDone) or been asked to
-  // stop (m_bStop): a restart set here would be dropped by the loop's keepGoing
-  // test or notify a condition nobody waits on, and the caller would wait on a
-  // script that never runs. Let the caller start a fresh thread instead.
-  if (m_processDone || m_bStop)
+  // Refuse once the loop has left (Done) or been asked to stop: a restart set
+  // here would be dropped by the loop or notify a condition nobody waits on, and
+  // the caller would wait on a script that never runs. Start a fresh thread.
+  if (m_phase == Phase::Done || m_bStop)
     return false;
 
   m_script = script;
@@ -76,7 +75,7 @@ bool CLanguageInvokerThread::execute(const std::string &script, const std::vecto
 
   if (CThread::IsRunning())
   {
-    m_restart = true;
+    m_phase = Phase::Queued;
     m_condition.notify_one();
     return true;
   }
@@ -123,26 +122,27 @@ void CLanguageInvokerThread::OnStartup()
 
 void CLanguageInvokerThread::Process()
 {
-  if (m_invoker == NULL)
-    return;
-
   std::unique_lock<std::mutex> lckdl(m_mutex);
-  bool keepGoing = true;
-  while (keepGoing)
+  if (m_invoker == NULL)
   {
-    m_restart = false;
+    m_phase = Phase::Done;
+    return;
+  }
+
+  for (;;)
+  {
+    m_phase = Phase::Running;
     const std::string script = m_script;
     const std::vector<std::string> args = m_args;
-    // Execute() talks to the GUI and to other invokers. Holding m_mutex
-    // across it deadlocks Home.xml load: a JobWorker in Release()/restart
-    // waits for this lock, the app thread waits for that job, and this
-    // script waits for the GUI.
+    // Execute() talks to the GUI and to other invokers. Holding m_mutex across
+    // it deadlocks Home.xml load: a JobWorker in Release()/restart waits for
+    // this lock, the app thread waits for that job, and this script waits for
+    // the GUI.
     lckdl.unlock();
-    bool started = false;
     bool threw = false;
     try
     {
-      started = m_invoker->Execute(script, args);
+      m_invoker->Execute(script, args);
     }
     catch (const XbmcCommons::Exception& e)
     {
@@ -164,30 +164,33 @@ void CLanguageInvokerThread::Process()
     {
       // Retire the thread without unwinding further, so OnExit() runs as on
       // every other exit; the invoker only has to leave its state fit for it.
-      m_processDone = true;
+      m_phase = Phase::Done;
       lckdl.unlock();
       m_invoker->onExecutionFailed();
       return;
     }
 
-    // The state here is this run's own outcome. A concurrent claimer can only
-    // Reset() (to Uninitialized) a thread it has claimed, so a terminal failure
-    // is always ours to act on; an Uninitialized seen under someone else's
-    // claim is their Reset() and must not retire the thread they will run. A
-    // run that never started leaves the same Uninitialized under our own
-    // claim, which only Execute()'s result tells apart.
-    const InvokerState state = m_invoker->GetState();
-    if (!started || state == InvokerStateFailed || state == InvokerStateExecutionDone ||
-        (!IsClaimed() && state != InvokerStateScriptDone))
-      m_reusable = false;
+    // This run's own outcome, read on this thread before any claimer can Reset()
+    // the invoker. Only a clean finish on a reuse-enabled thread parks; anything
+    // else retires it even with a claim still held, since the claim holder's
+    // wait ends on this thread reaching OnExit(), not the reverse.
+    const bool reusable = m_mayReuse && m_invoker->GetState() == InvokerStateScriptDone;
+    if (m_bStop || !reusable)
+    {
+      m_phase = Phase::Done;
+      break;
+    }
 
-    // Retire a run that is not reusable even while it is claimed: the claim's
-    // holder may be waiting for this thread to exit before it lets go.
-    m_condition.wait(lckdl, [this] { return m_bStop || m_restart || !m_reusable; });
-
-    keepGoing = (m_restart || m_reusable) && !m_bStop;
-    if (!keepGoing)
-      m_processDone = true; // set under m_mutex, before execute() can look again
+    // Park the idle interpreter and wait for the next script or a stop. A restart
+    // handed over during the run already set Queued; leave it for the predicate.
+    if (m_phase != Phase::Queued)
+      m_phase = Phase::Parked;
+    m_condition.wait(lckdl, [this] { return m_bStop || m_phase == Phase::Queued; });
+    if (m_bStop)
+    {
+      m_phase = Phase::Done;
+      break;
+    }
   }
 }
 
