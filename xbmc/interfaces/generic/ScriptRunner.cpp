@@ -36,9 +36,10 @@ CScriptRunner::CScriptRunner() : m_scriptDone(true)
 bool CScriptRunner::RunScript(const ADDON::AddonPtr& addon,
                               const CURL& url,
                               int handle,
-                              bool resume)
+                              bool resume,
+                              CReusableInvokerClaim* claim /* = nullptr */)
 {
-  return RunScriptInternal(addon, url, handle, resume, true);
+  return RunScriptInternal(addon, url, handle, resume, true, claim);
 }
 
 void CScriptRunner::SetDone()
@@ -51,7 +52,11 @@ int CScriptRunner::ExecuteScript(const ADDON::AddonPtr& addon, const CURL& path,
   return ExecuteScript(addon, path, -1, resume);
 }
 
-int CScriptRunner::ExecuteScript(const ADDON::AddonPtr& addon, CURL url, int handle, bool resume)
+int CScriptRunner::ExecuteScript(const ADDON::AddonPtr& addon,
+                                 CURL url,
+                                 int handle,
+                                 bool resume,
+                                 CReusableInvokerClaim* claim /* = nullptr */)
 {
   if (addon == nullptr)
     return false;
@@ -74,16 +79,20 @@ int CScriptRunner::ExecuteScript(const ADDON::AddonPtr& addon, CURL url, int han
   // run the script
   CLog::Log(LOGDEBUG, "CScriptRunner: running add-on script {:s}('{:s}', '{:s}', '{:s}')",
             addon->Name(), argv[0], argv[1], argv[2]);
-  int scriptId = CScriptInvocationManager::GetInstance().ExecuteAsync(addon->LibPath(), addon, argv,
-                                                                      reuseLanguageInvoker, handle);
+  int scriptId = CScriptInvocationManager::GetInstance().ExecuteAsync(
+      addon->LibPath(), addon, argv, reuseLanguageInvoker, handle, claim);
   if (scriptId < 0)
     CLog::Log(LOGERROR, "CScriptRunner: unable to run add-on script {:s}", addon->Name());
 
   return scriptId;
 }
 
-bool CScriptRunner::RunScriptInternal(
-    const ADDON::AddonPtr& addon, const CURL& url, int handle, bool resume, bool wait /* = true */)
+bool CScriptRunner::RunScriptInternal(const ADDON::AddonPtr& addon,
+                                      const CURL& url,
+                                      int handle,
+                                      bool resume,
+                                      bool wait /* = true */,
+                                      CReusableInvokerClaim* claim /* = nullptr */)
 {
   if (addon == nullptr)
     return false;
@@ -94,7 +103,7 @@ bool CScriptRunner::RunScriptInternal(
   // store the add-on
   m_addon = addon;
 
-  int scriptId = ExecuteScript(addon, url, handle, resume);
+  int scriptId = ExecuteScript(addon, url, handle, resume, claim);
   if (scriptId < 0)
     return false;
 

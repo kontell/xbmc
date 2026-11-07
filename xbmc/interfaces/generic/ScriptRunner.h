@@ -14,6 +14,8 @@
 
 #include <string>
 
+class CReusableInvokerClaim;
+
 class CScriptRunner
 {
 protected:
@@ -25,16 +27,34 @@ protected:
 
   ADDON::AddonPtr GetAddon() const;
 
-  bool RunScript(const ADDON::AddonPtr& addon, const CURL& url, int handle, bool resume);
+  /*!
+   * \brief Run the add-on script for the given URL and wait for its result.
+   *
+   * \param claim (Optional) The caller's claim on the reusable invoker, held for
+   *        the whole run. See CScriptInvocationManager::ClaimReusableInvoker.
+   */
+  bool RunScript(const ADDON::AddonPtr& addon,
+                 const CURL& url,
+                 int handle,
+                 bool resume,
+                 CReusableInvokerClaim* claim = nullptr);
 
   void SetDone();
 
   static int ExecuteScript(const ADDON::AddonPtr& addon, const CURL& url, bool resume);
-  static int ExecuteScript(const ADDON::AddonPtr& addon, CURL url, int handle, bool resume);
+  static int ExecuteScript(const ADDON::AddonPtr& addon,
+                           CURL url,
+                           int handle,
+                           bool resume,
+                           CReusableInvokerClaim* claim = nullptr);
 
 private:
-  bool RunScriptInternal(
-      const ADDON::AddonPtr& addon, const CURL& url, int handle, bool resume, bool wait = true);
+  bool RunScriptInternal(const ADDON::AddonPtr& addon,
+                         const CURL& url,
+                         int handle,
+                         bool resume,
+                         bool wait = true,
+                         CReusableInvokerClaim* claim = nullptr);
   bool WaitOnScriptResult(int scriptId, const std::string& path, const std::string& name);
 
   ADDON::AddonPtr m_addon;

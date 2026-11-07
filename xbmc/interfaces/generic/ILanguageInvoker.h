@@ -10,6 +10,7 @@
 
 #include "addons/IAddon.h"
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -70,6 +71,8 @@ protected:
 
 private:
   int m_id = -1;
-  InvokerState m_state = InvokerStateUninitialized;
+  // Advanced from more than one thread (the invoker's, and the caller's in
+  // stop()) and read from others: atomic, and setState() never moves it back.
+  std::atomic<InvokerState> m_state{InvokerStateUninitialized};
   ILanguageInvocationHandler *m_invocationHandler;
 };
