@@ -193,10 +193,34 @@ bool VideoPlayerCodec::Init(const CFileItem &file, unsigned int filecache)
     }
   }
 
+  ReadChapters();
+
   m_strFileName = file.GetDynPath();
   m_bInited = true;
 
   return true;
+}
+
+void VideoPlayerCodec::ReadChapters()
+{
+  // VideoPlayer's order: an input stream's own chapters replace the demuxer's
+  m_chapters.clear();
+  CDVDInputStream::IChapter* inputChapters = m_pInputStream->GetIChapter();
+  const int count = inputChapters ? inputChapters->GetChapterCount() : m_pDemuxer->GetChapterCount();
+  for (int i = 1; i <= count; ++i)
+  {
+    auto& [name, start] = m_chapters.emplace_back();
+    if (inputChapters)
+    {
+      inputChapters->GetChapterName(name, i);
+      start = inputChapters->GetChapterPos(i).count();
+    }
+    else
+    {
+      m_pDemuxer->GetChapterName(name, i);
+      start = m_pDemuxer->GetChapterPos(i).count();
+    }
+  }
 }
 
 bool VideoPlayerCodec::InitFormatFromStream(CDemuxStreamAudio* stream, bool allowFormatFallback)
@@ -387,6 +411,7 @@ void VideoPlayerCodec::DeInit()
   m_format.m_dataFormat = AE_FMT_INVALID;
 
   m_nDecodedLen = 0;
+  m_chapters.clear();
 
   m_strFileName = "";
   m_bInited = false;
