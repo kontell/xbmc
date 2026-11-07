@@ -31,6 +31,12 @@ public:
    */
   static void CreateAnalytics(CDatabase& db);
 
+  /*!
+   * \brief Create the indexes SQLite needs for case-insensitive name lookups
+   * \param[in] db the database, an SQLite one
+   */
+  static void CreateNameLookupIndices(CDatabase& db);
+
 private:
   static void CreateLinkIndex(CDatabase& db, const std::string& table);
   static void CreateForeignLinkIndex(CDatabase& db,

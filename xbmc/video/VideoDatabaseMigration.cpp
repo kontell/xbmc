@@ -1470,5 +1470,5 @@ void CVideoDatabase::UpdateTables(int iVersion)
 
 int CVideoDatabase::GetSchemaVersion() const
 {
-  return 153;
+  return 154;
 }
