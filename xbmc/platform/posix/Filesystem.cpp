@@ -12,6 +12,9 @@
 
 #if defined(TARGET_LINUX) || defined(TARGET_WASM)
 #include <sys/statvfs.h>
+#if defined(TARGET_LINUX)
+#include <sys/vfs.h>
+#endif
 #elif defined(TARGET_DARWIN) || defined(TARGET_FREEBSD)
 #include <sys/param.h>
 #include <sys/mount.h>
@@ -58,6 +61,41 @@ space_info space(const std::string& path, std::error_code& ec)
   sp.free = static_cast<uintmax_t>(fsInfo.f_bfree * fsInfo.f_bsize);
 
   return sp;
+}
+
+bool is_network_filesystem(const std::string& path)
+{
+#if defined(TARGET_LINUX) || defined(TARGET_ANDROID)
+  struct statfs fsInfo;
+  if (statfs(CSpecialProtocol::TranslatePath(path).c_str(), &fsInfo) != 0)
+    return false;
+
+  // The kernel's and Lustre's magic numbers, written out because older headers lack some
+  switch (static_cast<uint32_t>(fsInfo.f_type))
+  {
+    case 0x6969u: // NFS
+    case 0x517Bu: // SMB
+    case 0xFF534D42u: // CIFS
+    case 0xFE534D42u: // SMB2
+    case 0x01021997u: // 9P
+    case 0x5346414Fu: // OpenAFS
+    case 0x6B414653u: // kAFS
+    case 0x73757245u: // Coda
+    case 0x00C36400u: // Ceph
+    case 0x01161970u: // GFS2
+    case 0x7461636Fu: // OCFS2
+    case 0x0BD00BD0u: // Lustre
+      return true;
+    default:
+      return false;
+  }
+#elif defined(TARGET_DARWIN) || defined(TARGET_FREEBSD)
+  struct statfs fsInfo;
+  return statfs(CSpecialProtocol::TranslatePath(path).c_str(), &fsInfo) == 0 &&
+         (fsInfo.f_flags & MNT_LOCAL) == 0;
+#else
+  return false;
+#endif
 }
 
 std::string temp_directory_path(std::error_code &ec)

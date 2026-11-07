@@ -12,6 +12,7 @@
 
 #include "sqlitedataset.h"
 
+#include "platform/Filesystem.h"
 #include "utils/Map.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
@@ -423,6 +424,35 @@ int SqliteDatabase::postconnect()
   {
     throw DbErrors("%s", getErrorMsg());
   }
+
+  // With write-ahead logging a commit appends to the log, where a rollback journal is a file
+  // created, synced and removed for every transaction. WAL needs every connection on one host,
+  // which a network filesystem can't promise, so a database there keeps its journal.
+  if (KODI::PLATFORM::FILESYSTEM::is_network_filesystem(host))
+  {
+    CLog::Log(LOGINFO, "SqliteDatabase: {} is on a network filesystem and keeps its journal mode",
+              db);
+    return DB_COMMAND_OK;
+  }
+
+  // The pragma answers with the mode in effect, which is the old one when the change is refused
+  std::string mode;
+  std::string error;
+  sqlite3_stmt* stmt{nullptr};
+  if (sqlite3_prepare_v2(getHandle(), "PRAGMA journal_mode=WAL", -1, &stmt, nullptr) == SQLITE_OK &&
+      sqlite3_step(stmt) == SQLITE_ROW)
+  {
+    if (const unsigned char* text{sqlite3_column_text(stmt, 0)})
+      mode = reinterpret_cast<const char*>(text);
+  }
+  else
+    error = sqlite3_errmsg(getHandle());
+  sqlite3_finalize(stmt);
+
+  if (!error.empty())
+    CLog::Log(LOGWARNING, "SqliteDatabase: can't set the journal mode of {}: {}", db, error);
+  else if (mode != "wal")
+    CLog::Log(LOGWARNING, "SqliteDatabase: {} keeps journal mode {}", db, mode);
 
   return DB_COMMAND_OK;
 }
