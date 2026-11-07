@@ -9,12 +9,14 @@
 #include "ApplicationSettingsHandling.h"
 
 #include "GUIUserMessages.h"
+#include "PlayListPlayer.h"
 #include "ServiceBroker.h"
 #include "Util.h"
 #include "addons/AddonManager.h"
 #include "addons/addoninfo/AddonType.h"
 #include "addons/gui/GUIDialogAddonSettings.h"
 #include "application/ApplicationComponents.h"
+#include "application/ApplicationEnums.h"
 #include "application/ApplicationPlayer.h"
 #include "application/ApplicationPowerHandling.h"
 #include "application/ApplicationSkinHandling.h"
@@ -23,6 +25,9 @@
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "messaging/ApplicationMessenger.h"
+#include "playlists/PlayListHistory.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/Setting.h"
@@ -68,6 +73,7 @@ void CApplicationSettingsHandling::RegisterSettings()
                                           CSettings::SETTING_SOURCE_PICTURES,
                                           CSettings::SETTING_VIDEOSCREEN_FAKEFULLSCREEN,
                                           CSettings::SETTING_VIDEOLIBRARY_FLATTENVERSIONS,
+                                          CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE,
                                       });
 
   auto& components = CServiceBroker::GetAppComponents();
@@ -145,6 +151,31 @@ void CApplicationSettingsHandling::OnSettingChanged(const std::shared_ptr<const 
     CGUIMessage msg(GUI_MSG_NOTIFY_ALL, 0, 0, GUI_MSG_UPDATE);
     CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg);
   }
+  else if (settingId == CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE)
+  {
+    const int keep{std::static_pointer_cast<const CSettingInt>(setting)->GetValue()};
+    CServiceBroker::GetPlaylistPlayer().GetHistory().Trim(keep);
+    // Off empties the history, and the playlist a video took over goes with it
+    if (keep == 0)
+      CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
+  }
+}
+
+void CApplicationSettingsHandling::SettingOptionsStartupActionsFiller(
+    const std::shared_ptr<const CSetting>& setting,
+    std::vector<IntegerSettingOption>& list,
+    int& current)
+{
+  const CLocalizeStrings& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+  list.emplace_back(strings.Get(231), STARTUP_ACTION_NONE);
+  list.emplace_back(strings.Get(39101), STARTUP_ACTION_PLAY_TV);
+  list.emplace_back(strings.Get(39102), STARTUP_ACTION_PLAY_RADIO);
+
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+          CSettings::SETTING_MUSICPLAYER_PLAYLISTHISTORYSIZE) > 0)
+    list.emplace_back(strings.Get(40821), STARTUP_ACTION_RESTORE_PLAYLIST);
+  else if (current == STARTUP_ACTION_RESTORE_PLAYLIST)
+    current = STARTUP_ACTION_NONE;
 }
 
 void CApplicationSettingsHandling::OnSettingAction(const std::shared_ptr<const CSetting>& setting)

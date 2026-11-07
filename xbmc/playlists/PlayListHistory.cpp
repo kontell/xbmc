@@ -271,16 +271,26 @@ CPlayListHistoryEntry CPlayListHistoryEntry::FromPlayList(const CPlayList& playl
   return entry;
 }
 
-void CPlayListHistory::Add(CPlayListHistoryEntry entry)
+void CPlayListHistory::Add(CPlayListHistoryEntry entry, int keep)
 {
-  if (entry.tracks.empty())
+  if (keep <= 0 || entry.tracks.empty())
     return;
   if (!m_entries.empty() && entry.IsRepeatOf(m_entries.front()))
     return;
 
   m_entries.insert(m_entries.begin(), std::move(entry));
-  if (m_entries.size() > MAX_ENTRIES)
-    m_entries.resize(MAX_ENTRIES);
+  if (m_entries.size() > static_cast<size_t>(keep))
+    m_entries.resize(keep);
+  Save();
+}
+
+void CPlayListHistory::Trim(int keep)
+{
+  const size_t size = static_cast<size_t>(std::max(0, keep));
+  if (m_entries.size() <= size)
+    return;
+
+  m_entries.resize(size);
   Save();
 }
 
@@ -333,8 +343,6 @@ bool CPlayListHistory::Load()
     if (!entry.tracks.empty())
       m_entries.emplace_back(std::move(entry));
   }
-  if (m_entries.size() > MAX_ENTRIES)
-    m_entries.resize(MAX_ENTRIES);
   return true;
 }
 
