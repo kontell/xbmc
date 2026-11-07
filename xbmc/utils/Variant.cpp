@@ -405,8 +405,8 @@ double CVariant::asDouble(double fallback) const
       overloaded{
           [](double d) { return d; }, [](int64_t i) { return static_cast<double>(i); },
           [](uint64_t u) { return static_cast<double>(u); },
-          [=](const std::string& s) { return static_cast<double>(str2uint64(s, fallback)); },
-          [=](const std::wstring& ws) { return static_cast<double>(str2uint64(ws, fallback)); },
+          [=](const std::string& s) { return str2double(s, fallback); },
+          [=](const std::wstring& ws) { return str2double(ws, fallback); },
           [=](const auto&) { return fallback; }},
       m_data);
 }
