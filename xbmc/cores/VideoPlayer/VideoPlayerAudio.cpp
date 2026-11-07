@@ -134,11 +134,9 @@ void CVideoPlayerAudio::OpenStream(CDVDStreamInfo& hints, std::unique_ptr<CDVDAu
   m_stalled = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
 
   m_prevsynctype = -1;
-  m_synctype = SYNC_DISCON;
-  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK))
-    m_synctype = SYNC_RESAMPLE;
-  else if (m_processInfo.IsRealtimeStream())
-    m_synctype = SYNC_RESAMPLE;
+  m_displayClock = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+      CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
+  m_synctype = ResampleToClock() ? SYNC_RESAMPLE : SYNC_DISCON;
 
   if (m_synctype == SYNC_DISCON)
     CLog::LogF(LOGINFO, "Allowing max Out-Of-Sync Value of {} ms", m_disconAdjustTimeMs);
@@ -398,7 +396,10 @@ void CVideoPlayerAudio::Process()
       // back with its flag
       if (speed != DVD_PLAYSPEED_PAUSE)
         m_speedIsTempo = isTempo;
-      UpdateResampleRatio();
+      // A realtime stream changes clock at the start and the end of a tempo. The engine holds
+      // back a ratio while it resamples to the clock, so it is told the mode first.
+      m_synctype = ResampleToClock() ? SYNC_RESAMPLE : SYNC_DISCON;
+      SetSyncType(audioframe.passthrough);
 
       // A tempo plays the audio at a rate, which a bitstream cannot: decode it instead, and
       // bitstream again once the tempo is 1.0.
@@ -519,7 +520,7 @@ bool CVideoPlayerAudio::ProcessDecoderOutput(DVDAudioFrame &audioframe)
 
     // if stream switches to realtime, disable pass through
     // or switch to resample
-    if (m_processInfo.IsRealtimeStream() && m_synctype != SYNC_RESAMPLE)
+    if (ResampleToClock() && m_synctype != SYNC_RESAMPLE)
     {
       m_synctype = SYNC_RESAMPLE;
       if (SwitchCodecIfNeeded())
@@ -651,6 +652,20 @@ void CVideoPlayerAudio::SetSyncType(bool passthrough)
   }
 
   UpdateResampleRatio();
+}
+
+bool CVideoPlayerAudio::ResampleToClock() const
+{
+  // The display clock has every stream resampled to it, and a realtime stream is resampled to
+  // a clock that follows its source. At a tempo a realtime stream has the audio as its clock
+  // instead and asks the stream for the rate, as any other stream does: resampled to the clock,
+  // the sync servo would move the ratio at every correction, and beyond the atempo threshold
+  // every move has the engine drain and re-make its atempo filter.
+  if (m_displayClock)
+    return true;
+
+  return m_processInfo.IsRealtimeStream() &&
+         !(m_speedIsTempo && m_speed != DVD_PLAYSPEED_NORMAL);
 }
 
 bool CVideoPlayerAudio::AllowPassthrough()
