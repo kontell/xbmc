@@ -2033,7 +2033,8 @@
         "seasonid",
         "ratings",
         "genre",
-        "studio"
+        "studio",
+        "tag"
       ]
     }
   },
@@ -2529,6 +2530,9 @@
         "$ref": "Array.String"
       },
       "genre": {
+        "$ref": "Array.String"
+      },
+      "tag": {
         "$ref": "Array.String"
       }
     }

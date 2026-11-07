@@ -835,8 +835,17 @@ JSONRPC_STATUS CVideoLibrary::SetEpisodeDetails(const std::string &method, ITran
   std::set<std::string, std::less<>> updatedDetails;
   UpdateVideoTag(parameterObject, infos, artwork, removedArtwork, updatedDetails);
 
+  // SetDetailsForEpisode() only adds tags, so new ones replace the old here
+  videodatabase.BeginTransaction();
+  if (updatedDetails.contains("tag"))
+    videodatabase.RemoveTagsFromItem(id, KODI::MEDIA::TYPE::EPISODE);
+
   if (videodatabase.SetDetailsForEpisode(infos, artwork, tvshowid, id) <= 0)
+  {
+    videodatabase.RollbackTransaction();
     return InternalError;
+  }
+  videodatabase.CommitTransaction();
 
   if (!videodatabase.RemoveArtForItem(infos.m_iDbId, KODI::MEDIA::TYPE::EPISODE, removedArtwork))
     return InternalError;
