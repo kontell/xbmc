@@ -16,6 +16,7 @@
 #include "utils/Fanart.h"
 #include "utils/ISortable.h"
 #include "utils/ScraperUrl.h"
+#include "media/ScrubPreviews.h"
 #include "utils/StreamDetails.h"
 #include "video/Bookmark.h"
 
@@ -81,6 +82,17 @@ public:
             bool savePathInfo = true,
             const TiXmlElement* additionalNode = nullptr);
   void Merge(CVideoInfoTag& other);
+
+  /*!
+   * @brief The thumbnails to scrub through this video with, as the add-on that plays it set them.
+   * @return The previews, with no tiles when there are none.
+   */
+  const ScrubPreviews& GetScrubPreviews() const { return m_scrubPreviews; }
+
+  /*!
+   * @brief Set the thumbnails to scrub through this video with. Not stored with the item.
+   */
+  void SetScrubPreviews(ScrubPreviews previews);
   void Archive(CArchive& ar) override;
   void Serialize(CVariant& value) const override;
   void ToSortable(SortItem& sortable, Field field) const override;
@@ -456,6 +468,7 @@ public:
   int m_iIdSeason;
   CFanart m_fanart;
   CStreamDetails m_streamDetails;
+  ScrubPreviews m_scrubPreviews;
   CDateTime m_dateAdded;
   std::string m_type; //!< the table m_iDbId is in: a media type, or a node such as genre
   int m_relevance; // Used for actors' number of appearances

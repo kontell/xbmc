@@ -350,3 +350,24 @@ for cls in (xbmc.Player, xbmc.Monitor, xbmcgui.WindowXMLDialog):
 }
 
 } // namespace
+
+TEST_F(TestPythonBindings, VideoScrubPreviews)
+{
+  if (!s_pythonUp)
+    GTEST_SKIP() << "python runtime not initialized";
+  ASSERT_TRUE(s_mainImportOk);
+  EXPECT_TRUE(RunPy(R"py(
+import xbmcgui
+item = xbmcgui.ListItem('previews', '', '', True)
+tag = item.getVideoInfoTag()
+tag.setScrubPreviews(10000, 320, 180, 10, 10, ['http://s/0.jpg', 'http://s/1.jpg'])
+tag.setScrubPreviews(0, 0, 0, 0, 0, [])
+for args in ((0, 320, 180, 10, 10, ['t']), (10000, 320, 180, 0, 1, ['t']), (10000, 320, 180, 1, 1, [''])):
+    try:
+        tag.setScrubPreviews(*args)
+    except TypeError:
+        pass
+    else:
+        raise AssertionError('setScrubPreviews took %r' % (args,))
+)py"));
+}

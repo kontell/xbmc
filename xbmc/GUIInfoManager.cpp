@@ -813,6 +813,15 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///     @skinning_v20 **[New Infolabel]** \link Player_HasSceneMarkers `Player.HasSceneMarkers`\endlink
 ///     <p>
 ///   }
+///   \table_row3{   <b>`Player.HasScrubPreviews`</b>,
+///                  \anchor Player_HasScrubPreviews
+///                  _boolean_,
+///     @return **True** if the playing video has thumbnails to scrub through
+///     (`InfoTagVideo.setScrubPreviews()`).
+///     <p><hr>
+///     @skinning_v23 **[New Infolabel]** \link Player_HasScrubPreviews `Player.HasScrubPreviews`\endlink
+///     <p>
+///   }
 ///   \table_row3{   <b>`Player.Chapters`</b>,
 ///                  \anchor Player_Chapters
 ///                  _string_,
@@ -864,7 +873,7 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///     <p>
 ///   }
 // clang-format off
-constexpr std::array<InfoMap, 60> player_labels = {{
+constexpr std::array<InfoMap, 61> player_labels = {{
     {"hasmedia",              PLAYER_HAS_MEDIA},
     {"hasaudio",              PLAYER_HAS_AUDIO},
     {"hasvideo",              PLAYER_HAS_VIDEO},
@@ -925,6 +934,7 @@ constexpr std::array<InfoMap, 60> player_labels = {{
     {"chapters",              PLAYER_CHAPTERS},
     {"bookmarks",             PLAYER_BOOKMARKS},
     {"hasbookmarks",          PLAYER_HAS_BOOKMARKS},
+    {"hasscrubpreviews",      PLAYER_HAS_SCRUB_PREVIEWS},
 }};
 // clang-format on
 
@@ -12363,6 +12373,7 @@ void CGUIInfoManager::ResetCurrentItem()
 void CGUIInfoManager::UpdateCurrentItem(const CFileItem& item, bool replaceLabels /* = true */)
 {
   m_currentFile->UpdateInfo(item, replaceLabels);
+  m_infoProviders.GetPlayerInfoProvider().InitCurrentItem(m_currentFile.get());
 }
 
 void CGUIInfoManager::SetCurrentItem(const CFileItem& item)

@@ -111,6 +111,7 @@
 #include "video/dialogs/GUIDialogAudioSettings.h"
 #include "video/dialogs/GUIDialogSubtitleSettings.h"
 #include "video/dialogs/GUIDialogVideoBookmarks.h"
+#include "video/dialogs/GUIDialogVideoScrub.h"
 #include "video/dialogs/GUIDialogVideoSettings.h"
 
 /* PVR related include Files */
@@ -256,6 +257,7 @@ void CGUIWindowManager::CreateWindows()
   Add(new CGUIDialogAudioSettings);
   Add(new CGUIDialogSubtitleSettings);
   Add(new CGUIDialogVideoBookmarks);
+  Add(new CGUIDialogVideoScrub);
   // Don't add the filebrowser dialog - it's created and added when it's needed
   Add(new CGUIDialogNetworkSetup);
   Add(new CGUIDialogMediaSource);
