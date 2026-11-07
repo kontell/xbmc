@@ -9,7 +9,9 @@
 #include "FileItemList.h"
 #include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
+#include "music/Album.h"
 #include "music/MusicDatabase.h"
+#include "music/Song.h"
 #include "settings/AdvancedSettings.h"
 
 #include <gtest/gtest.h>
@@ -87,4 +89,59 @@ TEST_F(TestMusicDatabase, CommitTransactionSucceedsWithoutAGUI)
   ASSERT_TRUE(m_db.ExecuteQuery("INSERT INTO discography VALUES (2, 'Album', '2026', 'release')"));
   EXPECT_TRUE(m_db.CommitTransaction());
   EXPECT_EQ("1", m_db.GetSingleValue("SELECT COUNT(*) FROM discography"));
+}
+
+namespace
+{
+constexpr const char* DATE_ADDED = "2020-01-02 03:04:05";
+
+// An album of one song, as the scanner hands it over
+CAlbum AlbumOfOneSong(const std::string& file)
+{
+  CSong song;
+  song.strTitle = "Song";
+  song.strFileName = file;
+  song.dateAdded.SetFromDBDateTime(DATE_ADDED);
+  CAlbum album;
+  album.strAlbum = "Album";
+  album.songs.push_back(song);
+  return album;
+}
+} // namespace
+
+TEST_F(TestMusicDatabase, APluginSongKeepsTheDateAddedItCarries)
+{
+  CAlbum album{AlbumOfOneSong("plugin://plugin.audio.test/album/1.mp3")};
+  ASSERT_TRUE(m_db.AddAlbum(album, -1));
+
+  EXPECT_EQ(DATE_ADDED, m_db.GetSingleValue("SELECT dateAdded FROM song"));
+  EXPECT_EQ(DATE_ADDED, m_db.GetSingleValue("SELECT dateAdded FROM album"));
+}
+
+TEST_F(TestMusicDatabase, UpdatingAPluginSongKeepsItsDateAdded)
+{
+  CAlbum album{AlbumOfOneSong("plugin://plugin.audio.test/album/1.mp3")};
+  ASSERT_TRUE(m_db.AddAlbum(album, -1));
+  CSong song;
+  ASSERT_TRUE(m_db.GetSong(album.songs[0].idSong, song));
+
+  song.iTimesPlayed = 1;
+  ASSERT_TRUE(m_db.UpdateSong(song));
+
+  EXPECT_EQ(DATE_ADDED, m_db.GetSingleValue("SELECT dateAdded FROM song"));
+}
+
+TEST_F(TestMusicDatabase, ASongFileIsDatedByTheFile)
+{
+  const std::string file{CSpecialProtocol::TranslatePath("special://temp/TestMusicDatabase.mp3")};
+  XFILE::CFile handle;
+  ASSERT_TRUE(handle.OpenForWrite(file, true));
+  handle.Close();
+  CAlbum album{AlbumOfOneSong(file)};
+
+  const bool added{m_db.AddAlbum(album, -1)};
+  XFILE::CFile::Delete(file);
+
+  ASSERT_TRUE(added);
+  EXPECT_NE(DATE_ADDED, m_db.GetSingleValue("SELECT dateAdded FROM song"));
 }
