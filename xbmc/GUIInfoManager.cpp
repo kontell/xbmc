@@ -8654,11 +8654,20 @@ constexpr std::array<InfoMap, 4> control_labels = {{
 ///     @return **True** if the player is in repeat one mode.
 ///     <p>
 ///   }
+///   \table_row3{   <b>`Playlist.HasHistory`</b>,
+///                  \anchor Playlist_HasHistory
+///                  _boolean_,
+///     @return **True** if the history of music playlists holds one that `Playlist.Restore` can
+///     put back.
+///     <p><hr>
+///     @skinning_v23 **[New Boolean Condition]** \link Playlist_HasHistory `Playlist.HasHistory`\endlink
+///     <p>
+///   }
 /// \table_end
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 7> playlist = {{
+constexpr std::array<InfoMap, 8> playlist = {{
     {"length",      PLAYLIST_LENGTH},
     {"position",    PLAYLIST_POSITION},
     {"random",      PLAYLIST_RANDOM},
@@ -8666,6 +8675,7 @@ constexpr std::array<InfoMap, 7> playlist = {{
     {"israndom",    PLAYLIST_ISRANDOM},
     {"isrepeat",    PLAYLIST_ISREPEAT},
     {"isrepeatone", PLAYLIST_ISREPEATONE},
+    {"hashistory",  PLAYLIST_HASHISTORY},
 }};
 // clang-format on
 

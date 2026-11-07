@@ -85,6 +85,7 @@ inline constexpr char MOVIE_TITLE[] = "DefaultMovieTitle.png";
 inline constexpr char MUSIC_ALBUMS[] = "DefaultMusicAlbums.png";
 inline constexpr char MUSIC_ARTISTS[] = "DefaultMusicArtists.png";
 inline constexpr char MUSIC_GENRES[] = "DefaultMusicGenres.png";
+inline constexpr char MUSIC_PLAYLIST_HISTORY[] = "DefaultMusicPlaylistHistory.png";
 inline constexpr char MUSIC_RECENTLY_ADDED[] = "DefaultMusicRecentlyAdded.png";
 inline constexpr char MUSIC_RECENTLY_PLAYED[] = "DefaultMusicRecentlyPlayed.png";
 inline constexpr char MUSIC_ROLES[] = "DefaultMusicRoles.png";
