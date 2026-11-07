@@ -2557,9 +2557,13 @@ bool CFileItem::IsResumable() const
 
     return ((total != watched) && (inprogress > 0 || watched != 0));
   }
+  else if (HasVideoInfoTag())
+  {
+    return GetVideoInfoTag()->GetResumePoint().IsPartWay();
+  }
   else
   {
-    return HasVideoInfoTag() && GetVideoInfoTag()->GetResumePoint().IsPartWay();
+    return HasMusicInfoTag() && GetMusicInfoTag()->GetResumePoint().IsPartWay();
   }
 }
 
