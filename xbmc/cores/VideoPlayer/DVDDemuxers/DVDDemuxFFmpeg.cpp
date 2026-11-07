@@ -1424,7 +1424,14 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double* startpts)
         if (!m_pInput->IsRealtime())
           m_pInput->Close();
         else
+        {
+          // a growing HLS playlist refuses a seek to its own end, so go to its last second
+          if (!m_checkTransportStream)
+            av_seek_frame(m_pFormatContext, m_seekStream,
+                          m_pFormatContext->duration + starttime - AV_TIME_BASE,
+                          AVSEEK_FLAG_BACKWARD);
           ret = 0;
+        }
       }
       else if (m_pInput->IsEOF())
         ret = 0;
