@@ -827,6 +827,10 @@ AVDictionary* CDVDDemuxFFmpeg::GetFFMpegOptionsFromInput()
   CURL url = m_pInput->GetURL();
   AVDictionary* options = nullptr;
 
+  // A recording plays from its start, also while its HLS playlist is still growing
+  if (input && input->GetItem().IsPVRRecording())
+    av_dict_set_int(&options, "live_start_index", 0, 0);
+
   // For a local file we need the following protocol whitelist
   if (url.GetProtocol().empty() || url.IsProtocol("file"))
     av_dict_set(&options, "protocol_whitelist", "file,http,https,tcp,tls,crypto", 0);
