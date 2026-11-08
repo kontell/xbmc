@@ -1034,8 +1034,8 @@ namespace XBMCAddon
       ///
       /// \ingroup python_InfoTagMusic
       /// @brief \python_func{ setChapters(chapters) }
-      /// Set the chapters of the music item. PAPlayer plays them in place of any the file has,
-      /// and an empty list clears them.
+      /// Set the chapters of the music item, kept in order of their start. PAPlayer plays them
+      /// in place of any the file has, and an empty list clears them.
       ///
       /// @param chapters           list - `[ (start, end, title) ]`, with start and end in seconds
       ///                           from the start of the file. A time that is not a finite

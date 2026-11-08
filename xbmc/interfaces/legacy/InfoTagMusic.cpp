@@ -17,6 +17,7 @@
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 
@@ -514,6 +515,7 @@ namespace XBMCAddon
         mark.endTimeMs = std::chrono::milliseconds(std::llround(end * 1000.0));
         mark.name = chapter.third();
       }
+      std::ranges::stable_sort(marks, {}, &ChapterDetails::startTimeMs);
       infoTag->SetChapterMarks(marks);
     }
   }

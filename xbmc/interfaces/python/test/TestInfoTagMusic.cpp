@@ -19,11 +19,11 @@
 
 using namespace std::chrono_literals;
 
-TEST(TestInfoTagMusic, SetChaptersStoresThemInMilliseconds)
+TEST(TestInfoTagMusic, SetChaptersStoresThemInMillisecondsInOrder)
 {
   MUSIC_INFO::CMusicInfoTag tag;
   XBMCAddon::xbmc::InfoTagMusic::setChaptersRaw(
-      &tag, {{0.0, 754.2504, "Opening Credits"}, {754.2504, 2311.0, "Chapter 1"}});
+      &tag, {{754.2504, 2311.0, "Chapter 1"}, {0.0, 754.2504, "Opening Credits"}});
 
   const auto& marks = tag.GetChapterMarks();
   ASSERT_EQ(2u, marks.size());
