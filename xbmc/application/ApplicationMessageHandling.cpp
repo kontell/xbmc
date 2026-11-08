@@ -612,10 +612,14 @@ bool CApplicationMessageHandling::OnMessage(const CGUIMessage& message)
         // (an item removed, inserted or moved), the item asked for is no longer the next one:
         // queued now, it would play behind the new one, which asks for a next of its own, or
         // in place of the item now listed there, whose details the start would then take.
+        // The player asks once per track, so it is told, and asks again for what is next now.
         if (playlistPlayer.GetCurrentPlaylist() != playlistId ||
             playlistPlayer.GetCurrentItemIdx() != current || iNext >= playlist.size() ||
             playlist[iNext] != nextEntry)
+        {
+          appPlayer->OnQueueNextItemUnanswered();
           return true;
+        }
       }
 
       // Don't queue if next media type is different from current one
