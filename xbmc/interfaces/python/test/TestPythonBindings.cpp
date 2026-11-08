@@ -134,6 +134,27 @@ li.getVideoInfoTag().setStudios(['a', None])
 )py"));
 }
 
+TEST_F(TestPythonBindings, VideoChaptersAsTuples)
+{
+  if (!s_pythonUp)
+    GTEST_SKIP() << "python runtime not initialized";
+  ASSERT_TRUE(s_mainImportOk);
+  EXPECT_TRUE(RunPy(R"py(
+import xbmcgui
+item = xbmcgui.ListItem('chapters', '', '', True)
+tag = item.getVideoInfoTag()
+tag.setChapters([(0.0, 67.0, 'One'), (67.0, 162, 'Two')])
+tag.setChapters([])
+for chapters in ([('0', 1.0, 'One')], [(float('nan'), 1.0, 'One')], [(10.0, 5.0, 'One')]):
+    try:
+        tag.setChapters(chapters)
+    except TypeError:
+        pass
+    else:
+        raise AssertionError('setChapters took %r' % (chapters,))
+)py"));
+}
+
 TEST_F(TestPythonBindings, BytesAsString)
 {
   if (!s_pythonUp)

@@ -10,6 +10,7 @@
 
 #include "SetInfoTag.h"
 #include "XBDateTime.h"
+#include "media/ChapterDetails.h"
 #include "media/MediaType.h"
 #include "utils/EmbeddedArt.h"
 #include "utils/Fanart.h"
@@ -380,6 +381,18 @@ public:
   void SetIsDefaultVideoVersion(bool isDefaultVideoVersion);
 
   /*!
+   * @brief Get this video's chapters.
+   * @return The chapters, or an empty list if none were set.
+   */
+  const std::vector<ChapterDetails>& GetChapterMarks() const { return m_chapters; }
+
+  /*!
+   * @brief Set this video's chapters. VideoPlayer plays them in place of any the file has.
+   * @param chapters The chapters, in order of their start.
+   */
+  void SetChapterMarks(std::vector<ChapterDetails> chapters);
+
+  /*!
    * @brief Set this videos's resume point.
    * @param timeInSeconds the time of the resume point
    * @param totalTimeInSeconds the total time of the video
@@ -485,6 +498,8 @@ private:
   bool m_hasVideoVersions{false};
   bool m_hasVideoExtras{false};
   bool m_isDefaultVideoVersion{false};
+
+  std::vector<ChapterDetails> m_chapters;
 
   bool m_override{false};
 };

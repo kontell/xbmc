@@ -2817,6 +2817,34 @@ namespace XBMCAddon
       void setAvailableFanart(const std::vector<Properties>& images);
 #endif
 
+#ifdef DOXYGEN_SHOULD_USE_THIS
+      ///
+      /// \ingroup python_InfoTagVideo
+      /// @brief \python_func{ setChapters(chapters) }
+      /// Set the chapters of the video item, kept in order of their start. VideoPlayer plays
+      /// them in place of any the file has, and an empty list clears them.
+      ///
+      /// @param chapters           list - `[ (start, end, title) ]`, with start and end in seconds
+      ///                           from the start of the file. A time that is not a finite
+      ///                           number, a start below 0 or an end before its start raises
+      ///                           TypeError, and the item's chapters stay as they were.
+      ///
+      ///
+      ///-----------------------------------------------------------------------
+      /// @python_v23 New function added.
+      ///
+      /// **Example:**
+      /// ~~~~~~~~~~~~~{.py}
+      /// ...
+      /// info_tag.setChapters([(0.0, 67.0, "Introduction"), (67.0, 162.0, "Series preview")])
+      /// ...
+      /// ~~~~~~~~~~~~~
+      ///
+      setChapters(...);
+#else
+      void setChapters(const std::vector<Tuple<double, double, std::string>>& chapters);
+#endif
+
 #ifndef SWIG
       static void setDbIdRaw(CVideoInfoTag* infoTag, int dbId);
       static void setUniqueIDRaw(CVideoInfoTag* infoTag,
@@ -2903,6 +2931,8 @@ namespace XBMCAddon
                                          int season = -1);
       static void setAvailableFanartRaw(CVideoInfoTag* infoTag,
                                         const std::vector<Properties>& images);
+      static void setChaptersRaw(CVideoInfoTag* infoTag,
+                                 const std::vector<Tuple<double, double, std::string>>& chapters);
 #endif
     };
   }
