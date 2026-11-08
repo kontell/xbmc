@@ -966,6 +966,20 @@ void PAPlayer::OnNothingToQueueNotify()
   m_isFinished = true;
 }
 
+void PAPlayer::OnQueueNextItemUnanswered()
+{
+  std::unique_lock lock(m_streamsLock);
+  if (m_isFinished || m_streams.size() > 1)
+    return;
+
+  // A track asks once, at its prepare point or at its end. One past its prepare point asks
+  // again on the next pass; one that has run out meanwhile is asked for now.
+  if (m_streams.empty())
+    m_callback.OnQueueNextItem();
+  else
+    m_streams.front()->m_prepareTriggered = false;
+}
+
 bool PAPlayer::IsPlaying() const
 {
   return m_isPlaying;

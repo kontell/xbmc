@@ -152,6 +152,7 @@ public:
    */
   bool OnVideoDisplayAction(const CAction& action);
   void OnNothingToQueueNotify();
+  void OnQueueNextItemUnanswered();
   void Pause();
   bool QueueNextFile(const CFileItem &file);
   void Seek(bool bPlus = true, bool bLargeStep = false, bool bChapterOverride = false);

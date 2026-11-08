@@ -66,7 +66,9 @@ CPluginDirectory::~CPluginDirectory(void)
 {
 }
 
-bool CPluginDirectory::StartScript(const CURL& url, bool resume)
+bool CPluginDirectory::StartScript(const CURL& url,
+                                   bool resume,
+                                   std::chrono::milliseconds quietTime /* = {} */)
 {
   ADDON::AddonPtr addon;
   // try the plugin type first, and if not found, try an unknown type
@@ -96,7 +98,7 @@ bool CPluginDirectory::StartScript(const CURL& url, bool resume)
     return false;
 
   // run the script
-  return RunScript(this, addon, url, resume);
+  return RunScript(this, addon, url, resume, quietTime);
 }
 
 bool CPluginDirectory::GetResolvedPluginResult(CFileItem& resultItem)
@@ -140,12 +142,15 @@ bool CPluginDirectory::GetResolvedPluginResult(CFileItem& resultItem)
   return true;
 }
 
-bool CPluginDirectory::GetPluginResult(const std::string& strPath, CFileItem &resultItem, bool resume)
+bool CPluginDirectory::GetPluginResult(const std::string& strPath,
+                                       CFileItem& resultItem,
+                                       bool resume,
+                                       std::chrono::milliseconds quietTime /* = {} */)
 {
   CURL url(strPath);
   CPluginDirectory newDir;
 
-  bool success = newDir.StartScript(url, resume);
+  bool success = newDir.StartScript(url, resume, quietTime);
 
   if (success)
   { // update the play path and metadata, saving the old one as needed

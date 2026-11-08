@@ -632,6 +632,13 @@ void CApplicationPlayer::OnNothingToQueueNotify()
     player->OnNothingToQueueNotify();
 }
 
+void CApplicationPlayer::OnQueueNextItemUnanswered()
+{
+  std::shared_ptr<IPlayer> player = GetInternal();
+  if (player)
+    player->OnQueueNextItemUnanswered();
+}
+
 void CApplicationPlayer::GetVideoStreamInfo(int streamId, VideoStreamInfo& info) const
 {
   const std::shared_ptr<const IPlayer> player = GetInternal();

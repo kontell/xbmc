@@ -37,9 +37,15 @@ public:
    \param event the CEvent to wait on.
    \param displaytime the time in ms to wait prior to showing the busy dialog (defaults to 100ms)
    \param allowCancel whether the user can cancel the wait, defaults to true.
+   \param quietTime how long the caller can afford to wait before anything is shown: for that
+   long the GUI runs on as it is, rendering and taking input with no dialog up, and the busy
+   dialog follows at once when the wait outlasts it (defaults to none).
    \return true if the event completed, false if cancelled.
    */
-  static bool WaitOnEvent(CEvent& event, unsigned int displaytime = 100, bool allowCancel = true);
+  static bool WaitOnEvent(CEvent& event,
+                          unsigned int displaytime = 100,
+                          bool allowCancel = true,
+                          std::chrono::milliseconds quietTime = {});
 
   //! \brief How a wait on an event ended.
   enum class WaitResult
@@ -66,7 +72,8 @@ private:
   static WaitResult DoWaitOnEvent(CEvent& event,
                                   unsigned int displaytime,
                                   bool allowCancel,
-                                  std::optional<std::chrono::milliseconds> timeout);
+                                  std::optional<std::chrono::milliseconds> timeout,
+                                  std::chrono::milliseconds quietTime = {});
 
   CGUIDialogBusy();
   ~CGUIDialogBusy() override;

@@ -34,6 +34,7 @@ public:
   bool OpenFile(const CFileItem& file, const CPlayerOptions &options) override;
   bool QueueNextFile(const CFileItem &file) override;
   void OnNothingToQueueNotify() override;
+  void OnQueueNextItemUnanswered() override;
   bool CloseFile(bool reopen = false) override;
   bool IsPlaying() const override;
   void Pause() override;
