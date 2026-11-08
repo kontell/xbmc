@@ -290,6 +290,7 @@ void CPlayListHistory::Add(CPlayListHistoryEntry entry, int keep)
 
 void CPlayListHistory::Trim(int keep)
 {
+  std::unique_lock lock(m_section);
   const size_t size = static_cast<size_t>(std::max(0, keep));
   if (m_entries.size() <= size)
     return;

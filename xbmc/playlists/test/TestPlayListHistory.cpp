@@ -374,15 +374,15 @@ TEST_F(TestPlayListHistory, AddFromTwoThreadsKeepsEveryEntry)
   PLAYLIST::CPlayListHistory history(m_folder);
   const auto add = [&](double from)
   {
-    for (int i = 0; i < PLAYLIST::CPlayListHistory::MAX_ENTRIES / 2; ++i)
-      history.Add(
-          PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, from + 10.0 * i, false));
+    for (int i = 0; i < 10; ++i)
+      history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, from + 10.0 * i, false),
+                  20);
   };
   std::thread other(add, 1000.0);
   add(0.0);
   other.join();
 
-  EXPECT_EQ(history.Entries().size(), static_cast<size_t>(PLAYLIST::CPlayListHistory::MAX_ENTRIES));
+  EXPECT_EQ(history.Entries().size(), 20u);
 }
 
 TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheCueSheetSongThatWasSaved)
