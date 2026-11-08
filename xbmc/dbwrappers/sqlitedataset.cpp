@@ -427,19 +427,17 @@ int SqliteDatabase::postconnect()
 
   // With write-ahead logging a commit appends to the log, where a rollback journal is a file
   // created, synced and removed for every transaction. WAL needs every connection on one host,
-  // which a network filesystem can't promise, so a database there keeps its journal.
-  if (KODI::PLATFORM::FILESYSTEM::is_network_filesystem(host))
-  {
-    CLog::Log(LOGINFO, "SqliteDatabase: {} is on a network filesystem and keeps its journal mode",
-              db);
-    return DB_COMMAND_OK;
-  }
+  // which a network filesystem can't promise, so a database there uses the rollback journal.
+  // The mode is kept in the file, so a database that was on local storage is put back.
+  const bool network = KODI::PLATFORM::FILESYSTEM::is_network_filesystem(host);
+  const char* pragma = network ? "PRAGMA journal_mode=DELETE" : "PRAGMA journal_mode=WAL";
+  const char* wanted = network ? "delete" : "wal";
 
   // The pragma answers with the mode in effect, which is the old one when the change is refused
   std::string mode;
   std::string error;
   sqlite3_stmt* stmt{nullptr};
-  if (sqlite3_prepare_v2(getHandle(), "PRAGMA journal_mode=WAL", -1, &stmt, nullptr) == SQLITE_OK &&
+  if (sqlite3_prepare_v2(getHandle(), pragma, -1, &stmt, nullptr) == SQLITE_OK &&
       sqlite3_step(stmt) == SQLITE_ROW)
   {
     if (const unsigned char* text{sqlite3_column_text(stmt, 0)})
@@ -451,8 +449,11 @@ int SqliteDatabase::postconnect()
 
   if (!error.empty())
     CLog::Log(LOGWARNING, "SqliteDatabase: can't set the journal mode of {}: {}", db, error);
-  else if (mode != "wal")
+  else if (mode != wanted)
     CLog::Log(LOGWARNING, "SqliteDatabase: {} keeps journal mode {}", db, mode);
+  else if (network)
+    CLog::Log(LOGINFO, "SqliteDatabase: {} is on a network filesystem and uses its rollback journal",
+              db);
 
   return DB_COMMAND_OK;
 }
