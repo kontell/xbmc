@@ -25,6 +25,7 @@
 #include "utils/URIUtils.h"
 #include "video/VideoInfoTag.h"
 
+#include <chrono>
 #include <fstream>
 #include <tuple>
 #include <utility>
@@ -1540,4 +1541,33 @@ TEST(TestFileItemList, AddSortMethodLeavesTheSortOrderToTheView)
   ASSERT_EQ(2u, details.size());
   for (const auto& sort : details)
     EXPECT_EQ(SortOrder::NONE, sort.m_sortDescription.sortOrder);
+}
+
+TEST(TestFileItem, UpdateInfoKeepsTheItemsChaptersWhenTheOtherHasNone)
+{
+  const auto chapter = [](const char* name, int startMs, int endMs)
+  {
+    ChapterDetails details;
+    details.name = name;
+    details.startTimeMs = std::chrono::milliseconds(startMs);
+    details.endTimeMs = std::chrono::milliseconds(endMs);
+    return details;
+  };
+
+  CFileItem item("/movies/film.strm", false);
+  item.GetVideoInfoTag()->SetChapterMarks({chapter("One", 0, 60000), chapter("Two", 60000, 120000)});
+
+  // as a library update hands the playing item the database's tag
+  CFileItem fromLibrary("/movies/film.strm", false);
+  fromLibrary.GetVideoInfoTag()->SetTitle("Film");
+  item.UpdateInfo(fromLibrary);
+  EXPECT_EQ("Film", item.GetVideoInfoTag()->GetTitle());
+  ASSERT_EQ(2u, item.GetVideoInfoTag()->GetChapterMarks().size());
+  EXPECT_EQ("Two", item.GetVideoInfoTag()->GetChapterMarks()[1].name);
+
+  CFileItem resolved("/movies/film.strm", false);
+  resolved.GetVideoInfoTag()->SetChapterMarks({chapter("Whole", 0, 180000)});
+  item.UpdateInfo(resolved);
+  ASSERT_EQ(1u, item.GetVideoInfoTag()->GetChapterMarks().size());
+  EXPECT_EQ("Whole", item.GetVideoInfoTag()->GetChapterMarks()[0].name);
 }
