@@ -11,6 +11,7 @@
 #include "XBDateTime.h"
 #include "threads/CriticalSection.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -120,6 +121,9 @@ public:
   void Trim(int keep);
 
   bool HasEntries() const;
+
+  /*! \brief The newest entry, if there is one. */
+  std::optional<CPlayListHistoryEntry> Newest() const;
 
   /*! \brief The entries, newest first. A copy: the history is written from other threads. */
   std::vector<CPlayListHistoryEntry> Entries() const;

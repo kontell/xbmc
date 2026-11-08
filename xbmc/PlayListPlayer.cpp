@@ -54,6 +54,7 @@
 #include "video/VideoFileItemClassify.h"
 
 #include <mutex>
+#include <optional>
 
 using namespace KODI::MESSAGING;
 using namespace KODI::VIDEO;
@@ -922,7 +923,8 @@ void CPlayListPlayer::RecordReplacedMusicPlaylist()
   if (RecordMusicPlaylist() && appPlayer->IsPlaying())
   {
     std::unique_lock lock(m_replacedPlaylistSection);
-    m_replacedPlaylist = std::make_unique<CPlayListHistoryEntry>(m_history->Entries().front());
+    if (std::optional<CPlayListHistoryEntry> newest = m_history->Newest())
+      m_replacedPlaylist = std::make_unique<CPlayListHistoryEntry>(std::move(*newest));
   }
 }
 

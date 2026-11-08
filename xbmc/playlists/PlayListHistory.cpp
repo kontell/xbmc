@@ -305,6 +305,14 @@ bool CPlayListHistory::HasEntries() const
   return !m_entries.empty();
 }
 
+std::optional<CPlayListHistoryEntry> CPlayListHistory::Newest() const
+{
+  std::unique_lock lock(m_section);
+  if (m_entries.empty())
+    return std::nullopt;
+  return m_entries.front();
+}
+
 std::vector<CPlayListHistoryEntry> CPlayListHistory::Entries() const
 {
   std::unique_lock lock(m_section);
