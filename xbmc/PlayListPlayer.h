@@ -12,6 +12,7 @@
 #include "messaging/IMessageTarget.h"
 #include "playlists/PlayListTypes.h"
 
+#include <atomic>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -214,7 +215,7 @@ protected:
   std::chrono::time_point<std::chrono::steady_clock> m_failedSongsStart;
   int m_iCurrentSong;
   Id m_iCurrentPlayList{Id::TYPE_NONE};
-  bool m_musicPlaylistLive{false};
+  std::atomic<bool> m_musicPlaylistLive{false};
   bool m_pauseWhenStarted{false};
   std::unique_ptr<CPlayListHistory> m_history;
   CPlayList* m_PlaylistMusic;

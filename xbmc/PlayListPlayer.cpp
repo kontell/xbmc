@@ -855,9 +855,9 @@ void CPlayListPlayer::Clear()
 
 void CPlayListPlayer::RecordMusicPlaylist(bool playedThrough)
 {
-  if (!m_musicPlaylistLive)
+  // Taken, not read and then cleared: ClearPlaylist() comes in from add-on threads too
+  if (!m_musicPlaylistLive.exchange(false))
     return;
-  m_musicPlaylistLive = false;
   if (g_partyModeManager.IsEnabled())
     return;
 

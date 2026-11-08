@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <string>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -221,8 +222,9 @@ TEST_F(TestPlayListHistory, AddKeepsThePlaylistAndPersistsIt)
   ASSERT_EQ(history.Entries().size(), 1u);
 
   PLAYLIST::CPlayListHistory reloaded(m_folder);
-  ASSERT_EQ(reloaded.Entries().size(), 1u);
-  const PLAYLIST::CPlayListHistoryEntry& entry = reloaded.Entries().front();
+  const std::vector<PLAYLIST::CPlayListHistoryEntry> entries = reloaded.Entries();
+  ASSERT_EQ(entries.size(), 1u);
+  const PLAYLIST::CPlayListHistoryEntry& entry = entries.front();
   EXPECT_EQ(entry.position, 1);
   EXPECT_DOUBLE_EQ(entry.seconds, 42.5);
   EXPECT_FALSE(entry.playedThrough);
@@ -353,8 +355,9 @@ TEST_F(TestPlayListHistory, AddKeepsThePartOfTheFileEachCueSheetTrackPlays)
   history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 12.0, false));
 
   PLAYLIST::CPlayListHistory reloaded(m_folder);
-  ASSERT_EQ(reloaded.Entries().size(), 1u);
-  const auto& tracks = reloaded.Entries().front().tracks;
+  const std::vector<PLAYLIST::CPlayListHistoryEntry> entries = reloaded.Entries();
+  ASSERT_EQ(entries.size(), 1u);
+  const auto& tracks = entries.front().tracks;
   ASSERT_EQ(tracks.size(), 3u);
   EXPECT_EQ(tracks[0].startOffset, 0);
   EXPECT_EQ(tracks[0].endOffset, 40000);
@@ -362,6 +365,25 @@ TEST_F(TestPlayListHistory, AddKeepsThePartOfTheFileEachCueSheetTrackPlays)
   EXPECT_EQ(tracks[1].endOffset, 80000);
   EXPECT_EQ(tracks[2].startOffset, 80000);
   EXPECT_EQ(tracks[2].endOffset, 0);
+}
+
+TEST_F(TestPlayListHistory, AddFromTwoThreadsKeepsEveryEntry)
+{
+  PLAYLIST::CPlayList playlist;
+  playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
+
+  PLAYLIST::CPlayListHistory history(m_folder);
+  const auto add = [&](double from)
+  {
+    for (int i = 0; i < PLAYLIST::CPlayListHistory::MAX_ENTRIES / 2; ++i)
+      history.Add(
+          PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, from + 10.0 * i, false));
+  };
+  std::thread other(add, 1000.0);
+  add(0.0);
+  other.join();
+
+  EXPECT_EQ(history.Entries().size(), static_cast<size_t>(PLAYLIST::CPlayListHistory::MAX_ENTRIES));
 }
 
 TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheCueSheetSongThatWasSaved)

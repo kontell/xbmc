@@ -652,7 +652,7 @@ bool CPlayerGUIInfo::GetBool(bool& value,
       return true;
     }
     case PLAYLIST_HASHISTORY:
-      value = !CServiceBroker::GetPlaylistPlayer().GetHistory().Entries().empty();
+      value = CServiceBroker::GetPlaylistPlayer().GetHistory().HasEntries();
       return true;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////

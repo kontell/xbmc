@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <map>
+#include <mutex>
 
 namespace KODI::PLAYLIST
 {
@@ -224,6 +225,7 @@ CPlayListHistory::CPlayListHistory(std::string folder)
 
 void CPlayListHistory::ReInit(std::string folder)
 {
+  std::unique_lock lock(m_section);
   m_entries.clear();
   m_file = folder.empty() ? "" : URIUtils::AddFileToFolder(folder, HISTORY_FILE);
   if (!m_file.empty())
@@ -275,6 +277,8 @@ void CPlayListHistory::Add(CPlayListHistoryEntry entry)
 {
   if (entry.tracks.empty())
     return;
+
+  std::unique_lock lock(m_section);
   if (!m_entries.empty() && entry.IsRepeatOf(m_entries.front()))
     return;
 
@@ -282,6 +286,18 @@ void CPlayListHistory::Add(CPlayListHistoryEntry entry)
   if (m_entries.size() > MAX_ENTRIES)
     m_entries.resize(MAX_ENTRIES);
   Save();
+}
+
+bool CPlayListHistory::HasEntries() const
+{
+  std::unique_lock lock(m_section);
+  return !m_entries.empty();
+}
+
+std::vector<CPlayListHistoryEntry> CPlayListHistory::Entries() const
+{
+  std::unique_lock lock(m_section);
+  return m_entries;
 }
 
 bool CPlayListHistory::Load()

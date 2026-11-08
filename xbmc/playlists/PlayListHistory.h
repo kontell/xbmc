@@ -9,6 +9,7 @@
 #pragma once
 
 #include "XBDateTime.h"
+#include "threads/CriticalSection.h"
 
 #include <string>
 #include <utility>
@@ -113,12 +114,16 @@ public:
   /*! \brief Put an entry at the front of the history, unless it repeats the newest one. */
   void Add(CPlayListHistoryEntry entry);
 
-  const std::vector<CPlayListHistoryEntry>& Entries() const { return m_entries; }
+  bool HasEntries() const;
+
+  /*! \brief The entries, newest first. A copy: the history is written from other threads. */
+  std::vector<CPlayListHistoryEntry> Entries() const;
 
 private:
   bool Load();
   bool Save() const;
 
+  mutable CCriticalSection m_section;
   std::string m_file;
   std::vector<CPlayListHistoryEntry> m_entries;
 };
