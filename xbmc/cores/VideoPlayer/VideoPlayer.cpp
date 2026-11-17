@@ -3112,6 +3112,9 @@ void CVideoPlayer::HandleMessages()
 
       m_SelectionStreams.Clear(StreamType::NONE, STREAM_SOURCE_NONE);
 
+      // a speed asked of the file being closed does not carry over: the next starts at normal speed
+      m_messenger.Flush(CDVDMsg::PLAYER_SETSPEED);
+
       Prepare();
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_SEEK) &&
@@ -3475,6 +3478,7 @@ void CVideoPlayer::HandleMessages()
     {
       const auto msg = std::static_pointer_cast<CDVDMsgPlayerSetSpeed>(pMsg);
       const int speed = msg->GetSpeed();
+      const int previousSpeed = m_playSpeed;
 
       // correct our current clock, as it would start going wrong otherwise
       if (m_State.timestamp > 0)
@@ -3546,13 +3550,34 @@ void CVideoPlayer::HandleMessages()
 
       m_processInfo->SetFrameAdvance(false);
 
+      // A change between playing speeds reaches the audio as a rate, which the audio already
+      // queued does not get: the clock changes speed when the new rate is heard, so that the
+      // picture keeps to the sound.
+      const bool playingBefore = m_playSpeed != DVD_PLAYSPEED_PAUSE && !wasFFRW;
+      const bool playingAfter = speed == DVD_PLAYSPEED_NORMAL || isTempoSpeed;
+      const double rateDelay = playingBefore && playingAfter && speed != m_playSpeed
+                                   ? m_VideoPlayerAudio->GetRateChangeDelay()
+                                   : 0.0;
+      // the speed the clock already runs at, or has queued, leaves it alone
+      const bool repeated = speed == m_playSpeed && m_streamPlayerSpeed == speed;
+
       m_playSpeed = speed;
 
       m_caching = CACHESTATE_DONE;
-      m_clock.SetSpeed(speed);
+      if (rateDelay > 0.0)
+        m_clock.SetSpeedAt(speed, m_clock.GetAbsoluteClock() + rateDelay);
+      else if (!repeated)
+        m_clock.SetSpeed(speed);
       m_VideoPlayerAudio->SetSpeed(speed);
       m_VideoPlayerVideo->SetSpeed(speed);
       m_streamPlayerSpeed = speed;
+
+      CLog::Log(LOGDEBUG, "CVideoPlayer::HandleMessages - speed {:.3f} to {:.3f}{}, clock {}",
+                static_cast<double>(previousSpeed) / DVD_PLAYSPEED_NORMAL,
+                static_cast<double>(speed) / DVD_PLAYSPEED_NORMAL, isTempoSpeed ? " (tempo)" : "",
+                repeated          ? "unchanged"
+                : rateDelay > 0.0 ? StringUtils::Format("in {} ms", DVD_TIME_TO_MSEC(rateDelay))
+                                  : "now");
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_FRAME_ADVANCE))
     {
@@ -4205,7 +4230,7 @@ void CVideoPlayer::SetSpeed(float speed)
 
   float currentSpeed = m_processInfo->GetNewSpeed();
   m_processInfo->SetNewSpeed(speed);
-  if (iSpeed != currentSpeed)
+  if (speed != currentSpeed)
   {
     if (iSpeed == DVD_PLAYSPEED_NORMAL)
       m_callback.OnPlayBackResumed();
@@ -4225,12 +4250,19 @@ void CVideoPlayer::SetSpeed(float speed)
   }
 }
 
+int CVideoPlayer::TempoToSpeed(float tempo)
+{
+  // rounded: a float is not the decimal it stands for
+  return static_cast<int>(std::lround(tempo * DVD_PLAYSPEED_NORMAL));
+}
+
 void CVideoPlayer::SetTempo(float tempo)
 {
-  tempo = floor(tempo * 100.0f + 0.5f) / 100.0f;
+  // three decimals, and the tempo read back is the one the player will take
+  const int speed = TempoToSpeed(tempo);
+  tempo = static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL;
   if (m_processInfo->IsTempoAllowed(tempo))
   {
-    int speed = tempo * DVD_PLAYSPEED_NORMAL;
     CDVDMsgPlayerSetSpeed::SpeedParams params = { speed, true };
     m_messenger.Put(std::make_shared<CDVDMsgPlayerSetSpeed>(params));
 
@@ -5969,8 +6001,10 @@ void CVideoPlayer::UpdatePlayState(double timeout)
 
 bool CVideoPlayer::CanTempo()
 {
-  return CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
-      CSettings::SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK);
+  // With the display clock the engine's sync servo resamples the audio to the clock;
+  // without it CVideoPlayerAudio asks the stream for the rate. Either way the clock
+  // runs at the tempo and the rest of the player follows the clock.
+  return true;
 }
 
 int64_t CVideoPlayer::GetUpdatedTime()
