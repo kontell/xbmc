@@ -600,11 +600,11 @@ void CApplicationPlayer::SetSpeed(float speed)
     player->SetSpeed(speed);
 }
 
-void CApplicationPlayer::SetTempo(float tempo)
+void CApplicationPlayer::SetTempo(float tempo, bool correction)
 {
   std::shared_ptr<IPlayer> player = GetInternal();
   if (player)
-    player->SetTempo(tempo);
+    player->SetTempo(tempo, correction);
 }
 
 void CApplicationPlayer::FrameAdvance(int frames)
@@ -1061,6 +1061,15 @@ double CApplicationPlayer::GetPlayTempoDecimal() const
 {
   // a float is not the decimal it stands for: 1.03 is 1.0299999713897705
   return std::round(static_cast<double>(GetPlayTempo()) * 1000.0) / 1000.0;
+}
+
+float CApplicationPlayer::GetShownTempo() const
+{
+  std::shared_ptr<const IPlayer> player = GetInternal();
+  if (player)
+    return CDataCacheCore::GetInstance().GetShownTempo();
+  else
+    return 0;
 }
 
 bool CApplicationPlayer::SupportsTempo() const

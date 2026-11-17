@@ -550,7 +550,8 @@ JSONRPC_STATUS CPlayerOperations::SetTempo(const std::string& method,
         return FailedToExecute;
 
       if (parameterObject["tempo"].isDouble())
-        appPlayer->SetTempo(parameterObject["tempo"].asFloat());
+        appPlayer->SetTempo(parameterObject["tempo"].asFloat(),
+                            parameterObject["correction"].asBoolean());
       else if (parameterObject["tempo"].isString())
       {
         if (parameterObject["tempo"].asString().compare("increment") == 0)
