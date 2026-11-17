@@ -38,6 +38,7 @@
 #include "music/MusicLibraryQueue.h"
 #include "network/Network.h" //! @todo Remove me
 #include "network/NetworkServices.h" //! @todo Remove me
+#include "playlists/PlayListHistory.h"
 #include "pvr/PVRManager.h" //! @todo Remove me
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
@@ -424,6 +425,7 @@ void CProfileManager::FinalizeLoadProfile()
   contextMenuManager.Init();
 
   favouritesManager.ReInit(GetProfileUserDataFolder());
+  playlistManager.GetHistory().ReInit(GetProfileUserDataFolder());
 
   // Start these operations only when a profile is loaded, not on the login screen
   if (!m_profileLoadedForLogin ||
