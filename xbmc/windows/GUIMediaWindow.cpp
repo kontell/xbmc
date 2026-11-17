@@ -847,7 +847,18 @@ bool CGUIMediaWindow::Update(const std::string &strDirectory, bool updateFilterP
   if (CanContainFilter(pathNoFilter) && CURL(pathNoFilter).HasOption("filter"))
     pathNoFilter = RemoveParameterFromPath(pathNoFilter, "filter");
 
-  if (!GetDirectory(pathNoFilter, *m_vecItems))
+  m_loadingDirectory = true;
+  const bool loaded = GetDirectory(pathNoFilter, *m_vecItems);
+  m_loadingDirectory = false;
+
+  if (m_refreshPending)
+  {
+    m_refreshPending = false;
+    CGUIMessage msg(GUI_MSG_NOTIFY_ALL, GetID(), 0, GUI_MSG_UPDATE);
+    CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg, GetID());
+  }
+
+  if (!loaded)
   {
     CLog::Log(LOGERROR, "CGUIMediaWindow::GetDirectory({}) failed", CURL(path).GetRedacted());
 
@@ -966,6 +977,15 @@ bool CGUIMediaWindow::Refresh(bool clearCache /* = false */)
   std::string strCurrentDirectory = m_vecItems->GetPath();
   if (strCurrentDirectory == "?")
     return false;
+
+  // A load waits in a busy dialog that still dispatches GUI messages. A second load started
+  // from there would share the first one's directory in m_rootDir and mix the two listings.
+  if (m_loadingDirectory)
+  {
+    CLog::Log(LOGDEBUG, "CGUIMediaWindow::Refresh - held back until the current load ends");
+    m_refreshPending = true;
+    return true;
+  }
 
   if (clearCache)
     RemoveDiscCache(strCurrentDirectory);
