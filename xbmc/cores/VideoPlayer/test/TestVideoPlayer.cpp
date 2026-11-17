@@ -67,11 +67,10 @@ public:
   }
   bool InvokeEvaluateIsStreaming() const { return EvaluateIsStreaming(); }
 
-  static CVideoPlayer::SpeedChangeNotifications InvokeGetSpeedChangeNotifications(int previousSpeed,
-                                                                                  int newSpeed,
-                                                                                  bool isTempo)
+  static CVideoPlayer::SpeedChangeNotifications InvokeGetSpeedChangeNotifications(
+      int previousSpeed, int newSpeed, bool isTempo, bool previousIsTempo = false)
   {
-    return GetSpeedChangeNotifications(previousSpeed, newSpeed, isTempo);
+    return GetSpeedChangeNotifications(previousSpeed, previousIsTempo, newSpeed, isTempo);
   }
 
   static int InvokeTempoToSpeed(float tempo) { return TempoToSpeed(tempo); }
@@ -691,6 +690,30 @@ TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_RWFromPause)
       DVD_PLAYSPEED_PAUSE, -2 * DVD_PLAYSPEED_NORMAL, false);
   EXPECT_TRUE(notifications.resumed);
   EXPECT_TRUE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_TrickplayToTempoAtTheSameSpeed)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      2 * DVD_PLAYSPEED_NORMAL, 2 * DVD_PLAYSPEED_NORMAL, true, false);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_TRUE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_TempoToTrickplayAtTheSameSpeed)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      2 * DVD_PLAYSPEED_NORMAL, 2 * DVD_PLAYSPEED_NORMAL, false, true);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_TRUE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_NormalSpeedFromATempoOfOne)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      DVD_PLAYSPEED_NORMAL, DVD_PLAYSPEED_NORMAL, false, true);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_FALSE(notifications.speedChanged);
 }
 
 TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_SpeedChangeWhilePlaying)

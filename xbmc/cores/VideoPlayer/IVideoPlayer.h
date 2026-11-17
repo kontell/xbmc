@@ -109,6 +109,8 @@ public:
   bool OpenStream(CDVDStreamInfo hints) override = 0;
   void CloseStream(bool bWaitForBuffers) override = 0;
   virtual void SetSpeed(int speed) = 0;
+  //! A tempo is a speed the audio plays at, as it does at normal speed; trickplay is not.
+  virtual void SetSpeed(int speed, bool isTempo) { SetSpeed(speed); }
   virtual void Flush(bool sync) = 0;
   bool AcceptsData() const override = 0;
   virtual bool HasData() const = 0;
