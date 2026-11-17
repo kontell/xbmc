@@ -309,6 +309,8 @@ bool CInputStreamAddon::GetTimes(Times &times)
     return false;
 
   INPUTSTREAM_TIMES i_times{};
+  // an add-on built against an older API leaves this one, so unknown is what it then reads
+  i_times.ptsPresentationOffset = DVD_NOPTS_VALUE;
 
   if (m_ifc.inputstream->toAddon->get_times(m_ifc.inputstream, &i_times))
   {
@@ -316,6 +318,7 @@ bool CInputStreamAddon::GetTimes(Times &times)
     times.ptsEnd = i_times.ptsEnd;
     times.ptsStart = i_times.ptsStart;
     times.startTime = i_times.startTime;
+    times.ptsPresentationOffset = i_times.ptsPresentationOffset;
     return true;
   }
   return false;

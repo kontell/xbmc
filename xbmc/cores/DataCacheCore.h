@@ -13,6 +13,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -188,6 +189,20 @@ public:
   void SetPlayTimes(
       time_t start, int64_t current, int64_t min, int64_t max, bool moving = true);
   void GetPlayTimes(time_t &start, int64_t &current, int64_t &min, int64_t &max);
+
+  /*!
+   * \brief What to add to the play time for the position on the stream's own clock
+   *
+   * The presentation timestamp the container carries, which every player of the same
+   * broadcast or live stream shares, where the play time counts from this playback's start.
+   * Not set when the player cannot tell.
+   */
+  void SetPresentationTimeOffset(std::optional<int64_t> offsetMs);
+
+  /*!
+   * \brief The position on the stream's own clock, in ms, or nothing when the player cannot tell
+   */
+  std::optional<int64_t> GetPresentationTime();
 
   /*!
    * \brief Get the start time
@@ -407,5 +422,9 @@ protected:
     int64_t m_timeMin;
     /*! When m_time was stored */
     std::chrono::steady_clock::time_point m_timeStamp;
+
+
+    /*! ms to add to m_time for the position on the stream's own clock, when known */
+    std::optional<int64_t> m_presentationOffset;
   } m_timeInfo = {};
 };
