@@ -30,7 +30,10 @@ namespace XBMCAddon
        * We are ASS-U-MEing that this construction is happening
        *  within the context of a Python call. This way we can
        *  store off the PyThreadState to later verify that we're
-       *  handling callbacks in the appropriate thread.
+       *  handling callbacks in the appropriate thread. The same
+       *  PyThreadState is the key the callbacks are queued under, so
+       *  that thread's pump (PythonLanguageHook::MakePendingCalls)
+       *  finds them without looking at any other thread's.
        */
       PythonCallbackHandler();
       bool isStateOk(AddonClass* obj) override;
