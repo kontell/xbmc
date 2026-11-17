@@ -50,6 +50,13 @@ space_info space(const std::string& path, std::error_code& ec)
   return sp;
 }
 
+bool is_network_filesystem(const std::string& path)
+{
+  wchar_t volume[MAX_PATH + 1];
+  return GetVolumePathNameW(win::ToW(path).c_str(), volume, MAX_PATH + 1) &&
+         GetDriveTypeW(volume) == DRIVE_REMOTE;
+}
+
 namespace
 {
 std::wstring temp_directory_path_w(std::error_code& ec)
