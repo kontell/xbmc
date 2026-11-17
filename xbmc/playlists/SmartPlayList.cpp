@@ -1069,7 +1069,12 @@ std::string CSmartPlaylistRule::FormatWhereClause(const std::string &negate, con
     if (m_field == static_cast<int>(Field::GENRE))
       query = negate + FormatLinkQuery("genre", "genre", MEDIA::TYPE::TV_SHOW, (table + ".idShow").c_str(), parameter);
     else if (m_field == static_cast<int>(Field::TAG))
-      query = negate + FormatLinkQuery("tag", "tag", MEDIA::TYPE::TV_SHOW, (table + ".idShow").c_str(), parameter);
+      query = negate + " (" +
+              FormatLinkQuery("tag", "tag", MEDIA::TYPE::EPISODE,
+                              GetField(static_cast<int>(Field::ID), strType), parameter) +
+              " OR" +
+              FormatLinkQuery("tag", "tag", MEDIA::TYPE::TV_SHOW, table + ".idShow", parameter) +
+              ")";
     else if (m_field == static_cast<int>(Field::DIRECTOR))
       query = negate + FormatLinkQuery("director", "actor", MEDIA::TYPE::EPISODE,
                                        GetField(static_cast<int>(Field::ID), strType), parameter);
