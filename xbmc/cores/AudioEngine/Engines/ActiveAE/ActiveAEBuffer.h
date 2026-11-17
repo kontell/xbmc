@@ -128,6 +128,7 @@ public:
   bool Create(unsigned int totaltime) override;
   bool ProcessBuffers();
   float GetDelay();
+  float GetRateDelay();
   void Flush();
   void SetTempo(float tempo);
   float GetTempo() const;

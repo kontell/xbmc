@@ -115,7 +115,10 @@ public:
                           AEQuality quality,
                           float sublevel);
   bool HasInputLevel(int level);
+  // in the stream's own time
   float GetDelay();
+  // in output seconds, what has taken the ratio and is not yet mixed
+  float GetRateDelay();
   void Flush();
   void SetDrain(bool drain);
   bool IsDrained();
@@ -249,6 +252,12 @@ protected:
   int m_resampleMode;
   double m_resampleIntegral;
   double m_clockSpeed;
+  // The ratio the stream's owner asked for with SetResampleRatio(). The sync
+  // servo owns the ratio while it resamples (m_resampleMode); otherwise this
+  // one stands, across a flush and a re-configuration of the buffers.
+  double m_requestedResampleRatio;
+  // Runs while the output made at the previous requested ratio plays out.
+  XbmcThreads::EndTime<> m_ratioSettle;
   enum AVMatrixEncoding m_matrixEncoding;
   enum AVAudioServiceType m_audioServiceType;
   bool m_forceResampler;
