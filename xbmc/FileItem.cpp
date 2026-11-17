@@ -1389,11 +1389,14 @@ void CFileItem::UpdateInfo(const CFileItem& item,
     {
       if (m_videoInfoTag)
       {
-        // the database keeps no chapters, so a tag from it leaves the item's alone
+        // the database keeps no chapters or scrub previews, so a tag from it leaves the item's alone
         std::vector<ChapterDetails> chapters{m_videoInfoTag->GetChapterMarks()};
+        ScrubPreviews previews{m_videoInfoTag->GetScrubPreviews()};
         *m_videoInfoTag = *item.m_videoInfoTag;
         if (m_videoInfoTag->GetChapterMarks().empty())
           m_videoInfoTag->SetChapterMarks(std::move(chapters));
+        if (!m_videoInfoTag->GetScrubPreviews().HasPreviews())
+          m_videoInfoTag->SetScrubPreviews(std::move(previews));
       }
       else
         m_videoInfoTag = new CVideoInfoTag(*item.m_videoInfoTag);

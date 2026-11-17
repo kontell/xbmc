@@ -1548,6 +1548,10 @@ CGUIControl* CGUIControlFactory::Create(int parentID,
       GetInfoLabel(pControlNode, "imagefilter", imageFilter, parentID);
       icontrol->SetImageFilter(imageFilter);
 
+      GUIINFO::CGUIInfoLabel region;
+      GetInfoLabel(pControlNode, "region", region, parentID);
+      icontrol->SetRegionInfo(region);
+
       // Set diffuse filter
       GUIINFO::CGUIInfoLabel diffuseFilter;
       GetInfoLabel(pControlNode, "diffusefilter", diffuseFilter, parentID);

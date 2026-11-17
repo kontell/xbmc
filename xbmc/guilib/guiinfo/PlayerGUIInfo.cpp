@@ -34,6 +34,7 @@
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
+#include "video/VideoInfoTag.h"
 #include "windowing/WinSystem.h"
 
 #include <charconv>
@@ -617,6 +618,10 @@ bool CPlayerGUIInfo::GetBool(bool& value,
       return true;
     case PLAYER_HAS_BOOKMARKS:
       value = !CServiceBroker::GetDataCacheCore().GetBookmarks().empty();
+      return true;
+    case PLAYER_HAS_SCRUB_PREVIEWS:
+      value = m_currentItem && m_currentItem->HasVideoInfoTag() &&
+              m_currentItem->GetVideoInfoTag()->GetScrubPreviews().HasPreviews();
       return true;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////

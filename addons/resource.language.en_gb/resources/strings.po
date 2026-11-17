@@ -5437,7 +5437,12 @@ msgctxt "#10116"
 msgid "Player process info"
 msgstr ""
 
-#empty strings from id 10117 to 10119
+#: xbmc/guilib/WindowIDs.h
+msgctxt "#10117"
+msgid "Video scrub"
+msgstr ""
+
+#empty strings from id 10118 to 10119
 
 #: xbmc/guilib/WindowIDs.h
 msgctxt "#10120"
@@ -8034,6 +8039,18 @@ msgstr ""
 #: xbmc/settings/PlayerSettings.cpp
 msgctxt "#13559"
 msgid "{0:d}x"
+msgstr ""
+
+#. Name of a setting to limit how fast a held key moves through the scrub dialog's thumbnails
+#: system/settings/settings.xml
+msgctxt "#13560"
+msgid "Maximum scrub speed"
+msgstr ""
+
+#. Format of setting #13560 "Maximum scrub speed", in preview thumbnails per second
+#: system/settings/settings.xml
+msgctxt "#13561"
+msgid "{0:d} thumbnails a second"
 msgstr ""
 
 #empty strings id 13600
@@ -23588,7 +23605,13 @@ msgctxt "#37057"
 msgid "Data chunk size used on SMB connections"
 msgstr ""
 
-#empty strings from id 37058 to 37100
+#. Description of setting #13560 "Maximum scrub speed"
+#: system/settings/settings.xml
+msgctxt "#37058"
+msgid "Defines the fastest that holding left or right moves through a video's preview thumbnails in the scrub dialog."
+msgstr ""
+
+#empty strings from id 37059 to 37100
 
 #. Settings / Services "Caching" category label
 #: system/settings/settings.xml

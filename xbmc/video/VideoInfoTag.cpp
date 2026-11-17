@@ -115,6 +115,7 @@ void CVideoInfoTag::Reset()
   m_showLink.clear();
   m_seasons.clear();
   m_streamDetails.Reset();
+  m_scrubPreviews = {};
   m_playCount = PLAYCOUNT_NOT_SET;
   m_EpBookmark.Reset();
   m_EpBookmark.type = CBookmark::EPISODE;
@@ -424,6 +425,8 @@ bool CVideoInfoTag::Load(const TiXmlElement *element, bool append, bool prioriti
 
 void CVideoInfoTag::Merge(CVideoInfoTag& other)
 {
+  // the resolved item's, as what plays is what it resolved to
+  m_scrubPreviews = other.m_scrubPreviews;
   if (!other.m_director.empty())
     m_director = other.m_director;
   if (!other.m_writingCredits.empty())
@@ -2105,6 +2108,11 @@ bool CVideoInfoTag::IncrementPlayCount()
 
   m_playCount++;
   return true;
+}
+
+void CVideoInfoTag::SetScrubPreviews(ScrubPreviews previews)
+{
+  m_scrubPreviews = std::move(previews);
 }
 
 void CVideoInfoTag::ResetPlayCount()
