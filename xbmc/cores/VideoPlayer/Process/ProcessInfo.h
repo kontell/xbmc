@@ -129,7 +129,8 @@ public:
   bool GetVideoRender();
   unsigned int GetMaxPassthroughOffSyncDuration() const;
 
-  void SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max);
+  void SetPlayTimes(
+      time_t start, int64_t current, int64_t min, int64_t max, bool moving = true);
   int64_t GetMaxTime();
 
   // settings
