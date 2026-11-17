@@ -41,6 +41,7 @@ public:
   int GetStreamCount() const override;
   bool SetStream(int index) override;
   void GetStreamInfo(int index, AudioStreamInfo& info) const override;
+  std::vector<std::pair<std::string, int64_t>> GetChapters() const override { return m_chapters; }
 
 private:
   CAEStreamInfo::DataType GetPassthroughStreamType(AVCodecID codecId, int samplerate, int profile);
@@ -74,9 +75,14 @@ private:
   //! \brief Decide whether \p packet lies entirely before the time the last Seek() asked for.
   bool PacketIsBeforeSeek(const DemuxPacket& packet);
 
+  //! \brief Read the chapters from the input stream if it has them, else from the demuxer.
+  void ReadChapters();
+
   CDVDDemux* m_pDemuxer{nullptr};
   std::shared_ptr<CDVDInputStream> m_pInputStream;
   std::unique_ptr<CDVDAudioCodec> m_pAudioCodec;
+
+  std::vector<std::pair<std::string, int64_t>> m_chapters;
 
   std::string m_strContentType;
   std::string m_strFileName;
