@@ -218,7 +218,7 @@ TEST_F(TestPlayListHistory, AddKeepsThePlaylistAndPersistsIt)
   playlist.Add(Item("/music/2.flac", "Two", "Artist", "Album", 210));
 
   PLAYLIST::CPlayListHistory history(m_folder);
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 42.5, false));
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 42.5, false), 20);
   ASSERT_EQ(history.Entries().size(), 1u);
 
   PLAYLIST::CPlayListHistory reloaded(m_folder);
@@ -244,27 +244,26 @@ TEST_F(TestPlayListHistory, AddPutsTheNewestFirstAndSkipsARepeat)
   playlist.Add(Item("/music/2.flac", "Two", "Artist", "Album", 210));
 
   PLAYLIST::CPlayListHistory history(m_folder);
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false));
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.5, false));
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false), 20);
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.5, false), 20);
   ASSERT_EQ(history.Entries().size(), 1u);
 
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 30.0, true));
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 30.0, true), 20);
   ASSERT_EQ(history.Entries().size(), 2u);
   EXPECT_EQ(history.Entries().front().position, 1);
   EXPECT_TRUE(history.Entries().front().playedThrough);
 }
 
-TEST_F(TestPlayListHistory, AddTrimsToTheMaximum)
+TEST_F(TestPlayListHistory, AddKeepsOnlyAsManyAsAsked)
 {
   PLAYLIST::CPlayList playlist;
   playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
 
   PLAYLIST::CPlayListHistory history(m_folder);
-  for (int i = 0; i <= PLAYLIST::CPlayListHistory::MAX_ENTRIES; ++i)
-    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0 * i, false));
-  EXPECT_EQ(history.Entries().size(), static_cast<size_t>(PLAYLIST::CPlayListHistory::MAX_ENTRIES));
-  EXPECT_DOUBLE_EQ(history.Entries().front().seconds,
-                   10.0 * PLAYLIST::CPlayListHistory::MAX_ENTRIES);
+  for (int i = 0; i <= 5; ++i)
+    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0 * i, false), 5);
+  EXPECT_EQ(history.Entries().size(), 5u);
+  EXPECT_DOUBLE_EQ(history.Entries().front().seconds, 50.0);
 }
 
 TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheLibrarySongForATrackThatHasOne)
@@ -317,8 +316,8 @@ TEST_F(TestPlayListHistory, AddReplacesTheSavedHistory)
   playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
 
   PLAYLIST::CPlayListHistory history(m_folder);
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false));
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 20.0, false));
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false), 20);
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 20.0, false), 20);
 
   PLAYLIST::CPlayListHistory reloaded(m_folder);
   ASSERT_EQ(reloaded.Entries().size(), 2u);
@@ -331,7 +330,7 @@ TEST_F(TestPlayListHistory, LoadReadsANewHistoryLeftBesideTheFile)
   playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
   {
     PLAYLIST::CPlayListHistory history(m_folder);
-    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 42.5, false));
+    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 42.5, false), 20);
   }
   // As a quit leaves it between removing the old history and renaming the new one into place.
   ASSERT_TRUE(XFILE::CFile::Rename(m_file, m_file + ".tmp"));
@@ -352,7 +351,7 @@ TEST_F(TestPlayListHistory, AddKeepsThePartOfTheFileEachCueSheetTrackPlays)
   playlist[1]->SetStartOffset(52000);
 
   PLAYLIST::CPlayListHistory history(m_folder);
-  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 12.0, false));
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 1, 12.0, false), 20);
 
   PLAYLIST::CPlayListHistory reloaded(m_folder);
   const std::vector<PLAYLIST::CPlayListHistoryEntry> entries = reloaded.Entries();
@@ -375,15 +374,15 @@ TEST_F(TestPlayListHistory, AddFromTwoThreadsKeepsEveryEntry)
   PLAYLIST::CPlayListHistory history(m_folder);
   const auto add = [&](double from)
   {
-    for (int i = 0; i < PLAYLIST::CPlayListHistory::MAX_ENTRIES / 2; ++i)
-      history.Add(
-          PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, from + 10.0 * i, false));
+    for (int i = 0; i < 10; ++i)
+      history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, from + 10.0 * i, false),
+                  20);
   };
   std::thread other(add, 1000.0);
   add(0.0);
   other.join();
 
-  EXPECT_EQ(history.Entries().size(), static_cast<size_t>(PLAYLIST::CPlayListHistory::MAX_ENTRIES));
+  EXPECT_EQ(history.Entries().size(), 20u);
 }
 
 TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheCueSheetSongThatWasSaved)
@@ -410,4 +409,34 @@ TEST_F(TestPlayListHistoryLibrary, GetItemsQueuesTheCueSheetSongThatWasSaved)
   EXPECT_EQ(items[0]->GetEndOffset(), 80000);
   EXPECT_EQ(items[1]->GetMusicInfoTag()->GetDatabaseId(), album.songs[0].idSong);
   EXPECT_EQ(items[2]->GetMusicInfoTag()->GetDatabaseId(), album.songs[2].idSong);
+}
+
+TEST_F(TestPlayListHistory, AddKeepsNothingWhenAskedToKeepNone)
+{
+  PLAYLIST::CPlayList playlist;
+  playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
+
+  PLAYLIST::CPlayListHistory history(m_folder);
+  history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0, false), 0);
+  EXPECT_TRUE(history.Entries().empty());
+  EXPECT_FALSE(XFILE::CFile::Exists(m_file));
+}
+
+TEST_F(TestPlayListHistory, TrimDropsTheOldestAndZeroEmptiesTheHistory)
+{
+  PLAYLIST::CPlayList playlist;
+  playlist.Add(Item("/music/1.flac", "One", "Artist", "Album", 200));
+
+  PLAYLIST::CPlayListHistory history(m_folder);
+  for (int i = 1; i <= 3; ++i)
+    history.Add(PLAYLIST::CPlayListHistoryEntry::FromPlayList(playlist, 0, 10.0 * i, false), 20);
+
+  history.Trim(2);
+  ASSERT_EQ(history.Entries().size(), 2u);
+  EXPECT_DOUBLE_EQ(history.Entries().back().seconds, 20.0);
+  EXPECT_EQ(PLAYLIST::CPlayListHistory(m_folder).Entries().size(), 2u);
+
+  history.Trim(0);
+  EXPECT_TRUE(history.Entries().empty());
+  EXPECT_TRUE(PLAYLIST::CPlayListHistory(m_folder).Entries().empty());
 }

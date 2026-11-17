@@ -22,6 +22,7 @@
 #include "addons/Service.h" //! @todo Remove me
 #include "addons/Skin.h"
 #include "application/Application.h" //! @todo Remove me
+#include "application/ApplicationEnums.h"
 #include "application/ApplicationPowerHandling.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "events/EventLog.h"
@@ -35,10 +36,10 @@
 #include "guilib/GUIWindowManager.h"
 #include "guilib/StereoscopicsManager.h" //! @todo Remove me
 #include "input/InputManager.h"
+#include "messaging/ApplicationMessenger.h"
 #include "music/MusicLibraryQueue.h"
 #include "network/Network.h" //! @todo Remove me
 #include "network/NetworkServices.h" //! @todo Remove me
-#include "playlists/PlayListHistory.h"
 #include "pvr/PVRManager.h" //! @todo Remove me
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
@@ -256,6 +257,9 @@ void CProfileManager::Clear()
 
 void CProfileManager::PrepareLoadProfile(unsigned int profileIndex)
 {
+  // A playlist waiting for a video to end is the old profile's
+  CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
+
   CContextMenuManager &contextMenuManager = CServiceBroker::GetContextMenuManager();
   ADDON::CServiceAddonManager &serviceAddons = CServiceBroker::GetServiceAddons();
   PVR::CPVRManager &pvrManager = CServiceBroker::GetPVRManager();
@@ -425,7 +429,7 @@ void CProfileManager::FinalizeLoadProfile()
   contextMenuManager.Init();
 
   favouritesManager.ReInit(GetProfileUserDataFolder());
-  playlistManager.GetHistory().ReInit(GetProfileUserDataFolder());
+  playlistManager.LoadHistory(GetProfileUserDataFolder());
 
   // Start these operations only when a profile is loaded, not on the login screen
   if (!m_profileLoadedForLogin ||
@@ -434,6 +438,11 @@ void CProfileManager::FinalizeLoadProfile()
     pvrManager.Init();
     serviceAddons.Start();
     g_application.UpdateLibraries();
+
+    if (m_settings->GetInt(CSettings::SETTING_LOOKANDFEEL_STARTUPACTION) ==
+        STARTUP_ACTION_RESTORE_PLAYLIST)
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr,
+                                                 "Playlist.Restore(latest)");
   }
 
   stereoscopicsManager.Initialize();
@@ -453,6 +462,7 @@ void CProfileManager::LogOff()
 {
   CNetworkBase &networkManager = CServiceBroker::GetNetwork();
 
+  CServiceBroker::GetPlaylistPlayer().ForgetReplacedPlaylist();
   g_application.StopPlaying();
 
   if (CMusicLibraryQueue::GetInstance().IsScanningLibrary())
