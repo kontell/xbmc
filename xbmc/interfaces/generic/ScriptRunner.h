@@ -12,6 +12,7 @@
 #include "addons/IAddon.h"
 #include "threads/Event.h"
 
+#include <chrono>
 #include <string>
 
 class CReusableInvokerClaim;
@@ -32,12 +33,16 @@ protected:
    *
    * \param claim (Optional) The caller's claim on the reusable invoker, held for
    *        the whole run. See CScriptInvocationManager::ClaimReusableInvoker.
+   * \param quietTime How long the caller can wait before the GUI shows that it is waiting.
+   *        On the GUI thread the wait is under the busy dialog; for this long first the GUI
+   *        runs on as it is, with no dialog. Nothing on another thread.
    */
   bool RunScript(const ADDON::AddonPtr& addon,
                  const CURL& url,
                  int handle,
                  bool resume,
-                 CReusableInvokerClaim* claim = nullptr);
+                 CReusableInvokerClaim* claim = nullptr,
+                 std::chrono::milliseconds quietTime = {});
 
   void SetDone();
 
@@ -54,8 +59,12 @@ private:
                          int handle,
                          bool resume,
                          bool wait = true,
-                         CReusableInvokerClaim* claim = nullptr);
-  bool WaitOnScriptResult(int scriptId, const std::string& path, const std::string& name);
+                         CReusableInvokerClaim* claim = nullptr,
+                         std::chrono::milliseconds quietTime = {});
+  bool WaitOnScriptResult(int scriptId,
+                          const std::string& path,
+                          const std::string& name,
+                          std::chrono::milliseconds quietTime);
 
   ADDON::AddonPtr m_addon;
 

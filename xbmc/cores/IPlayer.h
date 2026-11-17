@@ -96,6 +96,8 @@ public:
   virtual bool OpenFile(const CFileItem& file, const CPlayerOptions& options){ return false;}
   virtual bool QueueNextFile(const CFileItem &file) { return false; }
   virtual void OnNothingToQueueNotify() {}
+  //! \brief No answer came to OnQueueNextItem(); ask again when the next item is due.
+  virtual void OnQueueNextItemUnanswered() {}
   virtual bool CloseFile(bool reopen = false) = 0;
   virtual bool IsPlaying() const { return false;}
   virtual bool CanPause() const { return true; }
