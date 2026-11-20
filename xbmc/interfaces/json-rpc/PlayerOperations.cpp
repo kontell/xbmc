@@ -544,7 +544,7 @@ JSONRPC_STATUS CPlayerOperations::SetTempo(const std::string& method,
     {
       auto& components = CServiceBroker::GetAppComponents();
       const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-      if (!appPlayer->SupportsTempo() || appPlayer->IsPausedPlayback())
+      if (!appPlayer->SupportsTempo())
         return FailedToExecute;
 
       if (parameterObject["tempo"].isDouble())

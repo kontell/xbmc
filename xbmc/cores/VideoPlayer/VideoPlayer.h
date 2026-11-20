@@ -617,6 +617,7 @@ protected:
 
   int m_playSpeed;
   int m_streamPlayerSpeed;
+  int m_speedBeforePause = DVD_PLAYSPEED_PAUSE; // the playing speed the paused audio was made at
   int m_demuxerSpeed = DVD_PLAYSPEED_NORMAL;
   struct SSpeedState
   {
