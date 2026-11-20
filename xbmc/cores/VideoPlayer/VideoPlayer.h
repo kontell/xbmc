@@ -621,6 +621,8 @@ protected:
   int m_streamPlayerSpeed;
   int m_speedBeforePause = DVD_PLAYSPEED_PAUSE; // the playing speed the paused audio was made at
   int m_demuxerSpeed = DVD_PLAYSPEED_NORMAL;
+  // since when the demuxer's reads have found the source with nothing to give, if they have
+  std::chrono::steady_clock::time_point m_sourceDrySince{};
   struct SSpeedState
   {
     double lastpts{0.0}; // holds last display pts during ff/rw operations
