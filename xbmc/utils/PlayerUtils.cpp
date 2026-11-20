@@ -48,7 +48,8 @@ bool CPlayerUtils::IsItemPlayable(const CFileItem& itemIn)
 void CPlayerUtils::AdvanceTempoStep(CApplicationPlayer& appPlayer, TempoStepChange change)
 {
   const auto step = 0.1f;
-  const auto currentTempo = appPlayer.GetPlayTempo();
+  // a step starts from the tempo the viewer sees
+  const auto currentTempo = appPlayer.GetShownTempo();
   switch (change)
   {
     case TempoStepChange::INCREASE:
