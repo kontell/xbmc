@@ -204,7 +204,7 @@ static int PlayerControl(const std::vector<std::string>& params)
   }
   else if (paramlow == "tempoup" || paramlow == "tempodown")
   {
-    if (appPlayer->SupportsTempo() && appPlayer->IsPlaying() && !appPlayer->IsPaused())
+    if (appPlayer->SupportsTempo() && appPlayer->IsPlaying())
     {
       if (paramlow == "tempodown")
         CPlayerUtils::AdvanceTempoStep(*appPlayer, TempoStepChange::DECREASE);
@@ -221,7 +221,7 @@ static int PlayerControl(const std::vector<std::string>& params)
                 params[0].substr(6));
     else
     {
-      if (appPlayer->SupportsTempo() && appPlayer->IsPlaying() && !appPlayer->IsPaused())
+      if (appPlayer->SupportsTempo() && appPlayer->IsPlaying())
       {
         std::string strTempo = params[0].substr(6);
         StringUtils::TrimRight(strTempo, ")");
@@ -850,7 +850,8 @@ static int SubtitleShiftDown(const std::vector<std::string>& params)
 ///     @param[in] control               Control to execute.
 ///     @param[in] param                 "notify" to notify user (optional\, certain controls).
 ///
-///     @note 'TempoUp' or 'TempoDown' only works if "Sync playback to display" is enabled.
+///     @note 'TempoUp'\, 'TempoDown' and 'Tempo(n)' work while the player supports a tempo
+///     (Player.TempoEnabled)\, which VideoPlayer does for anything but a realtime stream.
 ///     @note 'Next' will behave differently while using video playlists. In those\, chapters will be ignored and the next movie will be played.
 ///   }
 ///   \table_row2_l{
