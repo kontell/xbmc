@@ -99,6 +99,17 @@ TEST(TestVariant, VariantTypeDouble)
   EXPECT_EQ((double)0.1f, b.asDouble());
 }
 
+TEST(TestVariant, StringAsDouble)
+{
+  EXPECT_DOUBLE_EQ(95.5, CVariant("95.5").asDouble());
+  EXPECT_DOUBLE_EQ(-0.25, CVariant(" -0.25 ").asDouble());
+  EXPECT_DOUBLE_EQ(12.0, CVariant("12").asDouble());
+  EXPECT_DOUBLE_EQ(1.5, CVariant(L"1.5").asDouble());
+  EXPECT_FLOAT_EQ(0.75f, CVariant("0.75").asFloat());
+  EXPECT_DOUBLE_EQ(3.0, CVariant("not a number").asDouble(3.0));
+  EXPECT_DOUBLE_EQ(3.0, CVariant("95.5 percent").asDouble(3.0));
+}
+
 TEST(TestVariant, VariantTypeArray)
 {
   std::vector<std::string> strarray;
