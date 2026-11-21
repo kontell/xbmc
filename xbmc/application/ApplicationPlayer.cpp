@@ -29,6 +29,7 @@
 #include "video/VideoFileItemClassify.h"
 #include "windowing/WinSystem.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <mutex>
 #include <stdexcept>
@@ -709,6 +710,14 @@ bool CApplicationPlayer::OnPlaybackAction(const CAction& action)
         SetPlaySpeed(1);
       return true;
 
+    case ACTION_PLAYER_INCREASE_TEMPO:
+      CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::INCREASE);
+      return true;
+
+    case ACTION_PLAYER_DECREASE_TEMPO:
+      CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::DECREASE);
+      return true;
+
     default:
       break;
   }
@@ -776,18 +785,6 @@ bool CApplicationPlayer::OnPlaybackAction(const CAction& action)
         gui->GetAudioManager().Enable(IsPaused());
       return true;
     }
-
-    case ACTION_PLAYER_INCREASE_TEMPO:
-      if (wasPaused)
-        return false;
-      CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::INCREASE);
-      return true;
-
-    case ACTION_PLAYER_DECREASE_TEMPO:
-      if (wasPaused)
-        return false;
-      CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::DECREASE);
-      return true;
 
     default:
       return false;
@@ -1045,6 +1042,12 @@ float CApplicationPlayer::GetPlayTempo() const
   }
   else
     return 0;
+}
+
+double CApplicationPlayer::GetPlayTempoDecimal() const
+{
+  // a float is not the decimal it stands for: 1.03 is 1.0299999713897705
+  return std::round(static_cast<double>(GetPlayTempo()) * 1000.0) / 1000.0;
 }
 
 bool CApplicationPlayer::SupportsTempo() const

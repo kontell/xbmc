@@ -223,7 +223,8 @@ bool CPlayerGUIInfo::GetLabel(std::string& value,
     case PLAYER_PLAYSPEED:
     {
       float speed = m_appPlayer->GetPlaySpeed();
-      if (speed == 1.0f)
+      // paused, the tempo play resumes at
+      if (speed == 1.0f || speed == 0.0f)
         speed = m_appPlayer->GetPlayTempo();
       value = StringUtils::Format("{:.2f}", speed);
       return true;

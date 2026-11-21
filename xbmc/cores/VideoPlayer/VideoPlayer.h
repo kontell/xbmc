@@ -576,6 +576,8 @@ protected:
   static SpeedChangeNotifications GetSpeedChangeNotifications(int previousSpeed,
                                                               int newSpeed,
                                                               bool isTempo);
+  // The speed a tempo plays at: its own floor is 1/DVD_PLAYSPEED_NORMAL
+  static int TempoToSpeed(float tempo);
 
   bool m_players_created;
 
@@ -615,6 +617,7 @@ protected:
 
   int m_playSpeed;
   int m_streamPlayerSpeed;
+  int m_speedBeforePause = DVD_PLAYSPEED_PAUSE; // the playing speed the paused audio was made at
   int m_demuxerSpeed = DVD_PLAYSPEED_NORMAL;
   struct SSpeedState
   {
