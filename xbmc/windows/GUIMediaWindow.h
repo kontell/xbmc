@@ -203,6 +203,8 @@ protected:
   protected:
     std::atomic_bool &m_update;
   };
+  bool m_loadingDirectory = false;
+  bool m_refreshPending = false;
 
   // save control state on window exit
   int m_iLastControl;
