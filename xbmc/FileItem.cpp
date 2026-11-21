@@ -1388,7 +1388,13 @@ void CFileItem::UpdateInfo(const CFileItem& item,
     if (item.m_videoInfoTag)
     {
       if (m_videoInfoTag)
+      {
+        // the database keeps no scrub previews, so a tag from it leaves the item's alone
+        ScrubPreviews previews{m_videoInfoTag->GetScrubPreviews()};
         *m_videoInfoTag = *item.m_videoInfoTag;
+        if (!m_videoInfoTag->GetScrubPreviews().HasPreviews())
+          m_videoInfoTag->SetScrubPreviews(std::move(previews));
+      }
       else
         m_videoInfoTag = new CVideoInfoTag(*item.m_videoInfoTag);
     }

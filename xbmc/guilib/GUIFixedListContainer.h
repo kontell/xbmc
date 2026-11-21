@@ -48,6 +48,13 @@ public:
   bool OnAction(const CAction &action) override;
   bool OnMessage(CGUIMessage& message) override;
 
+  /*!
+   * \brief Place the list at once at a fractional item, for a caller that moves it frame by frame.
+   * The nearest item is the selected one.
+   * \param item Where the fixed cursor sits, in items
+   */
+  void SetScrollPosition(float item);
+
 protected:
   void Scroll(int amount) override;
   bool MoveDown(bool wrapAround) override;

@@ -3,6 +3,7 @@ set(SOURCES MediaSection.cpp
 
 set(HEADERS MediaLockState.h
             MediaSection.h
-            MediaType.h)
+            MediaType.h
+            ScrubPreviews.h)
 
 core_add_library(media)
