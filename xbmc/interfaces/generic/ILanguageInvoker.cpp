@@ -87,8 +87,10 @@ void ILanguageInvoker::onExecutionFinalized()
 
 void ILanguageInvoker::setState(InvokerState state)
 {
-  if (state <= m_state)
-    return;
-
-  m_state = state;
+  InvokerState current = m_state;
+  do
+  {
+    if (state <= current)
+      return;
+  } while (!m_state.compare_exchange_weak(current, state));
 }
