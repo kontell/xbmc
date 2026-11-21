@@ -180,7 +180,13 @@ public:
   bool GetGuiRender();
   void SetVideoRender(bool video);
   bool GetVideoRender();
-  void SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max);
+  /*!
+   * \brief Store the player's times
+   * \param moving whether the time moves on from here until the next store; false while the
+   * player's clock is stopped, as it is while the player buffers
+   */
+  void SetPlayTimes(
+      time_t start, int64_t current, int64_t min, int64_t max, bool moving = true);
   void GetPlayTimes(time_t &start, int64_t &current, int64_t &min, int64_t &max);
 
   /*!
@@ -384,11 +390,22 @@ protected:
     int64_t m_lastSeekOffset{0};
   } m_stateInfo;
 
+  /*!
+   * \brief The play time now, with m_stateSection held.
+   *
+   * A player stores its time on a cadence (VideoPlayer's is 200 ms) and between two stores
+   * the position moves on at the playing rate, so a reading in between is moved on by the
+   * time elapsed, within a bound.
+   */
+  int64_t CurrentPlayTime() const;
+
   struct STimeInfo
   {
     time_t m_startTime;
     int64_t m_time;
     int64_t m_timeMax;
     int64_t m_timeMin;
+    /*! When m_time was stored */
+    std::chrono::steady_clock::time_point m_timeStamp;
   } m_timeInfo = {};
 };
