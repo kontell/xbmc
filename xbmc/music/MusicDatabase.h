@@ -142,6 +142,7 @@ public:
    \param iChannels [in] the number of audio channels in the song file
    \param songVideoURL [in] url to video of the song
    \param replayGain [in] album and track replaygain and peak values
+   \param dtDateAdded [in] the song's date added, used when the file has no date of its own
    \return the id of the song
    */
   int AddSong(const int idSong,
@@ -173,7 +174,8 @@ public:
               int iSampleRate,
               int iChannels,
               const std::string& songVideoURL,
-              const ReplayGain& replayGain);
+              const ReplayGain& replayGain,
+              const CDateTime& dtDateAdded);
   bool GetSong(int idSong, CSong& song);
 
   /*! \brief Update a song and all its nested entities (genres, artists, contributors)
@@ -213,6 +215,7 @@ public:
    \param iSampleRate [in] the sample rate of the song file
    \param iChannels [in] the number of audio channels in the song file
    \param songVideoURL [in] url link to a video of the song
+   \param dtDateAdded [in] the song's date added, used when the file has no date of its own
    \return the id of the song
    */
   int UpdateSong(int idSong,
@@ -242,7 +245,8 @@ public:
                  int iBitRate,
                  int iSampleRate,
                  int iChannels,
-                 const std::string& songVideoURL);
+                 const std::string& songVideoURL,
+                 const CDateTime& dtDateAdded);
 
   //// Misc Song
   bool GetSongByFileName(const std::string& strFileName, CSong& song, int64_t startOffset = 0);
@@ -857,7 +861,8 @@ private:
                                            int offset = 0) const;
   CMusicRole GetArtistRoleFromDataset(const dbiplus::sql_record* const record,
                                       int offset = 0) const;
-  std::string GetMediaDateFromFile(const std::string& strFileNameAndPath) const;
+  std::string GetMediaDateFromFile(const std::string& strFileNameAndPath,
+                                   const CDateTime& songDateAdded) const;
   void GetFileItemFromDataset(CFileItem* item, const CMusicDbUrl& baseUrl);
   void GetFileItemFromDataset(const dbiplus::sql_record* const record,
                               CFileItem* item,
