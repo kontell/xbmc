@@ -82,10 +82,10 @@ bool CGUIDialogVideoScrub::OnMessage(CGUIMessage& message)
 
       m_previews = item.GetVideoInfoTag()->GetScrubPreviews();
       m_totalMs = appPlayer->GetTotalTime();
-      m_startMs = appPlayer->GetTime();
       m_index = -1;
       m_tile = -1;
       m_rate = 0.0;
+      m_deltaSeconds.reset();
       m_topRate = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
           CSettings::SETTING_VIDEOPLAYER_SCRUBTOPRATE);
       m_lastFrame = CTimeUtils::GetFrameTime();
@@ -93,8 +93,8 @@ bool CGUIDialogVideoScrub::OnMessage(CGUIMessage& message)
       FillStrip();
       // the window could not focus the strip while it was empty
       SET_CONTROL_FOCUS(CONTROL_STRIP, 0);
-      const int index =
-          std::clamp(static_cast<int>(m_startMs / m_previews.intervalMs), 0, LastIndex());
+      const int index = std::clamp(static_cast<int>(appPlayer->GetTime() / m_previews.intervalMs),
+                                   0, LastIndex());
       m_target = m_position = index;
       CGUIMessage msg(GUI_MSG_ITEM_SELECT, GetID(), CONTROL_STRIP, index);
       OnMessage(msg);
@@ -201,6 +201,7 @@ void CGUIDialogVideoScrub::Process(unsigned int currentTime, CDirtyRegionList& d
       strip->SetScrollPosition(position);
     SetIndex(static_cast<int>(std::lround(position)));
   }
+  SetDelta();
 
   // the strip moves before it is processed, for it to lay out what this frame draws
   CGUIDialog::Process(currentTime, dirtyregions);
@@ -268,11 +269,23 @@ void CGUIDialogVideoScrub::SetIndex(int index)
   Prefetch(tile);
 
   const int64_t positionMs = static_cast<int64_t>(index) * m_previews.intervalMs;
-  const int64_t deltaMs = positionMs - m_startMs;
   SetProperty("scrubtime", TimeLabel(positionMs));
-  SetProperty("scrubdelta", std::string(deltaMs < 0 ? "-" : "+") + TimeLabel(std::llabs(deltaMs)));
   SetProperty("scrubpercent",
               m_totalMs > 0 ? static_cast<int>(positionMs * 100 / m_totalMs) : 0);
+}
+
+void CGUIDialogVideoScrub::SetDelta()
+{
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  // from the time the seek bar shows, as playback runs on beneath the dialog
+  const int64_t seconds = static_cast<int64_t>(m_index) * m_previews.intervalMs / 1000 -
+                          std::llrint(appPlayer->GetTime() / 1000.0);
+  if (seconds == m_deltaSeconds)
+    return;
+  m_deltaSeconds = seconds;
+  SetProperty("scrubdelta",
+              std::string(seconds < 0 ? "-" : "+") + TimeLabel(std::llabs(seconds) * 1000));
 }
 
 void CGUIDialogVideoScrub::Seek(int index)
