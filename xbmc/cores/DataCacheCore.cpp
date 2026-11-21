@@ -493,7 +493,7 @@ bool CDataCacheCore::IsSeeking()
   return m_stateInfo.m_stateSeeking;
 }
 
-void CDataCacheCore::SetSpeed(float tempo, float speed)
+void CDataCacheCore::SetSpeed(float tempo, float speed, bool tempoIsCorrection)
 {
   std::unique_lock lock(m_stateSection);
 
@@ -507,6 +507,7 @@ void CDataCacheCore::SetSpeed(float tempo, float speed)
   }
 
   m_stateInfo.m_tempo = tempo;
+  m_stateInfo.m_tempoIsCorrection = tempoIsCorrection;
   m_stateInfo.m_speed = speed;
 }
 
@@ -522,6 +523,13 @@ float CDataCacheCore::GetTempo()
   std::unique_lock lock(m_stateSection);
 
   return m_stateInfo.m_tempo;
+}
+
+float CDataCacheCore::GetShownTempo()
+{
+  std::unique_lock lock(m_stateSection);
+
+  return m_stateInfo.m_tempoIsCorrection ? 1.0f : m_stateInfo.m_tempo;
 }
 
 void CDataCacheCore::SetFrameAdvance(bool fa)

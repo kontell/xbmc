@@ -725,6 +725,8 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///                  _boolean_,
 ///     @return **True** if player has tempo (i.e. is playing with a playback speed higher or
 ///     lower than normal playback speed)
+///     @note A tempo set as a correction (JSON-RPC `Player.SetTempo` with `correction`) is not
+///     one: it reads as normal playback speed here and in \ref Player_PlaySpeed "Player.PlaySpeed".
 ///     <p><hr>
 ///     @skinning_v17 **[New Boolean Condition]** \link Player_IsTempo `Player.IsTempo`\endlink
 ///     <p>
