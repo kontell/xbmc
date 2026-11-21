@@ -53,6 +53,9 @@ bool CDVDInputStreamFFmpeg::Open()
 void CDVDInputStreamFFmpeg::Close()
 {
   CDVDInputStream::Close();
+
+  // FFmpeg reads the stream itself, so stop it through the demuxer's interrupt callback
+  m_aborted = true;
 }
 
 int CDVDInputStreamFFmpeg::Read(uint8_t* buf, int buf_size)
