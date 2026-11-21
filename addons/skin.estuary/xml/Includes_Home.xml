@@ -280,6 +280,7 @@
 		<param name="icon_height">120</param>
 		<param name="additional_movie_items">false</param>
 		<param name="additional_tvshow_items">false</param>
+		<param name="additional_music_items">false</param>
 		<param name="visible">true</param>
 		<param name="browse">auto</param>
 		<definition>
@@ -380,6 +381,7 @@
 				</focusedlayout>
 				<include condition="$PARAM[additional_movie_items]" content="MovieSubmenuItems" />
 				<include condition="$PARAM[additional_tvshow_items]" content="TVShowSubmenuItems" />
+				<include condition="$PARAM[additional_music_items]" content="MusicSubmenuItems" />
 				<content target="$PARAM[widget_target]" limit="$PARAM[item_limit]" browse="$PARAM[browse_mode]">$PARAM[content_path]</content>
 			</control>
 		</definition>
@@ -407,6 +409,16 @@
 				<onclick>ActivateWindow(videos,plugin://script.embuary.info/nextaired,return)</onclick>
 				<thumb>DefaultYear.png</thumb>
 				<visible>System.AddonIsEnabled(script.embuary.info)</visible>
+			</item>
+		</content>
+	</include>
+	<include name="MusicSubmenuItems">
+		<content>
+			<item>
+				<label>$LOCALIZE[40807]</label>
+				<onclick>Playlist.Restore</onclick>
+				<thumb>DefaultMusicPlaylistHistory.png</thumb>
+				<visible>Playlist.HasHistory</visible>
 			</item>
 		</content>
 	</include>
