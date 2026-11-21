@@ -1990,7 +1990,8 @@
         "watchedepisodes",
         "art",
         "userrating",
-        "title"
+        "title",
+        "plot"
       ]
     }
   },
@@ -2459,6 +2460,9 @@
         "type": "integer"
       },
       "title": {
+        "type": "string"
+      },
+      "plot": {
         "type": "string"
       }
     }
