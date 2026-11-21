@@ -10,6 +10,7 @@
 
 #include "ServiceBroker.h"
 #include "TextureCache.h"
+#include "URL.h"
 #include "commons/ilog.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/Texture.h"
@@ -108,6 +109,9 @@ bool CImageLoader::DoWork()
 
   if (!loadPath.empty())
   {
+    // what follows a | can be an Authorization header, which redacting keeps
+    const std::string logPath = CURL::GetRedacted(loadPath.substr(0, loadPath.find('|')));
+
     // direct route - load the image
     auto start = std::chrono::steady_clock::now();
     m_texture = CTexture::LoadFromFile(loadPath, m_targetWidth, m_targetHeight, m_aspectRatio);
@@ -116,7 +120,7 @@ bool CImageLoader::DoWork()
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     if (duration.count() > 100)
-      CLog::Log(LOGDEBUG, "{} - took {} ms to load {}", __FUNCTION__, duration.count(), loadPath);
+      CLog::Log(LOGDEBUG, "{} - took {} ms to load {}", __FUNCTION__, duration.count(), logPath);
 
     if (m_texture)
     {
@@ -133,7 +137,7 @@ bool CImageLoader::DoWork()
     }
 
     // Fallthrough on failure:
-    CLog::Log(LOGERROR, "{} - Direct texture file loading failed for {}", __FUNCTION__, loadPath);
+    CLog::Log(LOGERROR, "{} - Direct texture file loading failed for {}", __FUNCTION__, logPath);
   }
 
   if (!m_use_cache)

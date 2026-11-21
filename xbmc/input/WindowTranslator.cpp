@@ -96,6 +96,7 @@ const CWindowTranslator::WindowMapByName CWindowTranslator::WindowMappingByName 
     {"osdaudiosettings", WINDOW_DIALOG_AUDIO_OSD_SETTINGS},
     {"osdsubtitlesettings", WINDOW_DIALOG_SUBTITLE_OSD_SETTINGS},
     {"videobookmarks", WINDOW_DIALOG_VIDEO_BOOKMARKS},
+    {"videoscrub", WINDOW_DIALOG_VIDEO_SCRUB},
     {"filebrowser", WINDOW_DIALOG_FILE_BROWSER},
     {"networksetup", WINDOW_DIALOG_NETWORK_SETUP},
     {"mediasource", WINDOW_DIALOG_MEDIA_SOURCE},

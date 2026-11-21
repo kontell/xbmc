@@ -140,11 +140,13 @@ void CApplicationPlay::GetOptionsAndUpdateItem()
 
     // Note that we need to load the tag from database also if the item already has a tag,
     // because for example the (full) video info for strm files will be loaded here.
-    // The database has no chapters; the ones the add-on that resolved the item set stay.
+    // The database has no chapters or scrub previews: those the resolving add-on set stay.
     std::vector<ChapterDetails> chapters{m_item.GetVideoInfoTag()->GetChapterMarks()};
+    ScrubPreviews previews{m_item.GetVideoInfoTag()->GetScrubPreviews()};
     db.LoadVideoInfo(path, *m_item.GetVideoInfoTag());
     if (!chapters.empty())
       m_item.GetVideoInfoTag()->SetChapterMarks(std::move(chapters));
+    m_item.GetVideoInfoTag()->SetScrubPreviews(std::move(previews));
 
     if (m_item.GetStartOffset() == STARTOFFSET_RESUME)
     {

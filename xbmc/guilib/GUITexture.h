@@ -109,6 +109,13 @@ public:
   bool SetFileName(const std::string &filename);
   void SetUseCache(const bool useCache = true);
   bool SetAspectRatio(const CAspectRatio &aspect);
+  /*!
+   * \brief Draw a part of the image: a rectangle in its own pixels, with the image's size, or
+   * none for the whole of it. With a region the whole image is loaded as large as the renderer
+   * allows, and the rectangle follows the size it was decoded at, so a tile of thumbnails is one
+   * texture and a cell of it a change of region.
+   */
+  bool SetRegion(const std::optional<CRect>& region, float imageWidth = 0.0f);
   void SetScalingMethod(TEXTURE_SCALING scalingMethod);
   void SetDiffuseScalingMethod(TEXTURE_SCALING scalingMethod);
 
@@ -206,6 +213,14 @@ protected:
   int m_requestHeight = REQUEST_SIZE_UNSET;
   bool m_largeInterim{false};
   static constexpr int REQUEST_SIZE_UNSET = -1;
+  std::optional<CRect> m_region; // the part of the image drawn, in its own pixels
+  float m_regionImageWidth{0.0f}; // the image's own width, to scale the region to the decode
+  CRect RegionInFrame() const; // the region in the pixels of the frame as decoded
+  //! a region is drawn from the whole image, so its requests share one entry whatever the aspect
+  CAspectRatio::AspectRatio RequestAspect() const
+  {
+    return m_region ? CAspectRatio::KEEP : m_aspect.ratio;
+  }
 
   CRect m_vertex;       // vertex coords to render
   bool m_invalid;       // if true, we need to recalculate
@@ -257,6 +272,8 @@ private:
   std::vector<Quad> m_quads;
   float m_frameU{0}; // frame size in texture coordinates
   float m_frameV{0};
+  float m_frameU0{0}; // the drawn part's origin in texture coordinates, 0 without a region
+  float m_frameV0{0};
   bool m_segmentsDirty{true};
   unsigned int m_quadsVersion{0};
 
