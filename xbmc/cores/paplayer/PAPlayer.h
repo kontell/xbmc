@@ -149,6 +149,7 @@ private:
   std::atomic_bool m_tempoIsCorrection{false}; /* the GUI shows normal speed through the tempo */
   bool m_isPlaying = false;
   bool m_isPaused = false;
+  std::chrono::steady_clock::time_point m_pausedAt; /* when the streams paused, while they are */
   bool m_isFinished = false; /* if there are no more songs in the queue */
   bool m_fullScreen;
   unsigned int m_defaultCrossfadeMS = 0; /* how long the default crossfade is in ms */

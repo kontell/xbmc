@@ -265,7 +265,7 @@ static int PlayerControl(const std::vector<std::string>& params)
   }
   else if (paramlow == "tempoup" || paramlow == "tempodown")
   {
-    if (appPlayer->SupportsTempo() && appPlayer->IsPlaying() && !appPlayer->IsPaused())
+    if (appPlayer->SupportsTempo() && appPlayer->IsPlaying())
     {
       if (paramlow == "tempodown")
         CPlayerUtils::AdvanceTempoStep(*appPlayer, TempoStepChange::DECREASE);
@@ -282,7 +282,7 @@ static int PlayerControl(const std::vector<std::string>& params)
                 params[0].substr(6));
     else
     {
-      if (appPlayer->SupportsTempo() && appPlayer->IsPlaying() && !appPlayer->IsPaused())
+      if (appPlayer->SupportsTempo() && appPlayer->IsPlaying())
       {
         std::string strTempo = params[0].substr(6);
         StringUtils::TrimRight(strTempo, ")");

@@ -258,6 +258,7 @@ protected:
   double m_requestedResampleRatio;
   // Runs while the output made at the previous requested ratio plays out.
   XbmcThreads::EndTime<> m_ratioSettle;
+  double m_settleRatio = 1.0; // the ratio that output was made at
   enum AVMatrixEncoding m_matrixEncoding;
   enum AVAudioServiceType m_audioServiceType;
   bool m_forceResampler;

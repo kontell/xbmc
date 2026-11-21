@@ -735,7 +735,7 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///                  \anchor Player_PlaySpeed
 ///                  _string_,
 ///     @return The player playback speed with the format `%1.2f` (1.00 means normal
-///     playback speed).
+///     playback speed). While paused it is the tempo playback resumes at.
 ///     @note For Tempo\, the default range is 0.80 - 1.50 (it can be changed
 ///     in advanced settings). If \ref Player_PlaySpeed "Player.PlaySpeed" returns a value different from 1.00
 ///     and \ref Player_IsTempo "Player.IsTempo" is false it means the player is in ff/rw mode.
@@ -1688,7 +1688,8 @@ constexpr std::array<InfoMap, 10> weather = {{
 ///   \table_row3{   <b>`System.BatteryLevel`</b>,
 ///                  \anchor System_BatteryLevel
 ///                  _string_,
-///     @return The remaining battery level in range 0-100.
+///     @return The remaining battery level in range 0-100, or empty when the device has no
+///     battery.
 ///     <p>
 ///   }
 ///   \table_row3{   <b>`System.FreeSpace`</b>,

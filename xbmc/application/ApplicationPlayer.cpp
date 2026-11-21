@@ -726,6 +726,14 @@ bool CApplicationPlayer::OnPlaybackAction(const CAction& action)
         SetPlaySpeed(1);
       return true;
 
+    case ACTION_PLAYER_INCREASE_TEMPO:
+      CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::INCREASE);
+      return true;
+
+    case ACTION_PLAYER_DECREASE_TEMPO:
+      CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::DECREASE);
+      return true;
+
     default:
       break;
   }
@@ -793,18 +801,6 @@ bool CApplicationPlayer::OnPlaybackAction(const CAction& action)
         gui->GetAudioManager().Enable(IsPaused());
       return true;
     }
-
-    case ACTION_PLAYER_INCREASE_TEMPO:
-      if (wasPaused)
-        return false;
-      CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::INCREASE);
-      return true;
-
-    case ACTION_PLAYER_DECREASE_TEMPO:
-      if (wasPaused)
-        return false;
-      CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::DECREASE);
-      return true;
 
     default:
       return false;

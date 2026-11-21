@@ -815,7 +815,8 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
               (!par->stream->m_resampleMode || !par->stream->m_pClock))
           {
             // What the sink holds and the stream's stages have made was made at the old ratio,
-            // and RunStages() would read it at the new one: sync waits until it has played.
+            // and RunStages() would read it at the new one: sync in place waits until it has
+            // played. Sync being taken, as after a resume, reads it at the old ratio instead.
             // Between two ratios within the resampler's range the misreading is that audio
             // times the ratios' difference, a few ms for a sync client's corrections, which
             // can come faster than the audio plays out: measurement goes on.
@@ -830,6 +831,9 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
               const double held =
                   status.GetDelay() +
                   static_cast<double>(par->stream->m_processingBuffers->GetRateDelay());
+              // output from before a change still playing out is heard first
+              if (par->stream->m_ratioSettle.IsTimePast())
+                par->stream->m_settleRatio = before;
               par->stream->m_ratioSettle.Set(
                   std::chrono::milliseconds(std::lround(held * 1000.0)));
             }
@@ -1677,6 +1681,8 @@ void CActiveAE::SFlushStream(CActiveAEStream *stream)
     stream->m_processingSamples.pop_front();
   }
   stream->m_processingBuffers->Flush();
+  // nothing made at an earlier ratio is left to play out
+  stream->m_ratioSettle.SetExpired();
   stream->m_streamPort->Purge();
   stream->m_bufferedTime = 0.0;
   stream->m_paused = false;
@@ -2202,8 +2208,9 @@ bool CActiveAE::RunStages()
       if ((*it)->m_paused && (*it)->m_started && m_settings.lowLatencyMode)
         m_targetBufferLevel = m_initialTargetBufferLevel;
 
-      if ((*it)->m_paused || !(*it)->m_started || !(*it)->m_processingBuffers ||
-          !(*it)->m_pClock || !(*it)->m_ratioSettle.IsTimePast())
+      const bool settling = !(*it)->m_ratioSettle.IsTimePast();
+      if ((*it)->m_paused || !(*it)->m_started || !(*it)->m_processingBuffers || !(*it)->m_pClock ||
+          (settling && (*it)->m_syncState == CAESyncInfo::SYNC_INSYNC))
         continue;
 
       if ((*it)->m_processingBuffers->m_outputSamples.empty())
@@ -2214,10 +2221,16 @@ bool CActiveAE::RunStages()
       {
         AEDelayStatus status;
         m_stats.GetDelay(status);
+        // what was made at the settle's ratio is read at it while it is still what the sink
+        // is given
+        if (settling &&
+            status.GetDelay() >=
+                std::chrono::duration<double>((*it)->m_ratioSettle.GetTimeLeft()).count())
+          continue;
         // The timestamp is in the stream's own time; the buffer's length and the delay
         // are output samples, which at a resample ratio stand for ratio times less of
         // it. Both go back into the stream's time before the clock is compared.
-        const double rr = (*it)->m_processingBuffers->GetRR();
+        const double rr = settling ? (*it)->m_settleRatio : (*it)->m_processingBuffers->GetRR();
         double pts = buf->timestamp -
                      (buf->pkt_start_offset * 1000.0 / buf->pkt->config.sample_rate) / rr;
         double delay = status.GetDelay() * 1000 / rr;
@@ -2637,8 +2650,13 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
     return ret;
 
   // the error is in the stream's time; a correction is made in output samples, which at
-  // a resample ratio are ratio times as many per unit of the stream's time
-  const double rr = stream->m_processingBuffers ? stream->m_processingBuffers->GetRR() : 1.0;
+  // a resample ratio are ratio times as many per unit of the stream's time. Sync being taken
+  // while a ratio settles corrects the output made before it, at its ratio.
+  const bool settling = !stream->m_ratioSettle.IsTimePast() &&
+                        stream->m_syncState != CAESyncInfo::AESyncState::SYNC_INSYNC;
+  const double rr = !stream->m_processingBuffers ? 1.0
+                    : settling                   ? stream->m_settleRatio
+                                                 : stream->m_processingBuffers->GetRR();
 
   if (stream->m_syncState == CAESyncInfo::AESyncState::SYNC_START)
   {
@@ -2681,14 +2699,18 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
 
   // Without resampling, the player moves its clock to the audio once the error exceeds its own
   // limit. Audio starting late is therefore left to the player, as skipping it would lose the
-  // start of the audio. The errors of TrueHD passthrough are scaled down, so they do not tell how
-  // late the audio is.
+  // start of the audio. So is audio starting early while a ratio settles: the player's clock
+  // changes speed when the output made before the change has been heard, and silence ahead of
+  // that output would put it off. That error is bounded by the time it plays in. The errors of
+  // TrueHD passthrough are scaled down, so they do not tell how late the audio is.
   const bool clockFollowsAudio{!stream->m_resampleMode && !IsTrueHDPassthrough()};
-  const auto keepAudible = [&](double syncError)
+  const auto leftToPlayer = [&](double syncError)
   {
-    return fabs(syncError) <= threshold ||
-           (clockFollowsAudio && syncError < 0 && -syncError <= MAX_LATE_START_MS);
+    return clockFollowsAudio && (syncError < 0 || settling) &&
+           fabs(syncError) * (settling ? rr : 1.0) <= MAX_LATE_START_MS;
   };
+  const auto keepAudible = [&](double syncError)
+  { return fabs(syncError) <= threshold || leftToPlayer(syncError); };
 
   if (newerror && fabs(error) > threshold && stream->m_syncState == CAESyncInfo::AESyncState::SYNC_INSYNC)
   {
@@ -2702,7 +2724,7 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
   }
   else if (newerror && stream->m_syncState == CAESyncInfo::AESyncState::SYNC_MUTE)
   {
-    if (clockFollowsAudio && error < 0 && -error <= MAX_LATE_START_MS)
+    if (leftToPlayer(error))
     {
       stream->m_syncState = CAESyncInfo::AESyncState::SYNC_INSYNC;
       stream->m_syncError.Flush(1000ms);

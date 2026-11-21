@@ -3638,22 +3638,30 @@ void CVideoPlayer::HandleMessages()
 
       // A change between playing speeds reaches the audio as a rate, which the audio already
       // queued does not get: the clock changes speed when the new rate is heard, so that the
-      // picture keeps to the sound.
-      const bool playingBefore = m_playSpeed != DVD_PLAYSPEED_PAUSE && !wasFFRW;
+      // picture keeps to the sound. A pause keeps that audio for the resume.
+      const bool resuming = m_playSpeed == DVD_PLAYSPEED_PAUSE;
+      const int heldSpeed = resuming ? m_speedBeforePause : m_playSpeed;
+      const bool playingBefore = heldSpeed != DVD_PLAYSPEED_PAUSE && !wasFFRW;
       const bool playingAfter = speed == DVD_PLAYSPEED_NORMAL || isTempoSpeed;
-      const double rateDelay = playingBefore && playingAfter && speed != m_playSpeed
+      const double rateDelay = playingBefore && playingAfter && speed != heldSpeed
                                    ? m_VideoPlayerAudio->GetRateChangeDelay(isTempoSpeed)
                                    : 0.0;
       // the speed the clock already runs at, or has queued, leaves it alone
       const bool repeated = speed == m_playSpeed && isTempoSpeed == m_playSpeedIsTempo &&
                             m_streamPlayerSpeed == speed;
 
+      if (speed == DVD_PLAYSPEED_PAUSE && !resuming)
+        m_speedBeforePause = wasFFRW ? DVD_PLAYSPEED_PAUSE : m_playSpeed;
       m_playSpeed = speed;
       m_playSpeedIsTempo = isTempoSpeed;
 
       m_caching = CACHESTATE_DONE;
       if (rateDelay > 0.0)
+      {
+        if (resuming)
+          m_clock.SetSpeed(heldSpeed);
         m_clock.SetSpeedAt(speed, m_clock.GetAbsoluteClock() + rateDelay);
+      }
       else if (!repeated)
         m_clock.SetSpeed(speed);
       // the live clock adjustment does not carry into or out of a tempo
@@ -4363,6 +4371,13 @@ void CVideoPlayer::SetTempo(float tempo, bool correction)
   tempo = static_cast<float>(speed) / DVD_PLAYSPEED_NORMAL;
   if (m_processInfo->IsTempoAllowed(tempo))
   {
+    // a tempo message would resume play: paused, the tempo waits for the resume to ask for it
+    if (m_processInfo->GetNewSpeed() == DVD_PLAYSPEED_PAUSE)
+    {
+      m_processInfo->SetTempo(tempo, correction);
+      return;
+    }
+
     CDVDMsgPlayerSetSpeed::SpeedParams params = {speed, true, correction};
     m_messenger.Put(std::make_shared<CDVDMsgPlayerSetSpeed>(params));
 

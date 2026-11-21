@@ -228,6 +228,7 @@ bool PAPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options)
     CloseAllStreams(!m_isPaused);
     StopThread();
     m_isPaused = false; // Make sure to reset the pause state
+    m_pausedAt = {};
   }
 
   {
@@ -1098,7 +1099,10 @@ double PAPlayer::QueuedSeconds(StreamInfo& si) const
     return 0.0;
 
   const CAESyncInfo info{si.m_stream->GetSyncInfo()};
-  const auto now{std::chrono::steady_clock::now()};
+  // nothing the engine holds plays while the streams are paused
+  const auto now{m_pausedAt != std::chrono::steady_clock::time_point{}
+                     ? m_pausedAt
+                     : std::chrono::steady_clock::now()};
   if (info.rr > 0.0 && info.rr != si.m_mixed.ratio)
   {
     si.m_mixed.tempoBefore = 1.0 / si.m_mixed.ratio;
@@ -1120,6 +1124,13 @@ void PAPlayer::SetSpeed(float speed)
   if (m_playbackSpeed != 0 && m_isPaused)
   {
     m_isPaused = false;
+    {
+      std::unique_lock lock(m_streamsLock);
+      const auto paused{std::chrono::steady_clock::now() - m_pausedAt};
+      for (StreamInfo* si : m_streams)
+        si->m_mixed.since += paused;
+      m_pausedAt = {};
+    }
     SoftStart();
     m_callback.OnPlayBackResumed();
   }
@@ -1127,6 +1138,10 @@ void PAPlayer::SetSpeed(float speed)
   {
     m_isPaused = true;
     SoftStop(true, false);
+    {
+      std::unique_lock lock(m_streamsLock);
+      m_pausedAt = std::chrono::steady_clock::now();
+    }
     m_callback.OnPlayBackPaused();
   }
   m_signalSpeedChange = true;
