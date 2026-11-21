@@ -12,6 +12,7 @@
 #include "URL.h"
 #include "Util.h"
 #include "filesystem/Directory.h"
+#include "filesystem/File.h"
 #include "language/LangInfo.h"
 #include "media/MediaType.h"
 #include "music/tags/MusicInfoTag.h"
@@ -22,7 +23,10 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/SettingsManager.h"
+#include "test/TestUtils.h"
+#include "utils/Archive.h"
 #include "utils/URIUtils.h"
+#include "video/Bookmark.h"
 #include "video/VideoInfoTag.h"
 
 #include <fstream>
@@ -1116,6 +1120,71 @@ TEST(TestFileItem, GetSubtitleAnchorPathUsesDynPathForPluginStrmRoutes)
   item.SetDynPath("https://example.com/video.m3u8");
 
   EXPECT_EQ("https://example.com/video.m3u8", item.GetSubtitleAnchorPath());
+}
+
+namespace
+{
+CBookmark ResumePoint(double time, double total)
+{
+  CBookmark resumePoint;
+  resumePoint.timeInSeconds = time;
+  resumePoint.totalTimeInSeconds = total;
+  return resumePoint;
+}
+} // namespace
+
+TEST(TestFileItem, IsResumableReadsASongsResumePoint)
+{
+  CFileItem item("song");
+  item.SetPath("plugin://plugin.audio.test/?song=1");
+  item.GetMusicInfoTag()->SetTitle("song");
+  EXPECT_FALSE(item.IsResumable());
+
+  item.GetMusicInfoTag()->SetResumePoint(ResumePoint(90.0, 360.0));
+  EXPECT_TRUE(item.IsResumable());
+
+  item.GetMusicInfoTag()->SetResumePoint(ResumePoint(0.0, 360.0));
+  EXPECT_FALSE(item.IsResumable());
+}
+
+TEST(TestFileItem, IsResumableTakesTheVideoTagFirst)
+{
+  CFileItem item("both");
+  item.GetMusicInfoTag()->SetResumePoint(ResumePoint(90.0, 360.0));
+  item.GetVideoInfoTag()->SetTitle("both");
+  EXPECT_FALSE(item.IsResumable());
+}
+
+TEST(TestFileItem, MusicResumePointSurvivesClearCopyAndArchive)
+{
+  MUSIC_INFO::CMusicInfoTag tag;
+  EXPECT_FALSE(tag.GetResumePoint().IsSet());
+  tag.SetResumePoint(ResumePoint(90.0, 360.0));
+
+  const MUSIC_INFO::CMusicInfoTag copy(tag);
+  EXPECT_DOUBLE_EQ(90.0, copy.GetResumePoint().timeInSeconds);
+  EXPECT_DOUBLE_EQ(360.0, copy.GetResumePoint().totalTimeInSeconds);
+
+  XFILE::CFile* file = XBMC_CREATETEMPFILE(".ar");
+  ASSERT_NE(nullptr, file);
+  {
+    CArchive store(file, CArchive::store);
+    tag.Archive(store);
+    store.Close();
+  }
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
+  MUSIC_INFO::CMusicInfoTag loaded;
+  {
+    CArchive load(file, CArchive::load);
+    loaded.Archive(load);
+    load.Close();
+  }
+  EXPECT_TRUE(XBMC_DELETETEMPFILE(file));
+  EXPECT_DOUBLE_EQ(90.0, loaded.GetResumePoint().timeInSeconds);
+  EXPECT_DOUBLE_EQ(360.0, loaded.GetResumePoint().totalTimeInSeconds);
+
+  tag.Clear();
+  EXPECT_FALSE(tag.GetResumePoint().IsSet());
 }
 
 TEST(TestFileItem, TestLabel)
