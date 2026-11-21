@@ -24,6 +24,8 @@
 #include "filesystem/Directory.h"
 #include "filesystem/File.h"
 #include "language/LanguageTag.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -36,6 +38,7 @@
 #include "utils/log.h"
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -1543,6 +1546,9 @@ int CDVDDemuxFFmpeg::GetPrograms(std::vector<ProgramInfo>& programs)
   if (!m_pFormatContext || m_pFormatContext->nb_programs <= 1)
     return 0;
 
+  const bool isHLS =
+      m_pFormatContext->iformat && strcmp(m_pFormatContext->iformat->name, "hls") == 0;
+
   for (unsigned int i = 0; i < m_pFormatContext->nb_programs; i++)
   {
     std::ostringstream os;
@@ -1556,6 +1562,15 @@ int CDVDDemuxFFmpeg::GetPrograms(std::vector<ProgramInfo>& programs)
     if (!m_pFormatContext->programs[i]->metadata)
       continue;
 
+    if (isHLS)
+    {
+      const std::string name = HLSProgramName(*m_pFormatContext->programs[i]);
+      if (!name.empty())
+        prog.name = name;
+      programs.push_back(prog);
+      continue;
+    }
+
     AVDictionaryEntry* tag = av_dict_get(m_pFormatContext->programs[i]->metadata, "", nullptr, AV_DICT_IGNORE_SUFFIX);
     while (tag)
     {
@@ -1566,6 +1581,50 @@ int CDVDDemuxFFmpeg::GetPrograms(std::vector<ProgramInfo>& programs)
     programs.push_back(prog);
   }
   return static_cast<int>(programs.size());
+}
+
+std::string CDVDDemuxFFmpeg::HLSProgramName(const AVProgram& program) const
+{
+  // A variant's only metadata is its bandwidth, so describe it by its video stream, or by
+  // its audio stream when it has none
+  const AVStream* video = nullptr;
+  const AVStream* audio = nullptr;
+  for (unsigned int i = 0; i < program.nb_stream_indexes; i++)
+  {
+    const AVStream* stream = m_pFormatContext->streams[program.stream_index[i]];
+    if (!video && stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+      video = stream;
+    else if (!audio && stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+      audio = stream;
+  }
+
+  const CLocalizeStrings& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+  std::vector<std::string> parts;
+  if (video)
+  {
+    const AVCodecParameters& par = *video->codecpar;
+    if (par.width > 0 && par.height > 0)
+      parts.push_back(StringUtils::Format("{}x{}", par.width, par.height));
+    const AVRational fps = video->avg_frame_rate;
+    if (fps.num > 0 && fps.den > 0)
+      parts.push_back(
+          StringUtils::Format(strings.Get(38016), static_cast<int>(std::lround(av_q2d(fps)))));
+    parts.push_back(StreamUtils::GetCodecName(par.codec_id, par.profile));
+  }
+  else if (audio)
+  {
+    const AVCodecParameters& par = *audio->codecpar;
+    parts.push_back(StreamUtils::GetCodecName(par.codec_id, par.profile));
+    if (par.ch_layout.nb_channels > 0)
+      parts.push_back(StringUtils::Format("{} {}", par.ch_layout.nb_channels, strings.Get(10127)));
+  }
+
+  const AVDictionaryEntry* bandwidth = av_dict_get(program.metadata, "variant_bitrate", nullptr, 0);
+  const int bitrate = bandwidth ? atoi(bandwidth->value) : 0;
+  if (bitrate > 0)
+    parts.push_back(StringUtils::Format(strings.Get(14048), bitrate / 1000));
+
+  return StringUtils::Join(parts, ", ");
 }
 
 void CDVDDemuxFFmpeg::SetProgram(int progId)
