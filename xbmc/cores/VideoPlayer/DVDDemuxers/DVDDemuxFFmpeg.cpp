@@ -262,6 +262,7 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
   m_currentPts = DVD_NOPTS_VALUE;
   m_speed = DVD_PLAYSPEED_NORMAL;
   m_program = UINT_MAX;
+  m_programSwitchPending = false;
   m_seekToKeyFrame = false;
 
   const AVIOInterruptCB int_cb = { interrupt_cb, this };
@@ -1094,9 +1095,30 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
     std::unique_lock lock(m_critSection); // open lock scope
     if (m_pFormatContext)
     {
+      const auto streamChange = [this]()
+      {
+        CLog::Log(LOGINFO, "CDVDDemuxFFmpeg::Read() stream change");
+        av_dump_format(m_pFormatContext, 0, CURL::GetRedacted(m_pInput->GetFileName()).c_str(),
+                       0);
+
+        // update streams
+        CreateStreams(m_program);
+
+        DemuxPacket* packet = CDVDDemuxUtils::AllocateDemuxPacket(0);
+        packet->iStreamId = DMX_SPECIALID_STREAMCHANGE;
+        packet->demuxerId = GetDemuxerId();
+        return packet;
+      };
+
       // assume we are not eof
       if (m_pFormatContext->pb)
         m_pFormatContext->pb->eof_reached = 0;
+
+      // A program picked during playback is switched to before another packet is read when a
+      // seek has just set the position: the HLS demuxer starts the variant from the last
+      // packet's position, and a packet read first would move it on.
+      if (m_programSwitchPending && m_currentPts == DVD_NOPTS_VALUE && IsProgramChange())
+        return streamChange();
 
       // check for saved packet after a program change
       if (m_pkt.result < 0)
@@ -1145,20 +1167,7 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
         ParsePacket(&m_pkt.pkt);
 
         if (IsProgramChange())
-        {
-          CLog::Log(LOGINFO, "CDVDDemuxFFmpeg::Read() stream change");
-          av_dump_format(m_pFormatContext, 0, CURL::GetRedacted(m_pInput->GetFileName()).c_str(),
-                         0);
-
-          // update streams
-          CreateStreams(m_program);
-
-          pPacket = CDVDDemuxUtils::AllocateDemuxPacket(0);
-          pPacket->iStreamId = DMX_SPECIALID_STREAMCHANGE;
-          pPacket->demuxerId = GetDemuxerId();
-
-          return pPacket;
-        }
+          return streamChange();
 
         AVStream* stream = m_pFormatContext->streams[m_pkt.pkt.stream_index];
 
@@ -1447,7 +1456,9 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double* startpts)
     }
   }
 
-  if (ret >= 0)
+  // A program picked meanwhile is switched to by the next packet read, which reports it to
+  // the player, so leave that read to playback rather than probing the position through it.
+  if (ret >= 0 && !m_programSwitchPending)
   {
     XbmcThreads::EndTime<> timer(1000ms);
     while (m_currentPts == DVD_NOPTS_VALUE && !timer.IsTimePast())
@@ -1630,6 +1641,7 @@ std::string CDVDDemuxFFmpeg::HLSProgramName(const AVProgram& program) const
 void CDVDDemuxFFmpeg::SetProgram(int progId)
 {
   m_newProgram = progId;
+  m_programSwitchPending = true;
 }
 
 double CDVDDemuxFFmpeg::SelectAspect(AVStream* st, bool& forced)
@@ -2509,6 +2521,7 @@ bool CDVDDemuxFFmpeg::IsProgramChange()
   if (m_program != m_newProgram)
   {
     m_program = m_newProgram;
+    m_programSwitchPending = false;
     return true;
   }
 
