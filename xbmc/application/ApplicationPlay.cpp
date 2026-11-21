@@ -39,6 +39,7 @@
 #include <cstdint>
 #include <memory>
 #include <utility>
+#include <vector>
 
 using namespace KODI;
 using namespace XFILE;
@@ -139,7 +140,11 @@ void CApplicationPlay::GetOptionsAndUpdateItem()
 
     // Note that we need to load the tag from database also if the item already has a tag,
     // because for example the (full) video info for strm files will be loaded here.
+    // The database has no chapters; the ones the add-on that resolved the item set stay.
+    std::vector<ChapterDetails> chapters{m_item.GetVideoInfoTag()->GetChapterMarks()};
     db.LoadVideoInfo(path, *m_item.GetVideoInfoTag());
+    if (!chapters.empty())
+      m_item.GetVideoInfoTag()->SetChapterMarks(std::move(chapters));
 
     if (m_item.GetStartOffset() == STARTOFFSET_RESUME)
     {

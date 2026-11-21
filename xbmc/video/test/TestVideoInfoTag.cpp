@@ -21,6 +21,7 @@
 #include "utils/XMLUtils.h"
 #include "video/VideoInfoTag.h"
 
+#include <chrono>
 #include <map>
 #include <string>
 #include <vector>
@@ -644,4 +645,27 @@ TEST(TestVideoInfoTag, ActorClearTrueStartsTheCastAgainFromThatActor)
 TEST(TestVideoInfoTag, ActorClearFalseKeepsTheCast)
 {
   EXPECT_EQ((std::vector<std::string>{"First", "Second"}), CastAfterLoading("false"));
+}
+
+TEST(TestVideoInfoTag, MergeTakesTheOtherTagsChapters)
+{
+  const std::vector<ChapterDetails> own{{"Own", std::chrono::milliseconds{0}, {}}};
+  const std::vector<ChapterDetails> added{{"One", std::chrono::milliseconds{0}, {}},
+                                          {"Two", std::chrono::milliseconds{67000}, {}}};
+
+  CVideoInfoTag tag;
+  tag.SetChapterMarks(own);
+  CVideoInfoTag other;
+  other.SetChapterMarks(added);
+  tag.Merge(other);
+  ASSERT_EQ(2u, tag.GetChapterMarks().size());
+  EXPECT_EQ("Two", tag.GetChapterMarks()[1].name);
+  EXPECT_EQ(std::chrono::milliseconds{67000}, tag.GetChapterMarks()[1].startTimeMs);
+
+  CVideoInfoTag none;
+  tag.Merge(none);
+  EXPECT_EQ(2u, tag.GetChapterMarks().size());
+
+  tag.Reset();
+  EXPECT_TRUE(tag.GetChapterMarks().empty());
 }

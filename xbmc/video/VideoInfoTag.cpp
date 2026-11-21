@@ -78,6 +78,7 @@ void CVideoInfoTag::Reset()
   m_hasVideoVersions = false;
   m_hasVideoExtras = false;
   m_isDefaultVideoVersion = false;
+  m_chapters.clear();
   m_strFile.clear();
   m_strPath.clear();
   m_strMPAARating.clear();
@@ -573,6 +574,8 @@ void CVideoInfoTag::Merge(CVideoInfoTag& other)
   m_hasVideoVersions = other.m_hasVideoVersions;
   m_hasVideoExtras = other.m_hasVideoExtras;
   m_isDefaultVideoVersion = other.m_isDefaultVideoVersion;
+  if (!other.m_chapters.empty())
+    m_chapters = other.m_chapters;
 }
 
 void CVideoInfoTag::Archive(CArchive& ar)
@@ -2229,4 +2232,9 @@ void CVideoInfoTag::SetHasVideoExtras(bool hasExtras)
 void CVideoInfoTag::SetIsDefaultVideoVersion(bool isDefaultVideoVersion)
 {
   m_isDefaultVideoVersion = isDefaultVideoVersion;
+}
+
+void CVideoInfoTag::SetChapterMarks(std::vector<ChapterDetails> chapters)
+{
+  m_chapters = std::move(chapters);
 }

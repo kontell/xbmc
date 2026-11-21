@@ -1388,7 +1388,13 @@ void CFileItem::UpdateInfo(const CFileItem& item,
     if (item.m_videoInfoTag)
     {
       if (m_videoInfoTag)
+      {
+        // the database keeps no chapters, so a tag from it leaves the item's alone
+        std::vector<ChapterDetails> chapters{m_videoInfoTag->GetChapterMarks()};
         *m_videoInfoTag = *item.m_videoInfoTag;
+        if (m_videoInfoTag->GetChapterMarks().empty())
+          m_videoInfoTag->SetChapterMarks(std::move(chapters));
+      }
       else
         m_videoInfoTag = new CVideoInfoTag(*item.m_videoInfoTag);
     }
