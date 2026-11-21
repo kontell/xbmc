@@ -52,10 +52,9 @@ protected:
     }
     else
     {
-      // An interpreter left by a handle-less run carries no handle for this
-      // listing's callbacks: let it go and run on a fresh one, which takes the
-      // slot.
-      claim.Release();
+      // Either nothing was parked, or the interpreter was left by a handle-less
+      // run and carries no handle for this listing's callbacks. A new handle
+      // serves both: ExecuteAsync binds it to the interpreter the claim holds.
       handle = GetNewScriptHandle(script);
     }
 
