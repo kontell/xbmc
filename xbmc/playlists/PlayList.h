@@ -62,7 +62,7 @@ public:
   void SetUnPlayable(int iItem);
   int GetPlayable() const { return m_iPlayableItems; }
 
-  void UpdateItem(const CFileItem *item);
+  void UpdateItem(const CFileItem* item, bool replaceLabels = true);
 
   const std::string& ResolveURL(const std::shared_ptr<CFileItem>& item) const;
 
