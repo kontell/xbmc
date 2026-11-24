@@ -112,7 +112,8 @@ bool CPlayListPlayer::OnMessage(CGUIMessage &message)
       {
         CPlayList& playlist = GetPlaylist(playlistId);
         CFileItemPtr item = std::static_pointer_cast<CFileItem>(message.GetItem());
-        playlist.UpdateItem(item.get());
+        playlist.UpdateItem(item.get(),
+                            !(message.GetParam2() & GUI_MSG_FLAG_KEEP_CURRENT_LABELS));
       }
     }
     break;
