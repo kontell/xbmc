@@ -504,7 +504,7 @@ bool CPlayList::Expand(int position)
   return true;
 }
 
-void CPlayList::UpdateItem(const CFileItem *item)
+void CPlayList::UpdateItem(const CFileItem* item, bool replaceLabels /* = true */)
 {
   if (!item) return;
 
@@ -514,8 +514,15 @@ void CPlayList::UpdateItem(const CFileItem *item)
     if (playlistItem->IsSamePath(item))
     {
       std::string temp = playlistItem->GetPath(); // save path, it may have been altered
+      const std::string label = playlistItem->GetLabel();
+      const std::string label2 = playlistItem->GetLabel2();
       *playlistItem = *item;
       playlistItem->SetPath(temp);
+      if (!replaceLabels)
+      {
+        playlistItem->SetLabel(label);
+        playlistItem->SetLabel2(label2);
+      }
       break;
     }
   }
